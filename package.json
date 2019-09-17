@@ -1,0 +1,55 @@
+{
+  "name": "zsh-history-enquirer",
+  "version": "0.1.0",
+  "description": "zsh history search by enquirer",
+  "main": "index.js",
+  "bin": {
+    "henquire": "bin/index.js"
+  },
+  "scripts": {
+    "test": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zthxxx/zsh-history-enquirer.git"
+  },
+  "keywords": [
+    "zsh",
+    "history",
+    "enquirer",
+    "inquirer"
+  ],
+  "author": "zthxxx",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/zthxxx/zsh-history-enquirer/issues"
+  },
+  "homepage": "https://github.com/zthxxx/zsh-history-enquirer#readme",
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "files": [
+    "index.js",
+    "history.zsh",
+    "bin"
+  ],
+  "dependencies": {
+    "enquirer": "^2.3.2",
+    "execa": "^2.0.4"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^8.2.0",
+    "@commitlint/config-conventional": "^8.2.0",
+    "husky": "^3.0.5"
+  },
+  "husky": {
+    "hooks": {
+      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS"
+    }
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
+  }
+}
