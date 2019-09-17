@@ -2,8 +2,12 @@ const path = require('path');
 const execa = require('execa')
 const { AutoComplete } = require('enquirer');
 
-async function history(historyPath) {
-  const { stdout } = await execa(path.join(__dirname, 'history.zsh'), historyPath ? [historyPath] : [])
+
+const historyScript = path.join(__dirname, 'history.zsh')
+
+async function history (historyCommand=historyScript, historyFile) {
+  const historyPath = historyFile ? [historyFile] : []
+  const { stdout } = await execa(historyCommand, historyPath)
   const lines = stdout.trim().split('\n')
 
   const dedup = []
@@ -19,17 +23,26 @@ async function history(historyPath) {
   return dedup
 };
 
+async function searchHistory (input='', historyCommand, historyFile) {
+  const lines = await history(historyCommand, historyFile)
 
-history()
-  .then(lines => {
-    const prompt = new AutoComplete({
-      name: 'history',
-      message: 'reverse search history',
-      limit: 12,
-      choices: lines,
-    })
-
-    return prompt.run()
+  const searcher = new AutoComplete({
+    name: 'history',
+    message: 'reverse search history',
+    limit: 15,
+    choices: lines,
+    onRun (prompt) {
+      if (input && input.length) {
+        prompt.input = input
+        prompt.cursor = input.length
+        prompt.choices = prompt.suggest()
+      }
+    }
   })
-  .then(console.log)
-  .catch(console.error)
+
+  return await searcher.run()
+}
+
+
+module.exports = searchHistory
+module.exports.history = history

@@ -1,10 +1,10 @@
 {
   "name": "zsh-history-enquirer",
-  "version": "0.1.0",
-  "description": "zsh history search by enquirer",
+  "version": "0.2.0",
+  "description": "zsh history search plugin by enquirer",
   "main": "index.js",
   "bin": {
-    "henquire": "bin/index.js"
+    "fcenquire": "bin/index.js"
   },
   "scripts": {
     "test": "node index.js"
@@ -16,6 +16,11 @@
   "keywords": [
     "zsh",
     "history",
+    "zsh-history",
+    "plugin",
+    "plugins",
+    "zsh-plugin",
+    "zsh-plugins",
     "enquirer",
     "inquirer"
   ],

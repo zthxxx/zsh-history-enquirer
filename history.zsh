@@ -1,4 +1,6 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
+
+# ./history.zsh <historyPath>
 
 # Some good zsh history options to try
 # and get as much history as possible.
