@@ -1,28 +1,24 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require('fs')
+const path = require('path')
 const execa = require('execa')
 const tty = require('tty')
-const { AutoComplete } = require('enquirer');
+const colors = require('ansi-colors');
+const { AutoComplete } = require('enquirer')
+const ansi = require('enquirer/lib/ansi')
 
 
 const historyScript = path.join(__dirname, 'history.zsh')
+const cursorPosScript = path.join(__dirname, 'cursor.zsh')
+
+getStdin = () => new tty.ReadStream(fs.openSync('/dev/tty', 'r'))
+getStdout = () => new tty.WriteStream(fs.openSync('/dev/tty', 'w'))
 
 
-function getStdin () {
-  const fd = fs.openSync('/dev/tty', 'r')
-  const stdin = new tty.ReadStream(fd, {
-    highWaterMark: 0,
-    readable: true,
-    writable: false
-  });
-
-  return stdin
-}
-
-function getStdout () {
-  const fd = fs.openSync('/dev/tty', 'w')
-  const stream = new tty.WriteStream(fd);
-  return stream
+async function getCursorPos () {
+  const { stdout: position } = await execa(cursorPosScript)
+  const [row, col] = position.split(' ')
+  const [x, y] = [+col, +row]
+  return { x, y }
 }
 
 async function history (historyCommand=historyScript, historyFile) {
@@ -30,30 +26,83 @@ async function history (historyCommand=historyScript, historyFile) {
   const { stdout } = await execa(historyCommand, historyPath)
   const lines = stdout.trim().split('\n')
 
-  const dedup = []
   const linesSet = new Set()
+  
+  return lines
+    .reverse()
+    .filter(
+      line => !linesSet.has(line) && linesSet.add(line)
+    )
+}
 
-  for (const line of lines.reverse()) {
-    if (!linesSet.has(line)) {
-      dedup.push(line)
-      linesSet.add(line)
+
+class Search extends AutoComplete {
+  constructor(options) {
+    super(options)
+
+    // start with initial col position rather than 0 default
+    this.stdout.write(ansi.cursor.to(options.initCol))
+
+    // overwrite, replace erase first line with erasePrompt (only erase from initial to end)
+    ansi.clear = (input = '', columns = process.stdout.columns) => {
+      const erasePrompt = ansi.cursor.to(options.initCol) + ansi.erase.lineEnd
+      if (!columns) return erasePrompt
+      let width = str => [...colors.unstyle(str)].length
+      let lines = input.split(/\r?\n/)
+      let rows = 0
+      for (let line of lines) {
+        rows += 1 + Math.floor(Math.max(width(line) - 1, 0) / columns)
+      }
+      return (ansi.erase.line + ansi.cursor.prevLine()).repeat(rows - 1) + erasePrompt
     }
   }
 
-  return dedup
-};
+  restore() {
+    super.restore()
+    // append initial position
+    this.stdout.write(ansi.cursor.right(this.options.initCol))
+  }
+
+  /**
+   * when submit, restore curcor from output row to input row
+   * 
+   * when cancel, erase and leave raw user input
+   */
+  async close() {
+    const { cursor, submitted, cancelled } = this.state
+    await super.close()
+
+    if (submitted) {
+      this.stdout.write(ansi.erase.line + ansi.cursor.up())
+    }
+
+    if (cancelled) {
+      this.stdout.write(ansi.cursor.to(this.options.initCol + cursor) + ansi.erase.lineEnd)
+    }
+  }
+
+  /**
+   * when cancel leave raw user input to send
+   */
+  error(err) {
+    return this.state.cancelled ? this.input.slice(0, this.cursor) : super.error(err)
+  }
+}
 
 async function searchHistory (input='', historyCommand, historyFile) {
+  const cursor = await getCursorPos()
   const lines = await history(historyCommand, historyFile)
 
-  const searcher = new AutoComplete({
+  const searcher = new Search({
     name: 'history',
-    prefix: '\n',
     message: 'reverse search history',
     limit: 15,
     choices: lines,
+    // shell prompt start col without input buffer
+    initCol: cursor.x - input.length,
+    promptLine: false,
     onRun (prompt) {
-      if (input && input.length) {
+      if (input.length) {
         prompt.input = input
         prompt.cursor += input.length
         prompt.choices = prompt.suggest()
@@ -63,7 +112,7 @@ async function searchHistory (input='', historyCommand, historyFile) {
     stdout: process.stdout.isTTY ? process.stdout : getStdout(),
   })
 
-  return await searcher.run()
+  return searcher.run()
 }
 
 
