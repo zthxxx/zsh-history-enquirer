@@ -3,7 +3,7 @@ const path = require('path')
 const execa = require('execa')
 const tty = require('tty')
 const colors = require('ansi-colors');
-const { AutoComplete } = require('enquirer')
+const { AutoComplete, Select } = require('enquirer')
 const ansi = require('enquirer/lib/ansi')
 
 
@@ -35,8 +35,9 @@ async function history (historyCommand=historyScript, historyFile) {
     )
 }
 
+AutoComplete.prototype.pointer = Select.prototype.pointer
 
-class Search extends AutoComplete {
+class HistorySearcher extends AutoComplete {
   constructor(options) {
     super(options)
 
@@ -56,6 +57,19 @@ class Search extends AutoComplete {
       return (ansi.erase.line + ansi.cursor.prevLine()).repeat(rows - 1) + erasePrompt
     }
   }
+  
+  number(ch) {
+    return this.append(ch)
+  }
+
+  format() {
+    const { input, cancelled } = this.state
+    if (cancelled) {
+      return input
+    }
+    if (input) return super.format();
+    return ansi.code.show
+  }
 
   restore() {
     super.restore()
@@ -63,29 +77,40 @@ class Search extends AutoComplete {
     this.stdout.write(ansi.cursor.right(this.options.initCol))
   }
 
-  /**
-   * when submit, restore curcor from output row to input row
-   * 
-   * when cancel, erase and leave raw user input
-   */
-  async close() {
-    const { cursor, submitted, cancelled } = this.state
-    await super.close()
-
-    if (submitted) {
-      this.stdout.write(ansi.erase.line + ansi.cursor.up())
+  pageUp() {
+    const { limit = 10 } = this.options
+    for (let i = 0; i < limit; i++) {
+      this.shiftUp()
     }
+  }
 
-    if (cancelled) {
-      this.stdout.write(ansi.cursor.to(this.options.initCol + cursor) + ansi.erase.lineEnd)
+  pageDown() {
+    const { limit = 10 } = this.options
+    for (let i = 0; i < limit; i++) {
+      this.shiftDown()
     }
   }
 
   /**
-   * when cancel leave raw user input to send
+   * when submit, restore curcor from output row to input row
+   * 
+   * when cancel, erase and leave origin input
+   */
+  async close() {
+    const { input, submitted } = this.state
+    await super.close()
+    if (!input) return
+
+    if (submitted) {
+      this.stdout.write(ansi.erase.line + ansi.cursor.up())
+    }
+  }
+
+  /**
+   * @TODO: when cancel leave origin input to send
    */
   error(err) {
-    return this.state.cancelled ? this.input.slice(0, this.cursor) : super.error(err)
+    return this.state.cancelled ? this.input : super.error(err)
   }
 }
 
@@ -93,7 +118,7 @@ async function searchHistory (input='', historyCommand, historyFile) {
   const cursor = await getCursorPos()
   const lines = await history(historyCommand, historyFile)
 
-  const searcher = new Search({
+  const searcher = new HistorySearcher({
     name: 'history',
     message: 'reverse search history',
     limit: 15,
@@ -101,6 +126,7 @@ async function searchHistory (input='', historyCommand, historyFile) {
     // shell prompt start col without input buffer
     initCol: cursor.x - input.length,
     promptLine: false,
+    scroll: true,
     onRun (prompt) {
       if (input.length) {
         prompt.input = input
