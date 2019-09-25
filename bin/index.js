@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
-const searchHistory = require('..')
+require = require("esm")(module)
+
+const searchHistory = require('..').default
 
 const input = process.argv.slice(2).join(' ')
 
