@@ -1,4 +1,4 @@
-#!/usr/bin/env zsh -il
+#!/usr/bin/env zsh
 
 if [[ -z $ZSH ]]; then
   echo "\\n\\n!! the plugin made for oh-my-zsh, but cannot find oh-my-zsh, please install it at first\\n\\n" >&2
@@ -12,4 +12,4 @@ mkdir -p ${plugins_dir}/${package_name}
 
 cp -f ./${package_name}.plugin.zsh ${plugins_dir}/${package_name}/
 
-perl -i -pe "s/^plugins=\(/plugins=(\n  ${package_name}\n/gms" $HOME/.zshrc
+perl -i -pe "s/^[ \t]*plugins=\(/plugins=(\n  ${package_name}\n/gms" $HOME/.zshrc

@@ -17,5 +17,8 @@
     npm i -g npm
   fi
 
-  npm i -g ${package_name}
+  # access to install for root
+  # https://stackoverflow.com/questions/49084929/npm-sudo-global-installation-unsafe-perm
+  # https://docs.npmjs.com/misc/config#unsafe-perm
+  npm i -g ${package_name} --unsafe-perm=true
 }

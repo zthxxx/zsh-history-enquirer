@@ -1,6 +1,6 @@
 {
   "name": "zsh-history-enquirer",
-  "version": "0.2.9",
+  "version": "0.2.11",
   "description": "zsh history search plugin by enquirer",
   "main": "index.js",
   "bin": {
@@ -9,7 +9,7 @@
   "scripts": {
     "test": "node index.js",
     "preinstall": "command -v zsh || (echo '\\n\\n!! this is a plugin for oh-my-zsh, please install zsh at first \\n\\n' >&2 && exit 1)",
-    "postinstall": "./postinstall.zsh",
+    "postinstall": "env zsh -il ./postinstall.zsh",
     "postuninstall": "rm -rf ${ZSH_CUSTOM:-${ZSH}/custom}/plugins/zsh-history-enquirer && perl -i -pe 's/.*zsh-history-enquirer.*//gms' ${HOME}/.zshrc"
   },
   "repository": {
