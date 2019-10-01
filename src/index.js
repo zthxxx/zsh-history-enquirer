@@ -1,6 +1,6 @@
 import getCursorPos from './cursorPosition'
 import history from './zshHistory'
-import HistorySearcher from './HistorySearcher'
+import HistorySearcher from './historySearcher'
 import { getStdin, getStdout } from './tty'
 
 
