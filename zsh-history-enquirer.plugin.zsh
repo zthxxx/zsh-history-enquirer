@@ -1,7 +1,7 @@
 # replace '^R' search of zsh-history-enquirer in zsh
 
 # fcenquire is bin name of zsh-history-enquirer
-if [[ $commands[fcenquire] ]]; then
+if command -v fcenquire > /dev/null; then
   function history_enquire() {
     BUFFER=$(fcenquire "$LBUFFER")
     CUOSOR=$#BUFFER
