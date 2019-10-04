@@ -8,11 +8,16 @@ export default async function searchHistory (input='', historyCommand, historyFi
   const cursor = await getCursorPos()
   const lines = await history(historyCommand, historyFile)
 
+  const stdin = process.stdin.isTTY ? process.stdin : getStdin()
+  const stdout = process.stdout.isTTY ? process.stdout : getStdout()
+
   const searcher = new HistorySearcher({
     name: 'history',
     message: 'reverse search history',
     promptLine: false,
-    limit: 15,
+    get limit() {
+      return Math.min(15, stdout.rows - 2)
+    },
     choices: lines,
     // shell prompt start col without input buffer
     initCol: cursor.x - input.length,
@@ -23,8 +28,8 @@ export default async function searchHistory (input='', historyCommand, historyFi
         prompt.choices = prompt.suggest()
       }
     },
-    stdin: process.stdin.isTTY ? process.stdin : getStdin(),
-    stdout: process.stdout.isTTY ? process.stdout : getStdout(),
+    stdin,
+    stdout,
   })
 
   return searcher.run()
