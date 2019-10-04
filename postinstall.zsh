@@ -12,4 +12,5 @@ mkdir -p ${plugins_dir}/${package_name}
 
 cp -f ./${package_name}.plugin.zsh ${plugins_dir}/${package_name}/
 
+perl -i -pe "s/^[ \t]*${package_name}[ \t\n]*//gms" ${HOME}/.zshrc
 perl -i -pe "s/^[ \t]*plugins=\(/plugins=(\n  ${package_name}\n/gms" $HOME/.zshrc
