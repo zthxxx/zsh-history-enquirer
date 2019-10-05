@@ -40,7 +40,18 @@ export default class HistorySearcher extends AutoComplete {
   }
 
   restore() {
+    const { rest } = this.sections()
     super.restore()
+
+    // [BUG]`prompt.restore` dont calculate if line width more than termainal columns
+    const rows = rest
+      .map(line => colors.unstyle(line).length)
+      .map(width => Math.max(width - 2, 0))
+      .map(width => Math.ceil(width / this.width))
+      .reduce((a, b) => a + b, 0)
+    this.state.size = rows
+    this.stdout.write(ansi.cursor.up(rows - rest.length))
+
     // append initial position
     this.stdout.write(ansi.cursor.right(this.options.initCol))
   }
@@ -74,9 +85,6 @@ export default class HistorySearcher extends AutoComplete {
     }
   }
 
-  /**
-   * @TODO: when cancel leave origin input to send
-   */
   error(err) {
     return this.state.cancelled ? this.input : super.error(err)
   }
