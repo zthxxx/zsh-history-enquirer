@@ -1,16 +1,21 @@
 {
   "name": "zsh-history-enquirer",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "description": "zsh history search plugin by enquirer",
   "main": "index.js",
   "bin": {
     "fcenquire": "bin/index.js"
   },
   "scripts": {
-    "test": "node index.js",
+    "test": "jest",
+    "build": "rollup -c",
+    "build:dev": "rollup -c -w",
+    "clean": "rimraf dist coverage",
     "preinstall": "command -v zsh || (echo '\\n\\n!! this is a plugin for oh-my-zsh, please install zsh at first \\n\\n' >&2 && exit 1)",
     "postinstall": "env zsh -il ./postinstall.zsh",
-    "postuninstall": "rm -rf ${ZSH_CUSTOM:-${ZSH}/custom}/plugins/zsh-history-enquirer && perl -i -pe 's/.*zsh-history-enquirer.*//gms' ${HOME}/.zshrc"
+    "postuninstall": "rm -rf ${ZSH_CUSTOM:-${ZSH}/custom}/plugins/zsh-history-enquirer && perl -i -pe 's/.*zsh-history-enquirer.*//gms' ${HOME}/.zshrc",
+    "prepublishOnly": "npm run build && npm test",
+    "postpublish": "npm run clean"
   },
   "repository": {
     "type": "git",
@@ -43,19 +48,25 @@
   "files": [
     "src",
     "bin",
+    "dist",
     "index.js",
     "zsh-history-enquirer.plugin.zsh",
     "postinstall.zsh"
   ],
   "dependencies": {
     "enquirer": "^2.3.2",
-    "esm": "^3.2.25",
     "execa": "^2.0.4"
   },
   "devDependencies": {
     "@commitlint/cli": "^8.2.0",
     "@commitlint/config-conventional": "^8.2.0",
-    "husky": "^3.0.5"
+    "esm": "^3.2.25",
+    "husky": "^3.0.5",
+    "jest": "^24.9.0",
+    "rimraf": "^3.0.0",
+    "rollup": "^1.23.1",
+    "rollup-plugin-copy": "^3.1.0",
+    "signale": "^1.4.0"
   },
   "husky": {
     "hooks": {
@@ -66,5 +77,8 @@
     "extends": [
       "@commitlint/config-conventional"
     ]
+  },
+  "jest": {
+    "testEnvironment": "node"
   }
 }

@@ -1,0 +1,4 @@
+: 1568796702:0;echo first
+: 1568796803:0;echo 2
+: 1568796904:0;echo zsh-history-enquirer
+: 1568797005:0;last command

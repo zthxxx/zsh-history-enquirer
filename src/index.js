@@ -4,12 +4,18 @@ import HistorySearcher from './historySearcher'
 import { getStdin, getStdout } from './tty'
 
 
-export default async function searchHistory (input='', historyCommand, historyFile) {
-  const cursor = await getCursorPos()
-  const lines = await history(historyCommand, historyFile)
-
-  const stdin = process.stdin.isTTY ? process.stdin : getStdin()
-  const stdout = process.stdout.isTTY ? process.stdout : getStdout()
+export default async function searchHistory({ input = '', historyCommand, historyFile }) {
+  const [
+    cursor,
+    lines,
+    stdin,
+    stdout
+  ] = await Promise.all([
+    getCursorPos(),
+    history(historyCommand, historyFile),
+    process.stdin.isTTY ? process.stdin : getStdin(),
+    process.stdout.isTTY ? process.stdout : getStdout(),
+  ])
 
   const searcher = new HistorySearcher({
     name: 'history',
@@ -21,7 +27,7 @@ export default async function searchHistory (input='', historyCommand, historyFi
     choices: lines,
     // shell prompt start col without input buffer
     initCol: cursor.x - input.length,
-    onRun (prompt) {
+    onRun(prompt) {
       if (input.length) {
         prompt.input = input
         prompt.cursor += input.length
@@ -32,6 +38,6 @@ export default async function searchHistory (input='', historyCommand, historyFi
     stdout,
   })
 
-  return searcher.run()
+  return searcher
 }
 
