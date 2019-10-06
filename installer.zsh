@@ -13,7 +13,9 @@
     [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
     nvm install --lts
-    nvm use --lts
+    # nvm is not compatible with the npm config "prefix" option
+    # Run `nvm use --delete-prefix` to unset it
+    nvm use --delete-prefix --lts
     npm i -g npm
   fi
 

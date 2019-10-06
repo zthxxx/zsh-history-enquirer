@@ -1,7 +1,38 @@
 language: node_js
 
 node_js:
-  - "10"
+  - 10
+
+addons:
+  apt:
+    update: true
+    packages:
+      - zsh
+
+cache:
+  npm: false
+
+git:
+  depth: false
+
+before_install:
+  - zsh --version
+  - curl -fsSL install.ohmyz.sh | sh
+
+before_script:
+  - npm test
 
 script:
-  - npm test
+  - npm run build
+
+deploy:
+  - provider: npm
+    skip_cleanup: true
+    email: "${NPM_USER_EMAIL}"
+    api_key: "${NPM_AUTH_TOKEN}"
+    on:
+      branch: master
+      tags: true
+
+notifications:
+  email: true

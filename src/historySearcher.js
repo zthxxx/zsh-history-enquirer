@@ -1,6 +1,7 @@
 import colors from 'ansi-colors'
 import ansi from 'enquirer/lib/ansi'
-import { AutoComplete, Select } from 'enquirer'
+import AutoComplete from 'enquirer/lib/prompts/autocomplete'
+import Select from 'enquirer/lib/prompts/select'
 
 
 AutoComplete.prototype.pointer = Select.prototype.pointer
