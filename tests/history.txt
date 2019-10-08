@@ -1,4 +1,13 @@
-: 1568796702:0;echo first
-: 1568796803:0;echo 2
-: 1568796904:0;echo zsh-history-enquirer
-: 1568797005:0;last command
+: 1568797112:0;echo earlier command
+: 1568797113:0;ffmpeg -i "input.mp4" -vf reverse reversed.mp4
+: 1568797114:0;where git
+: 1568797115:0;echo author zthxxx
+: 1568797116:0;cd Documents
+: 1568797117:0;cd Temporary
+: 1568797118:0;md5sum --help
+: 1568797118:0;git status
+: 1568797119:0;cat <<< 123
+: 1568797120:0;where php
+: 1568797121:0;pwgen --help
+: 1568797123:0;echo zsh-history-enquirer
+: 1568797124:0;echo "\e[33m\\n Enhance history search, review and choose (ctrl+R) \n"

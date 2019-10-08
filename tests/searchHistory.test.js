@@ -5,7 +5,7 @@ const searchHistory = require('..')
 
 test('search `echo` in history', async () => {
   const searcher = await searchHistory({
-    input: 'echo',
+    input: 'author',
     historyFile: path.join(__dirname, 'history.txt'),
   })
 
@@ -15,6 +15,6 @@ test('search `echo` in history', async () => {
   });
 
   const result = await searcher.run()
-  signale.info('found history command', result)
-  expect(result).toBe('echo zsh-history-enquirer')
+  signale.info('found history command: ', result)
+  expect(result).toBe('echo author zthxxx')
 })

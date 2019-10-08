@@ -1,6 +1,6 @@
 {
   "name": "zsh-history-enquirer",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "zsh history search plugin by enquirer",
   "main": "index.js",
   "bin": {
@@ -11,9 +11,13 @@
     "build": "npm run clean && rollup -c",
     "build:dev": "rollup -c -w",
     "clean": "rimraf dist coverage",
-    "preinstall": "command -v zsh || (echo '\\n\\n!! this is a plugin for oh-my-zsh, please install zsh at first \\n\\n' >&2 && exit 1)",
+    "warn:zsh": "echo '\\n\\n!! this is a plugin for oh-my-zsh, please install zsh at first \\n\\n' >&2",
+    "rm-plugin:config": "perl -i -pe 's/.*zsh-history-enquirer.*//gms' ${HOME}/.zshrc",
+    "rm-plugin:file": "rm -rf ${ZSH_CUSTOM:-${ZSH}/custom}/plugins/zsh-history-enquirer",
+    "no-spotlight": "mkdir -p ./node_modules; touch ./node_modules/.metadata_never_index",
+    "preinstall": "command -v zsh || (npm run warn:zsh && exit 1) && npm run no-spotlight",
     "postinstall": "env zsh -il ./postinstall.zsh",
-    "postuninstall": "rm -rf ${ZSH_CUSTOM:-${ZSH}/custom}/plugins/zsh-history-enquirer && perl -i -pe 's/.*zsh-history-enquirer.*//gms' ${HOME}/.zshrc",
+    "postuninstall": "npm run rm-plugin:config && npm run rm-plugin:file",
     "prepublishOnly": "npm run build && npm test",
     "postpublish": "npm run clean"
   },

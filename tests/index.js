@@ -3,7 +3,7 @@ const searchHistory = require('..')
 
 
 searchHistory({
-  input: 'echo',
+  input: 'zsh',
   historyFile: path.join(__dirname, 'history.txt'),
 })
   .then(searcher => {

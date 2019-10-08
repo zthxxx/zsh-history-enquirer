@@ -15,9 +15,11 @@ cache:
 git:
   depth: false
 
+env:
+  ZSH=${HOME}/.oh-my-zsh
+
 before_install:
   - zsh --version
-  - curl -fsSL install.ohmyz.sh | sh
 
 before_script:
   - npm test
