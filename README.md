@@ -1,16 +1,17 @@
 <h1 align="center">zsh-history-enquirer</h1>
 
 <p align="center">
-
-[![Build Status](https://travis-ci.org/zthxxx/zsh-history-enquirer.svg)](https://travis-ci.org/zthxxx/zsh-history-enquirer)
-[![NPM Version](https://badgen.net/npm/v/zsh-history-enquirer)](https://www.npmjs.com/package/zsh-history-enquirer)
-[![NPM Downloads](https://badgen.net/npm/dt/zsh-history-enquirer)](https://www.npmjs.com/package/zsh-history-enquirer)
-[![Node.js](https://badgen.net/npm/node/zsh-history-enquirer)](https://nodejs.org/)
-[![License](https://badgen.net/github/license/zthxxx/zsh-history-enquirer)](https://github.com/zthxxx/zsh-history-enquirer/blob/master/LICENSE)
-
+  <a href="https://travis-ci.org/zthxxx/zsh-history-enquirer" target="_blank" rel="noopener noreferrer"><img src="https://travis-ci.org/zthxxx/zsh-history-enquirer.svg" alt="Build Status" /></a>
+  <a href="https://www.npmjs.com/package/zsh-history-enquirer" target="_blank" rel="noopener noreferrer"><img src="https://badgen.net/npm/v/zsh-history-enquirer" alt="NPM Version" /></a>
+  <a href="https://www.npmjs.com/package/zsh-history-enquirer" target="_blank" rel="noopener noreferrer"><img src="https://badgen.net/npm/dt/zsh-history-enquirer" alt="NPM Downloads" /></a>
+  <a href="https://nodejs.org/" target="_blank" rel="noopener noreferrer"><img src="https://badgen.net/npm/node/zsh-history-enquirer" alt="Node.js" /></a>
+  <a href="https://github.com/zthxxx/zsh-history-enquirer/blob/master/LICENSE" target="_blank" rel="noopener noreferrer"><img src="https://badgen.net/github/license/zthxxx/zsh-history-enquirer" alt="License" /></a>
 </p>
 
-enhance zsh history search interaction, review and choose in multilines
+
+## What's this
+
+plugin for **enhance zsh history search interaction**, review and choose in multilines
 
 
 ## Preview
@@ -19,14 +20,15 @@ enhance zsh history search interaction, review and choose in multilines
 
 <p align="center">
   <kbd>Ctrl</kbd> + <kbd>R</kbd>
+  <br />
+  <img src="./images/screenshot.png" alt="zsh-history-enquirer screenshot" />
 </p>
-
-![zsh-history-enquirer screenshot](./images/screenshot.png)
 
 #### live demo
 
-![zsh-history-enquirer preview](./images/preview.svg)
-
+<p align="center">
+  <img src="./images/preview.svg?sanitize=true" alt="zsh-history-enquirer preview" />
+</p>
 
 ## Install
 

@@ -1,6 +1,6 @@
 {
   "name": "zsh-history-enquirer",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "zsh history search plugin by enquirer",
   "main": "index.js",
   "bin": {
