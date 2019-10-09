@@ -1,6 +1,6 @@
 {
   "name": "zsh-history-enquirer",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "zsh history search plugin by enquirer",
   "main": "index.js",
   "bin": {
@@ -9,17 +9,23 @@
   "scripts": {
     "test": "jest",
     "build": "npm run clean && rollup -c",
-    "build:dev": "rollup -c -w",
+    "build:dev": "npm run clean && rollup -c -w",
     "clean": "rimraf dist coverage",
-    "warn:zsh": "echo '\\n\\n!! this is a plugin for oh-my-zsh, please install zsh at first \\n\\n' >&2",
-    "rm-plugin:config": "perl -i -pe 's/.*zsh-history-enquirer.*//gms' ${HOME}/.zshrc",
-    "rm-plugin:file": "rm -rf ${ZSH_CUSTOM:-${ZSH}/custom}/plugins/zsh-history-enquirer",
-    "no-spotlight": "mkdir -p ./node_modules; touch ./node_modules/.metadata_never_index",
+    "record": "npm run asciinema && git checkout ./tests/history.txt",
+    "render": "npm run svg-term && npm run replace:font && npm run replace:arrow",
     "preinstall": "command -v zsh || (npm run warn:zsh && exit 1) && npm run no-spotlight",
     "postinstall": "env zsh -il ./postinstall.zsh",
     "postuninstall": "npm run rm-plugin:config && npm run rm-plugin:file",
     "prepublishOnly": "npm run build && npm test",
-    "postpublish": "npm run clean"
+    "postpublish": "npm run clean",
+    "warn:zsh": "echo '\\n\\n!! this is a plugin for zsh, please install zsh at first \\n\\n' >&2",
+    "rm-plugin:config": "perl -i -pe 's/.*zsh-history-enquirer.*//gms' ${HOME}/.zshrc",
+    "rm-plugin:file": "rm -rf ${ZSH_CUSTOM:-${ZSH}/custom}/plugins/zsh-history-enquirer",
+    "no-spotlight": "mkdir -p ./node_modules; touch ./node_modules/.metadata_never_index",
+    "asciinema": "HISTFILE=${PWD}/tests/history.txt asciinema rec --overwrite ./images/zsh-record.cast",
+    "svg-term": "svg-term --window --in ./images/zsh-record.cast --out ./images/preview.svg",
+    "replace:font": "perl -i -pe 's/\"Monaco,/\"Menlo,Monaco,/g' ./images/preview.svg",
+    "replace:arrow": "perl -i -pe 's/➤/▶/g' ./images/preview.svg"
   },
   "repository": "zthxxx/zsh-history-enquirer",
   "publishConfig": {
@@ -47,6 +53,7 @@
     "node": ">=10.0.0"
   },
   "files": [
+    "README.md",
     "src",
     "bin",
     "dist",
@@ -70,7 +77,8 @@
     "rollup-plugin-filesize": "^6.2.1",
     "rollup-plugin-node-resolve": "^5.2.0",
     "rollup-plugin-progress": "^1.1.1",
-    "signale": "^1.4.0"
+    "signale": "^1.4.0",
+    "svg-term-cli": "^2.1.1"
   },
   "husky": {
     "hooks": {
