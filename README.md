@@ -11,7 +11,7 @@
 
 ## What's this
 
-plugin for **enhance zsh history search interaction**, review and choose in multilines
+a plugin for **enhance zsh history search interaction**, review and choose in multilines
 
 
 ## Preview
@@ -34,7 +34,7 @@ plugin for **enhance zsh history search interaction**, review and choose in mult
 
 ### oh-my-zsh
 
-if you used [`oh-my-zsh`](https://github.com/robbyrussell/oh-my-zsh), **all you need to do is one-line for npm**
+if you used [`oh-my-zsh`](https://github.com/robbyrussell/oh-my-zsh), **all you need to do is the one command for npm**
 
 ```bash
 npm i -g zsh-history-enquirer
@@ -60,7 +60,7 @@ curl -#sSL https://github.com/zthxxx/zsh-history-enquirer/raw/master/installer.z
 ```
 ### manually without oh-my-zsh
 
-if you dont have `oh-my-zsh`, manual add `source` plugin file to `.zshrc`
+if you dont have `oh-my-zsh`, manual add `source` plugin file to `.zshrc` after npm installed
 
 and manual remove the `source` command while uninstalled
 
@@ -86,3 +86,4 @@ just press <kbd>^R</kbd> (<kbd>Ctrl</kbd> + <kbd>R</kbd>) for enjoy it!
 **zsh-history-enquirer** © [zthxxx](https://github.com/zthxxx), Released under the **[MIT](./LICENSE)** License.<br>
 
 > Blog [@zthxxx](https://blog.zthxxx.me) · GitHub [@zthxxx](https://github.com/zthxxx)
+

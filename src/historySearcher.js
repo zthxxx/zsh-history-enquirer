@@ -2,9 +2,12 @@ import colors from 'ansi-colors'
 import ansi from 'enquirer/lib/ansi'
 import AutoComplete from 'enquirer/lib/prompts/autocomplete'
 import Select from 'enquirer/lib/prompts/select'
+import signale from './signale'
 
 
 AutoComplete.prototype.pointer = Select.prototype.pointer
+
+const SIGINT_CODE = 3
 
 export default class HistorySearcher extends AutoComplete {
   constructor(options) {
@@ -29,6 +32,11 @@ export default class HistorySearcher extends AutoComplete {
 
   number(ch) {
     return this.append(ch)
+  }
+
+  dispatch(ch) {
+    signale.info('HistorySearcher dispatch', ch)
+    return super.dispatch(ch);
   }
 
   format() {
@@ -83,10 +91,18 @@ export default class HistorySearcher extends AutoComplete {
 
     if (submitted) {
       this.stdout.write(ansi.erase.line + ansi.cursor.up())
+      signale.info('HistorySearcher submitted')
     }
   }
 
   error(err) {
+    if (err !== undefined) {
+      if (err === String.fromCharCode(SIGINT_CODE)) {
+        signale.info('HistorySearcher cancel')
+      } else {
+        signale.error('HistorySearcher ERROR', err, new Error(err).stack)
+      }
+    }
     return this.state.cancelled ? this.input : super.error(err)
   }
 }

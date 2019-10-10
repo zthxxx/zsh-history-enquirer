@@ -1,6 +1,6 @@
 {
   "name": "zsh-history-enquirer",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "zsh history search plugin by enquirer",
   "main": "index.js",
   "bin": {
@@ -77,6 +77,7 @@
     "rollup-plugin-filesize": "^6.2.1",
     "rollup-plugin-node-resolve": "^5.2.0",
     "rollup-plugin-progress": "^1.1.1",
+    "rollup-plugin-strip": "^1.2.2",
     "signale": "^1.4.0",
     "svg-term-cli": "^2.1.1"
   },
