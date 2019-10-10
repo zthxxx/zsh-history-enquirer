@@ -13,6 +13,8 @@ export default class HistorySearcher extends AutoComplete {
   constructor(options) {
     super(options)
 
+    signale.info('HistorySearcher size', { width: this.width, height: this.height })
+
     // start with initial col position rather than 0 default
     this.stdout.write(ansi.cursor.to(options.initCol))
 

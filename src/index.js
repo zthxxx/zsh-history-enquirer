@@ -23,7 +23,6 @@ export default async function searchHistory({ input = '', historyCommand, histor
     'searchHistory lines',
     lines.length,
     stringify(lines[0]),
-    stringify(lines[lines.length - 1]),
   )
 
   const stdin = process.stdin.isTTY ? process.stdin : getStdin()
@@ -31,12 +30,12 @@ export default async function searchHistory({ input = '', historyCommand, histor
   signale.info(
     'searchHistory stdin',
     stdin.constructor.name,
-    stdin.isTTY,
+    ['isTTY', stdin.isTTY],
   )
   signale.info(
     'searchHistory stdout',
     stdout.constructor.name,
-    stdout.isTTY,
+    ['isTTY', stdout.isTTY],
   )
 
   const searcher = new HistorySearcher({
@@ -51,7 +50,7 @@ export default async function searchHistory({ input = '', historyCommand, histor
     initCol: cursor.x - input.length,
     onRun(prompt) {
       signale.info('HistorySearcher onRun start')
-      signale.info('HistorySearcher start input', input)
+      signale.info('HistorySearcher start input', stringify(input))
 
       if (input.length) {
         prompt.input = input
