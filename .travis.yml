@@ -28,6 +28,15 @@ script:
   - npm run build
 
 deploy:
+  - provider: pages
+    local_dir: public
+    skip_cleanup: true
+    keep_history: true
+    github_token: ${GIT_REPO_TOKEN}
+    target_branch: gh-pages
+    on:
+      branch: master
+
   - provider: npm
     skip_cleanup: true
     email: "${NPM_USER_EMAIL}"
@@ -38,3 +47,5 @@ deploy:
 
 notifications:
   email: true
+  on_success: always
+  on_failure: always

@@ -58,6 +58,7 @@ or one-line command (which will install node via nvm)
 ```bash
 curl -#sSL https://github.com/zthxxx/zsh-history-enquirer/raw/master/installer.zsh | zsh
 ```
+
 ### manually without oh-my-zsh
 
 if you dont have `oh-my-zsh`, manual add `source` plugin file to `.zshrc` after npm installed
