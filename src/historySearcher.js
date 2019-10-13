@@ -6,8 +6,10 @@ import signale from './signale'
 
 
 AutoComplete.prototype.pointer = Select.prototype.pointer
+AutoComplete.prototype.render = Select.prototype.render
 
 const SIGINT_CODE = 3
+const { stringify } = JSON
 
 export default class HistorySearcher extends AutoComplete {
   constructor(options) {
@@ -33,12 +35,37 @@ export default class HistorySearcher extends AutoComplete {
   }
 
   number(ch) {
-    return this.append(ch)
+    return this.dispatch(ch)
   }
 
-  dispatch(ch) {
-    signale.info('HistorySearcher dispatch', ch)
+  dispatch(ch, key) {
+    if (typeof ch !== 'string') {
+      signale.error('[ERROR] HistorySearcher dispatch', ch, key, new Error(ch).stack)
+      return
+    }
+    signale.info('HistorySearcher dispatch', stringify(ch), key, new Error(ch).stack)
     return super.dispatch(ch);
+  }
+
+  suggest(input = this.input, choices = this.state._choices) {
+    let result = choices
+    for (const item of input.toLowerCase().split(' ').filter(Boolean)) {
+      result = result.filter(({ message }) => message.toLowerCase().includes(item))
+    }
+    return result
+  }
+
+  choiceMessage(choice, i) {
+    const input = this.input
+    const shader = this.options.highlight
+      ? this.options.highlight.bind(this)
+      : this.styles.placeholder
+
+    let message = choice.message
+    for (const item of new Set(input.toLowerCase().split(' ').filter(Boolean))) {
+      message = message.replace(item, shader(item))
+    }
+    return super.choiceMessage({ ...choice, message }, i)
   }
 
   format() {
@@ -93,7 +120,7 @@ export default class HistorySearcher extends AutoComplete {
 
     if (submitted) {
       this.stdout.write(ansi.erase.line + ansi.cursor.up())
-      signale.info('HistorySearcher submitted')
+      signale.info('HistorySearcher submitted input', stringify(input))
     }
   }
 
@@ -102,7 +129,7 @@ export default class HistorySearcher extends AutoComplete {
       if (err === String.fromCharCode(SIGINT_CODE)) {
         signale.info('HistorySearcher cancel')
       } else {
-        signale.error('HistorySearcher ERROR', err, new Error(err).stack)
+        signale.error('HistorySearcher ERROR', stringify(err), new Error(err).stack)
       }
     }
     return this.state.cancelled ? this.input : super.error(err)

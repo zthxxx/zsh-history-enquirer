@@ -42,12 +42,14 @@ export default async function searchHistory({ input = '', historyCommand, histor
     name: 'history',
     message: 'reverse search history',
     promptLine: false,
-    get limit() {
-      return Math.min(15, stdout.rows - 2)
-    },
     choices: lines,
     // shell prompt start col without input buffer
     initCol: cursor.x - input.length,
+    stdin,
+    stdout,
+    get limit() {
+      return Math.min(15, stdout.rows - 2)
+    },
     onRun(prompt) {
       signale.info('HistorySearcher onRun start')
       signale.info('HistorySearcher start input', stringify(input))
@@ -64,8 +66,6 @@ export default async function searchHistory({ input = '', historyCommand, histor
         stringify(prompt.choices[0].value),
       )
     },
-    stdin,
-    stdout,
   })
 
   return searcher

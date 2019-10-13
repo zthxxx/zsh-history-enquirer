@@ -4,7 +4,7 @@ function history_enquire() {
   # fcenquire is the bin name of zsh-history-enquirer
   if [[ -e $commands[fcenquire] ]]; then
     BUFFER=$(fcenquire "$LBUFFER")
-    CUOSOR=$#BUFFER
+    CURSOR=$#BUFFER
     zle -R -c
   else
     # fallback to use zsh default history search

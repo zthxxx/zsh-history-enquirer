@@ -1,3 +1,4 @@
+: 1568797111:0;git log --pretty=fuller --date=iso -n 1
 : 1568797112:0;echo earlier command
 : 1568797113:0;ffmpeg -i "input.mp4" -vf reverse reversed.mp4
 : 1568797114:0;where git
