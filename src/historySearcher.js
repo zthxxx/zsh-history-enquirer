@@ -17,6 +17,15 @@ export default class HistorySearcher extends AutoComplete {
 
     signale.info('HistorySearcher size', { width: this.width, height: this.height })
 
+    /**
+     * isPasting: null | true | false
+     *
+     * true - bracketed paste mode \e[200
+     * false - ending but not complete of bracketed paste mode \e[201
+     * null - finished paste mode
+     */
+    this.isPasting = null
+
     // start with initial col position rather than 0 default
     this.stdout.write(ansi.cursor.to(options.initCol))
 
@@ -39,11 +48,28 @@ export default class HistorySearcher extends AutoComplete {
   }
 
   dispatch(ch, key) {
-    if (typeof ch !== 'string') {
-      signale.error('[ERROR] HistorySearcher dispatch', ch, key, new Error(ch).stack)
+    const { sequence } = key
+    // [BUG enquirer] bracketed paste mode
+    // content will be wrapped by the sequences `\e[200~` and `\e[201~`
+    // https://cirw.in/blog/bracketed-paste
+    if (sequence === '\u001b[200') {
+      this.isPasting = true
+      signale.info('Keyperss start pasting \\e[200~')
+      return
+    } else if (sequence === '~' && this.isPasting){
+      signale.info('Keyperss in pasting')
+      return
+    } else if (sequence === '\u001b[201') {
+      signale.info('Keyperss ending pasting \\e[201~')
+      this.isPasting = false
+      return
+    } else if (sequence === '~' && this.isPasting === false) {
+      this.isPasting = null
+      signale.info('Keyperss end pasted')
       return
     }
-    signale.info('HistorySearcher dispatch', stringify(ch), key, new Error(ch).stack)
+
+    signale.info('HistorySearcher dispatch', stringify(ch), key)
     return super.dispatch(ch);
   }
 
@@ -81,7 +107,7 @@ export default class HistorySearcher extends AutoComplete {
     const { rest } = this.sections()
     super.restore()
 
-    // [BUG]`prompt.restore` dont calculate if line width more than termainal columns
+    // [BUG enquirer]`prompt.restore` dont calculate if line width more than termainal columns
     const rows = rest
       .map(line => colors.unstyle(line).length)
       .map(width => Math.max(width - 2, 0))
