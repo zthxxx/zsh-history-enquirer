@@ -18,19 +18,21 @@ export default class HistorySearcher extends AutoComplete {
     signale.info('HistorySearcher size', { width: this.width, height: this.height })
 
     /**
-     * isPasting: null | true | false
+     * pastingStep: null | starting | started | ending | ended
      *
-     * true - bracketed paste mode \e[200
-     * false - ending but not complete of bracketed paste mode \e[201
-     * null - finished paste mode
+     * starting - bracketed paste mode \e[200
+     * started - get first ~ after \e[200
+     * ending - ending but not complete of bracketed paste mode \e[201
+     * ended | null - finished paste, get first ~ after \e[201
      */
-    this.isPasting = null
+    this.pastingStep = null
 
     // start with initial col position rather than 0 default
     this.stdout.write(ansi.cursor.to(options.initCol))
 
     // overwrite, replace erase first line with erasePrompt (only erase from initial to end)
     ansi.clear = (input = '', columns = process.stdout.columns) => {
+      // [BUG enquirer] cursor not always at the beginning when prompt start
       const erasePrompt = ansi.cursor.to(options.initCol) + ansi.erase.lineEnd
       if (!columns) return erasePrompt
       let width = str => [...colors.unstyle(str)].length
@@ -47,24 +49,27 @@ export default class HistorySearcher extends AutoComplete {
     return this.dispatch(ch)
   }
 
-  dispatch(ch, key) {
+  dispatch(ch, key = {}) {
+    // https://github.com/enquirer/enquirer/blob/2.3.2/lib/keypress.js#L104
+    // https://github.com/enquirer/enquirer/blob/2.3.2/lib/keypress.js#L209
     const { sequence } = key
     // [BUG enquirer] bracketed paste mode
     // content will be wrapped by the sequences `\e[200~` and `\e[201~`
     // https://cirw.in/blog/bracketed-paste
     if (sequence === '\u001b[200') {
-      this.isPasting = true
+      this.pastingStep = 'starting'
       signale.info('Keyperss start pasting \\e[200~')
       return
-    } else if (sequence === '~' && this.isPasting){
+    } else if (this.pastingStep === 'starting' && sequence === '~'){
+      this.pastingStep = 'started'
       signale.info('Keyperss in pasting')
       return
-    } else if (sequence === '\u001b[201') {
+    } else if (this.pastingStep === 'started' && sequence === '\u001b[201') {
+      this.pastingStep = 'ending'
       signale.info('Keyperss ending pasting \\e[201~')
-      this.isPasting = false
       return
-    } else if (sequence === '~' && this.isPasting === false) {
-      this.isPasting = null
+    } else if (this.pastingStep === 'ending' && sequence === '~') {
+      this.pastingStep = 'ended'
       signale.info('Keyperss end pasted')
       return
     }
@@ -104,17 +109,22 @@ export default class HistorySearcher extends AutoComplete {
   }
 
   restore() {
+    // @TODO: pointer length from Prompt.pointer()
+    const POINTER_LENGTH = 2
     const { rest } = this.sections()
     super.restore()
 
     // [BUG enquirer]`prompt.restore` dont calculate if line width more than termainal columns
     const rows = rest
       .map(line => colors.unstyle(line).length)
-      .map(width => Math.max(width - 2, 0))
+      .map(width => width + POINTER_LENGTH)
       .map(width => Math.ceil(width / this.width))
       .reduce((a, b) => a + b, 0)
+
     this.state.size = rows
     this.stdout.write(ansi.cursor.up(rows - rest.length))
+
+    signale.info('HistorySearcher restore [rows, rest.length]', [rows, rest.length])
 
     // append initial position
     this.stdout.write(ansi.cursor.right(this.options.initCol))
