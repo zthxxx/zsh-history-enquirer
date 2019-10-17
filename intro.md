@@ -41,12 +41,6 @@ review and choose in multilines
 
 ---
 
-<style>
-.content img {
-  transform: scale(.8)
-}
-</style>
-
 ![zsh-history-enquirer preview](./images/preview.svg?sanitize=true)
 
 ---
@@ -80,9 +74,9 @@ Released under the 🎉**[MIT](https://github.com/zthxxx/zsh-history-enquirer/bl
 ---
 
 <img
-width="150" height="150"
+width="200" height="200"
 alt="zthxxx"
-src="https://avatars.githubusercontent.com/u/15135943?s=150"
+src="https://avatars.githubusercontent.com/u/15135943"
 style="border-radius: 50%; border: solid 1px #bbb;"
 />
 
