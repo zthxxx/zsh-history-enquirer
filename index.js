@@ -3,8 +3,8 @@ try {
   const searchHistory = require('./dist')
   module.exports = searchHistory
 } catch {
-  // esm `src` for dev
-  require = require('esm')(module)
+  // ts `src` for dev
+  require('ts-node/register')
   const searchHistory = require('./src').default
   module.exports = searchHistory
 }

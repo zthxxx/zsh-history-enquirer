@@ -2,7 +2,10 @@ import path from 'path'
 import execa from 'execa'
 
 
-export default async function history(historyScript, historyFile) {
+export default async function history(
+  historyScript?: string,
+  historyFile?: string
+): Promise<string[]> {
   const historyCommand = historyScript || path.join(__dirname, 'history.zsh')
   const historyPath = historyFile ? [historyFile] : []
   const { stdout } = await execa(historyCommand, historyPath)

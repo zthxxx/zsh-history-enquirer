@@ -1,9 +1,75 @@
 import colors from 'ansi-colors'
+import tty from 'tty'
+import { Prompt } from 'enquirer'
 import ansi from 'enquirer/lib/ansi'
 import AutoComplete from 'enquirer/lib/prompts/autocomplete'
 import Select from 'enquirer/lib/prompts/select'
 import signale from './signale'
 
+
+export interface Keyperss {
+  name: string,
+  ctrl: boolean,
+  meta: boolean,
+  shift: boolean,
+  option: boolean,
+  sequence: string,
+  raw: string,
+  code: string,
+  action: string,
+}
+
+export interface ChoiceItem {
+  name: string,
+  normalized: boolean,
+  message: string,
+  value: string,
+  input: string,
+  index: number,
+  cursor: number,
+  level: number,
+  indent: string,
+  path: string,
+  enabled: boolean,
+  reset: Function[],
+}
+
+export interface PromptState {
+  name: string,
+  message: string,
+  header: string,
+  footer: string,
+  error: string,
+  hint: string,
+  input: string,
+  cursor: number,
+  index: number,
+  lines: number,
+  size: number,
+  tick: number,
+  prompt: string,
+  buffer: string,
+  width: number,
+  promptLine: boolean,
+  choices: ChoiceItem[],
+  initCol: number,
+  stdin: tty.ReadStream,
+  stdout: tty.WriteStream,
+  limit: number,
+  onRun: Function,
+  cancelled: boolean,
+  submitted: boolean,
+  loadingChoices: boolean,
+}
+
+export type PromptOptions = ConstructorParameters<typeof Prompt>[0]
+export type PromptInstance = InstanceType<typeof Prompt>
+
+export interface ExtraOptions {
+  limit?: number,
+  highlight?: () => void,
+  initCol?: number,
+}
 
 AutoComplete.prototype.pointer = Select.prototype.pointer
 AutoComplete.prototype.render = Select.prototype.render
@@ -12,6 +78,24 @@ const SIGINT_CODE = 3
 const { stringify } = JSON
 
 export default class HistorySearcher extends AutoComplete {
+  private state: PromptState
+  private options: PromptOptions & ExtraOptions
+  private width: number
+  private height: number
+  private input: string
+  private stdout: tty.WriteStream
+  private styles: any
+  private pastingStep: null | 'starting' | 'started' | 'ending' | 'ended'
+  private shiftUp: () => void
+  private shiftDown: () => void
+  private sections: () => any
+  public submit: () => void
+  public keypress: (char: string | number, key?: Keyperss) => void
+  public render: PromptInstance['render']
+  public run: PromptInstance['run']
+  public once: PromptInstance['once']
+
+
   constructor(options) {
     super(options)
 
@@ -45,14 +129,14 @@ export default class HistorySearcher extends AutoComplete {
     }
   }
 
-  number(ch) {
+  number(ch: string) {
     return this.dispatch(ch)
   }
 
-  dispatch(ch, key = {}) {
+  dispatch(ch: string, key?: Keyperss) {
     // https://github.com/enquirer/enquirer/blob/2.3.2/lib/keypress.js#L104
     // https://github.com/enquirer/enquirer/blob/2.3.2/lib/keypress.js#L209
-    const { sequence } = key
+    const { sequence } = key || {}
     // [BUG enquirer] bracketed paste mode
     // content will be wrapped by the sequences `\e[200~` and `\e[201~`
     // https://cirw.in/blog/bracketed-paste
@@ -75,10 +159,10 @@ export default class HistorySearcher extends AutoComplete {
     }
 
     signale.info('HistorySearcher dispatch', stringify(ch), key)
-    return super.dispatch(ch);
+    return super.dispatch(ch)
   }
 
-  suggest(input = this.input, choices = this.state._choices) {
+  suggest(input = this.input, choices = this.state.choices) {
     let result = choices
     for (const item of input.toLowerCase().split(' ').filter(Boolean)) {
       result = result.filter(({ message }) => message.toLowerCase().includes(item))
@@ -86,7 +170,9 @@ export default class HistorySearcher extends AutoComplete {
     return result
   }
 
-  choiceMessage(choice, i) {
+  choiceMessage(choice: ChoiceItem, index: number) {
+    signale.info('HistorySearcher choiceMessage', choice, index)
+
     const input = this.input
     const shader = this.options.highlight
       ? this.options.highlight.bind(this)
@@ -96,7 +182,7 @@ export default class HistorySearcher extends AutoComplete {
     for (const item of new Set(input.toLowerCase().split(' ').filter(Boolean))) {
       message = message.replace(item, shader(item))
     }
-    return super.choiceMessage({ ...choice, message }, i)
+    return super.choiceMessage({ ...choice, message }, index)
   }
 
   format() {
@@ -104,7 +190,7 @@ export default class HistorySearcher extends AutoComplete {
     if (cancelled) {
       return input
     }
-    if (input) return super.format();
+    if (input) return super.format()
     return ansi.code.show
   }
 

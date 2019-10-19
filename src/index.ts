@@ -5,10 +5,19 @@ import { getStdin, getStdout } from './tty'
 import signale from './signale'
 
 
+export interface SearchOptions {
+  input?: string,
+  historyCommand?: string,
+  historyFile?: string,
+}
+
+export type SearchFunction = (options: SearchOptions) => Promise<HistorySearcher>
+
 const { stringify } = JSON
 
-export default async function searchHistory({ input = '', historyCommand, historyFile }) {
+export default async function searchHistory(options: SearchOptions): ReturnType<SearchFunction> {
   signale.info('searchHistory start')
+  const { input = '', historyCommand, historyFile } = options
 
   const [
     cursor,
@@ -38,7 +47,7 @@ export default async function searchHistory({ input = '', historyCommand, histor
     ['isTTY', stdout.isTTY],
   )
 
-  const searcher = new HistorySearcher({
+  return new HistorySearcher({
     name: 'history',
     message: 'reverse search history',
     promptLine: false,
@@ -67,7 +76,5 @@ export default async function searchHistory({ input = '', historyCommand, histor
       )
     },
   })
-
-  return searcher
 }
 
