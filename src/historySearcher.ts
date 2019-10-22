@@ -74,7 +74,7 @@ export interface ExtraOptions {
 AutoComplete.prototype.pointer = Select.prototype.pointer
 AutoComplete.prototype.render = Select.prototype.render
 
-const SIGINT_CODE = 3
+export const SIGINT_CODE = 3
 const { stringify } = JSON
 
 export default class HistorySearcher extends AutoComplete {
@@ -90,6 +90,7 @@ export default class HistorySearcher extends AutoComplete {
   private shiftDown: () => void
   private sections: () => any
   public submit: () => void
+  public cancel: (err?: string) => void
   public keypress: (char: string | number, key?: Keyperss) => void
   public render: PromptInstance['render']
   public run: PromptInstance['run']

@@ -72,7 +72,7 @@ export default async function searchHistory(options: SearchOptions): ReturnType<
       signale.info(
         'HistorySearcher onRun choices',
         prompt.choices.length,
-        stringify(prompt.choices[0].value),
+        stringify(prompt.choices[0]?.value),
       )
     },
   })

@@ -7,8 +7,7 @@ import { SearchFunction } from '../src'
   input: 'zsh',
   historyFile: path.join(__dirname, 'history.txt'),
 })
-  .then(prompt => {
-    const searcher = prompt
+  .then(searcher => {
     searcher.once('run', async() => {
       await searcher.render()
       await searcher.submit()

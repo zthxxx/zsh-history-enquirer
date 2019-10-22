@@ -1,6 +1,6 @@
 import path from 'path'
 import search from '..'
-import HistorySearcher, { Keyperss } from '../src/historySearcher'
+import HistorySearcher, { Keyperss, SIGINT_CODE } from '../src/historySearcher'
 import { SearchFunction } from '../src'
 
 
@@ -40,6 +40,7 @@ test('search `echo` in history', async () => {
   searcher.once('run', async() => {
     await searcher.render()
     await searcher.submit()
+    await searcher.cancel()
   })
 
   const result = await searcher.run()
@@ -112,4 +113,103 @@ test('number and paste number in terminal', async () => {
 
   const result = await searcher.run()
   expect(result).toBe('233333')
+})
+
+test('pageUp', async () => {
+  const searcher = await searchHistory({
+    input: '',
+    historyFile: path.join(__dirname, 'history.txt'),
+  })
+
+  searcher.once('run', async() => {
+    await searcher.render()
+    await searcher.pageUp()
+    await searcher.render()
+    await searcher.submit()
+  })
+
+  const result = await searcher.run()
+  expect(result).toBe('echo zsh-history-enquirer')
+})
+
+test('pageDown', async () => {
+  const searcher = await searchHistory({
+    input: '',
+    historyFile: path.join(__dirname, 'history.txt'),
+  })
+
+  searcher.once('run', async() => {
+    await searcher.render()
+    await searcher.pageDown()
+    await searcher.render()
+    await searcher.submit()
+  })
+
+  const result = await searcher.run()
+  expect(result).toBe('233333')
+})
+
+test('test cancel', async () => {
+  const searcher = await searchHistory({
+    input: '',
+    historyFile: path.join(__dirname, 'history.txt'),
+  })
+
+  searcher.once('run', async() => {
+    await searcher.render()
+    await searcher.keypress(2)
+    await searcher.keypress(3)
+    await searcher.keypress(3)
+    await searcher.keypress(3)
+    await searcher.cancel('some error message')
+  })
+  try {
+    await searcher.run()
+    expect(true).toBe(false)
+  } catch (result) {
+    expect(result).toBe('2333')
+  }
+})
+
+test('test cancel ctrl+c', async () => {
+  const searcher = await searchHistory({
+    input: '',
+    historyFile: path.join(__dirname, 'history.txt'),
+  })
+
+  searcher.once('run', async() => {
+    await searcher.render()
+    await searcher.keypress(2)
+    await searcher.keypress(3)
+    await searcher.keypress(3)
+    await searcher.keypress(3)
+    await searcher.cancel(String.fromCharCode(SIGINT_CODE))
+  })
+  try {
+    await searcher.run()
+    expect(true).toBe(false)
+  } catch (result) {
+    expect(result).toBe('2333')
+  }
+})
+
+
+test('search not match in history', async () => {
+  const searcher = await searchHistory({
+    input: '3jdfn2-9jgf',
+    historyFile: path.join(__dirname, 'history.txt'),
+  })
+
+  searcher.once('run', async() => {
+    await searcher.render()
+    await searcher.submit()
+    await searcher.cancel()
+  })
+
+  try {
+    await searcher.run()
+    expect(true).toBe(false)
+  } catch (result) {
+    expect(result).toBe('3jdfn2-9jgf')
+  }
 })
