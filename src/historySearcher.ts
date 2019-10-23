@@ -82,12 +82,14 @@ export default class HistorySearcher extends AutoComplete {
   private options: PromptOptions & ExtraOptions
   private width: number
   private height: number
-  private input: string
   private stdout: tty.WriteStream
   private styles: any
+  private input: string
+  private choices: ChoiceItem[]
   private pastingStep: null | 'starting' | 'started' | 'ending' | 'ended'
-  private shiftUp: () => void
-  private shiftDown: () => void
+  private isDisabled: () => boolean
+  private up: () => void
+  private down: () => void
   private sections: () => any
   public submit: () => void
   public cancel: (err?: string) => void
@@ -219,16 +221,20 @@ export default class HistorySearcher extends AutoComplete {
 
   pageUp() {
     const { limit = 10 } = this.options
-    for (let i = 0; i < limit; i++) {
-      this.shiftUp()
+    this.choices = [...this.choices.slice(-limit), ...this.choices.slice(0, -limit)]
+    while (this.isDisabled()) {
+      this.up();
     }
+    this.render()
   }
 
   pageDown() {
     const { limit = 10 } = this.options
-    for (let i = 0; i < limit; i++) {
-      this.shiftDown()
+    this.choices = [...this.choices.slice(limit), ...this.choices.slice(0, limit)]
+    while (this.isDisabled()) {
+      this.down();
     }
+    this.render()
   }
 
   /**
