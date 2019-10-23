@@ -22,7 +22,7 @@ before_install:
   - zsh --version
 
 before_script:
-  - npm test
+  - npm run test:coverage
 
 script:
   - npm run build

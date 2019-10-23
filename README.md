@@ -2,6 +2,7 @@
 
 <p align="center">
   <a href="https://travis-ci.org/zthxxx/zsh-history-enquirer" target="_blank" rel="noopener noreferrer"><img src="https://travis-ci.org/zthxxx/zsh-history-enquirer.svg" alt="Build Status" /></a>
+  <a href="https://coveralls.io/github/zthxxx/zsh-history-enquirer" target="_blank" rel="noopener noreferrer"><img src="https://badgen.net/coveralls/c/github/zthxxx/zsh-history-enquirer" alt="Build Status" /></a>
   <a href="https://www.npmjs.com/package/zsh-history-enquirer" target="_blank" rel="noopener noreferrer"><img src="https://badgen.net/npm/v/zsh-history-enquirer" alt="NPM Version" /></a>
   <a href="https://www.npmjs.com/package/zsh-history-enquirer" target="_blank" rel="noopener noreferrer"><img src="https://badgen.net/npm/dt/zsh-history-enquirer" alt="NPM Downloads" /></a>
   <a href="https://nodejs.org/" target="_blank" rel="noopener noreferrer"><img src="https://badgen.net/npm/node/zsh-history-enquirer" alt="Node.js" /></a>

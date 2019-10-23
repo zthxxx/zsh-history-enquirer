@@ -256,7 +256,7 @@ export default class HistorySearcher extends AutoComplete {
   error(err) {
     if (err !== undefined) {
       if (err === String.fromCharCode(SIGINT_CODE)) {
-        signale.info('HistorySearcher cancel')
+        signale.info('HistorySearcher cancel, terminated with SIGINT')
       } else {
         signale.error('HistorySearcher ERROR', stringify(err), new Error(err).stack)
       }
