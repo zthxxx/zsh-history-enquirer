@@ -11,8 +11,7 @@
 
 ## What's this
 
-a plugin for **enhance zsh history search interaction**, review and choose in multilines
-
+A plugin that **enhances zsh history search interaction**, with review and choose in a multiline menu
 
 ## Preview
 
@@ -34,17 +33,17 @@ a plugin for **enhance zsh history search interaction**, review and choose in mu
 
 ### oh-my-zsh
 
-if you used [`oh-my-zsh`](https://github.com/robbyrussell/oh-my-zsh), **all you need to do is the one command for npm**
+If you are using [`oh-my-zsh`](https://github.com/robbyrussell/oh-my-zsh), **all you need to do is one npm command.**
 
 ```bash
 npm i -g zsh-history-enquirer
 ```
 
-the install/uninstall hooks will be correct in setup `oh-my-zsh` plugins and config, so manual edit `.zshrc` is also **no longer necessary**
+The install/uninstall hooks will be correctly setup in your `oh-my-zsh` plugins and config. Manually editing `.zshrc` is **no longer necessary**
 
 ### root
 
-but for **root**, must enable option `--unsafe-perm`
+For **root**, you must use the `--unsafe-perm` option for `npm`.
 
 ```bash
 # https://stackoverflow.com/questions/49084929/npm-sudo-global-installation-unsafe-perm
@@ -53,7 +52,7 @@ npm i -g zsh-history-enquirer --unsafe-perm
 
 ### one-line command
 
-or one-line command (which will install node via nvm)
+You can use a one-line command (which will also install node via nvm)
 
 ```bash
 curl -#sSL https://github.com/zthxxx/zsh-history-enquirer/raw/master/installer.zsh | zsh
@@ -61,20 +60,17 @@ curl -#sSL https://github.com/zthxxx/zsh-history-enquirer/raw/master/installer.z
 
 ### manually without oh-my-zsh
 
-if you dont have `oh-my-zsh`, manual add `source` plugin file to `.zshrc` after npm installed
-
-and manual remove the `source` command while uninstalled
+If you don't use `oh-my-zsh`, you can manually add the `source` plugin file to your `.zshrc` after npm is installed and manually remove the `source` command when it is uninstalled.
 
 ```bash
 echo 'source `npm root -g`/zsh-history-enquirer/zsh-history-enquirer.plugin.zsh' >> ~/.zshrc
 ```
 
-
 ## Usage
 
-this plugin will replace default zsh history search as shortcuts `^R`
+This plugin will replace the default ZSH history search with the `^R` shortcut.
 
-just press <kbd>^R</kbd> (<kbd>Ctrl</kbd> + <kbd>R</kbd>) for enjoy it!
+Just press <kbd>^R</kbd> (<kbd>Ctrl</kbd> + <kbd>R</kbd>) to enjoy enhanced history search!
 
 
 ## License
@@ -87,4 +83,3 @@ just press <kbd>^R</kbd> (<kbd>Ctrl</kbd> + <kbd>R</kbd>) for enjoy it!
 **zsh-history-enquirer** © [zthxxx](https://github.com/zthxxx), Released under the **[MIT](./LICENSE)** License.<br>
 
 > Blog [@zthxxx](https://blog.zthxxx.me) · GitHub [@zthxxx](https://github.com/zthxxx)
-
