@@ -1,6 +1,7 @@
 ## [zsh-history-enquirer](https://github.com/zthxxx/zsh-history-enquirer)
 
 [![Build Status](https://travis-ci.org/zthxxx/zsh-history-enquirer.svg)](https://travis-ci.org/zthxxx/zsh-history-enquirer)
+[![Coverage Status](https://badgen.net/coveralls/c/github/zthxxx/zsh-history-enquirer)](https://coveralls.io/github/zthxxx/zsh-history-enquirer)
 [![NPM Version](https://badgen.net/npm/v/zsh-history-enquirer)](https://www.npmjs.com/package/zsh-history-enquirer)
 [![NPM Downloads](https://badgen.net/npm/dt/zsh-history-enquirer)](https://www.npmjs.com/package/zsh-history-enquirer)
 [![Node.js](https://badgen.net/npm/node/zsh-history-enquirer)](https://nodejs.org/)
