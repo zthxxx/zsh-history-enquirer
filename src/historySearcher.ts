@@ -77,6 +77,21 @@ AutoComplete.prototype.render = Select.prototype.render
 export const SIGINT_CODE = 3
 const { stringify } = JSON
 
+// @TODO: pointer length from Prompt.pointer()
+const POINTER_LENGTH = 2
+const POINTER_PLACEHOLDER = Array.from({ length: POINTER_LENGTH })
+  .fill(' ')
+  .join('')
+
+
+const calcStringRows = (input: string, columns: number): number => {
+  return `${POINTER_PLACEHOLDER}${input}`
+    .split('\n')
+    .map(line => Math.ceil(line.length / columns))
+    .reduce((a, b) => a + b, 0)
+}
+
+
 export default class HistorySearcher extends AutoComplete {
   private state: PromptState
   private options: PromptOptions & ExtraOptions
@@ -85,11 +100,17 @@ export default class HistorySearcher extends AutoComplete {
   private stdout: tty.WriteStream
   private styles: any
   private input: string
+  private limit: number
   private choices: ChoiceItem[]
+  private visible: ChoiceItem[]
+  private focused: ChoiceItem
+  private value: ChoiceItem['name']
+  private index: number
   private pastingStep: null | 'starting' | 'started' | 'ending' | 'ended'
   private isDisabled: () => boolean
-  private up: () => void
-  private down: () => void
+  private alert: () => void
+  private scrollUp: () => void
+  private scrollDown: () => void
   private sections: () => any
   public submit: () => void
   public cancel: (err?: string) => void
@@ -147,7 +168,7 @@ export default class HistorySearcher extends AutoComplete {
       this.pastingStep = 'starting'
       signale.info('Keyperss start pasting \\e[200~')
       return
-    } else if (this.pastingStep === 'starting' && sequence === '~'){
+    } else if (this.pastingStep === 'starting' && sequence === '~') {
       this.pastingStep = 'started'
       signale.info('Keyperss in pasting')
       return
@@ -173,8 +194,41 @@ export default class HistorySearcher extends AutoComplete {
     return result
   }
 
+  /**
+   * calc and change `this.limit`,
+   * to dynamic limit choices rendered to avoid long and multiline choices
+   * overflow the terminal container
+   *
+   * rewrite `enquirer/lib/prompts/select.js`
+   */
+  async renderChoices(): Promise<string> {
+    const { options } = this
+
+    let limit = 0
+    let rows = 0
+    const { width } = this
+
+    for (let choice of this.choices) {
+      rows += calcStringRows(choice.message, width)
+
+      if (rows > this.height - 3) {
+        break
+      }
+
+      limit += 1
+
+      if (limit >= options.limit) {
+        break
+      }
+    }
+
+    this.limit = limit
+
+    return super.renderChoices()
+  }
+
   choiceMessage(choice: ChoiceItem, index: number) {
-    signale.info('HistorySearcher choiceMessage', choice, index)
+    // signale.info('HistorySearcher choiceMessage', index, { message: choice.message })
 
     const input = this.input
     const shader = this.options.highlight
@@ -198,43 +252,79 @@ export default class HistorySearcher extends AutoComplete {
   }
 
   restore() {
-    // @TODO: pointer length from Prompt.pointer()
-    const POINTER_LENGTH = 2
+    const { width } = this
     const { rest } = this.sections()
     super.restore()
 
     // [BUG enquirer]`prompt.restore` dont calculate if line width more than termainal columns
     const rows = rest
-      .map(line => colors.unstyle(line).length)
-      .map(width => width + POINTER_LENGTH)
-      .map(width => Math.ceil(width / this.width))
+      .map(line => colors.unstyle(line))
+      .map(line => calcStringRows(line, width))
       .reduce((a, b) => a + b, 0)
 
     this.state.size = rows
     this.stdout.write(ansi.cursor.up(rows - rest.length))
 
-    signale.info('HistorySearcher restore [rows, rest.length]', [rows, rest.length])
+    signale.info('HistorySearcher restore [limit, rows, rest.length]', [
+      this.limit,
+      rows,
+      rest.length,
+    ])
 
     // append initial position
     this.stdout.write(ansi.cursor.right(this.options.initCol))
   }
 
   pageUp() {
-    const { limit = 10 } = this.options
+    const { limit } = this
     this.choices = [...this.choices.slice(-limit), ...this.choices.slice(0, -limit)]
     while (this.isDisabled()) {
-      this.up();
+      this.up()
     }
     this.render()
   }
 
   pageDown() {
-    const { limit = 10 } = this.options
+    const { limit } = this
     this.choices = [...this.choices.slice(limit), ...this.choices.slice(0, limit)]
     while (this.isDisabled()) {
-      this.down();
+      this.down()
     }
     this.render()
+  }
+
+  /**
+   * @TODO: scroll when multiline command
+   */
+  up() {
+    let len = this.choices.length;
+    let vis = this.visible.length;
+    let idx = this.index;
+    if (len > vis && idx === 0) {
+      return this.scrollUp();
+    }
+    this.index = ((idx - 1 % len) + len) % len;
+    if (this.isDisabled()) {
+      return this.up();
+    }
+    return this.render();
+  }
+
+  /**
+   * @TODO: scroll when multiline command
+   */
+  down() {
+    let len = this.choices.length;
+    let vis = this.visible.length;
+    let idx = this.index;
+    if (len > vis && idx === vis - 1) {
+      return this.scrollDown();
+    }
+    this.index = (idx + 1) % len;
+    if (this.isDisabled()) {
+      return this.down();
+    }
+    return this.render();
   }
 
   /**
@@ -243,13 +333,18 @@ export default class HistorySearcher extends AutoComplete {
    * when cancel, erase and leave origin input
    */
   async close() {
+    const { value } = this
     const { input, submitted } = this.state
     await super.close()
     if (!input) return
 
     if (submitted) {
-      this.stdout.write(ansi.erase.line + ansi.cursor.up())
-      signale.info('HistorySearcher submitted input', stringify(input))
+      this.stdout.write(ansi.erase.line)
+      this.stdout.write(ansi.cursor.up().repeat(calcStringRows(value, this.width)))
+      signale.info('HistorySearcher submitted value', [
+        calcStringRows(value, this.width),
+        stringify(value),
+      ])
     }
   }
 

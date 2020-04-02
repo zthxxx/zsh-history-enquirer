@@ -18,4 +18,19 @@ export default async function history(
     .filter(
       line => !linesSet.has(line) && linesSet.add(line)
     )
+    /**
+     * replace '\\n' to support multiline command
+     *
+     * Example:
+     *
+     *   echo '\n  multi-line command\n  in history\n'
+     *
+     *   TO ->
+     *
+     *   echo '
+     *     multi-line command
+     *     in history
+     *   '
+     */
+    .map(line => line.replace(/\\n/g, '\n'))
 }
