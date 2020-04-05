@@ -13,7 +13,6 @@ export interface SearchOptions {
 
 export type SearchFunction = (options: SearchOptions) => Promise<HistorySearcher>
 
-const { stringify } = JSON
 
 export default async function searchHistory(options: SearchOptions): ReturnType<SearchFunction> {
   signale.info('searchHistory start')
@@ -30,8 +29,10 @@ export default async function searchHistory(options: SearchOptions): ReturnType<
   signale.info('searchHistory cursor', cursor)
   signale.info(
     'searchHistory lines',
-    lines.length,
-    stringify(lines[0]),
+    {
+      lines: lines.length,
+      first: lines[0]?.slice(0, 50),
+    },
   )
 
   const stdin = process.stdin.isTTY ? process.stdin : getStdin()
@@ -61,7 +62,7 @@ export default async function searchHistory(options: SearchOptions): ReturnType<
     },
     onRun(prompt) {
       signale.info('HistorySearcher onRun start')
-      signale.info('HistorySearcher start input', stringify(input))
+      signale.info('HistorySearcher start', { input })
 
       if (input.length) {
         prompt.input = input
@@ -71,8 +72,10 @@ export default async function searchHistory(options: SearchOptions): ReturnType<
 
       signale.info(
         'HistorySearcher onRun choices',
-        prompt.choices.length,
-        stringify(prompt.choices[0]?.value),
+        {
+          choices: prompt.choices.length,
+          first: prompt.choices[0]?.value?.slice(0, 50),
+        },
       )
     },
   })

@@ -84,13 +84,22 @@ const POINTER_PLACEHOLDER = Array.from({ length: POINTER_LENGTH })
   .join('')
 
 
-const calcStringRows = (input: string, columns: number): number => {
+const calcStringRowsTerminal = (input: string, columns: number): number => {
   return `${POINTER_PLACEHOLDER}${input}`
     .split('\n')
     .map(line => Math.ceil(line.length / columns))
     .reduce((a, b) => a + b, 0)
 }
 
+/**
+ * performance optimization with
+ * enquirer/lib/utils.js scrollDown
+ */
+const scrollDownInPlace = <T = any>(list: T[]): T[] => {
+  const first = list.shift()
+  list.push(first)
+  return list
+}
 
 export default class HistorySearcher extends AutoComplete {
   private state: PromptState
@@ -109,6 +118,7 @@ export default class HistorySearcher extends AutoComplete {
   private pastingStep: null | 'starting' | 'started' | 'ending' | 'ended'
   private isDisabled: () => boolean
   private alert: () => void
+  private up: () => void
   private scrollUp: () => void
   private scrollDown: () => void
   private sections: () => any
@@ -182,7 +192,13 @@ export default class HistorySearcher extends AutoComplete {
       return
     }
 
-    signale.info('HistorySearcher dispatch', stringify(ch), key)
+    signale.info(
+      'HistorySearcher dispatch',
+      {
+        char: stringify(ch),
+        key,
+      },
+    )
     return super.dispatch(ch)
   }
 
@@ -209,8 +225,9 @@ export default class HistorySearcher extends AutoComplete {
     const { width } = this
 
     for (let choice of this.choices) {
-      rows += calcStringRows(choice.message, width)
+      rows += calcStringRowsTerminal(choice.message, width)
 
+      // prompt occupy about 3 lines
       if (rows > this.height - 3) {
         break
       }
@@ -228,8 +245,6 @@ export default class HistorySearcher extends AutoComplete {
   }
 
   choiceMessage(choice: ChoiceItem, index: number) {
-    // signale.info('HistorySearcher choiceMessage', index, { message: choice.message })
-
     const input = this.input
     const shader = this.options.highlight
       ? this.options.highlight.bind(this)
@@ -252,24 +267,27 @@ export default class HistorySearcher extends AutoComplete {
   }
 
   restore() {
-    const { width } = this
+    const { width, limit } = this
     const { rest } = this.sections()
     super.restore()
 
     // [BUG enquirer]`prompt.restore` dont calculate if line width more than termainal columns
     const rows = rest
       .map(line => colors.unstyle(line))
-      .map(line => calcStringRows(line, width))
+      .map(line => calcStringRowsTerminal(line, width))
       .reduce((a, b) => a + b, 0)
 
     this.state.size = rows
     this.stdout.write(ansi.cursor.up(rows - rest.length))
 
-    signale.info('HistorySearcher restore [limit, rows, rest.length]', [
-      this.limit,
-      rows,
-      rest.length,
-    ])
+    signale.info(
+      'HistorySearcher restore()',
+      {
+        limit,
+        rows,
+        'rest.length': rest.length,
+      },
+    )
 
     // append initial position
     this.stdout.write(ansi.cursor.right(this.options.initCol))
@@ -294,37 +312,42 @@ export default class HistorySearcher extends AutoComplete {
   }
 
   /**
-   * @TODO: scroll when multiline command
-   */
-  up() {
-    let len = this.choices.length;
-    let vis = this.visible.length;
-    let idx = this.index;
-    if (len > vis && idx === 0) {
-      return this.scrollUp();
-    }
-    this.index = ((idx - 1 % len) + len) % len;
-    if (this.isDisabled()) {
-      return this.up();
-    }
-    return this.render();
-  }
-
-  /**
-   * @TODO: scroll when multiline command
+   * scroll when multiline command
    */
   down() {
-    let len = this.choices.length;
-    let vis = this.visible.length;
-    let idx = this.index;
+    const len = this.choices.length
+    const vis = this.visible.length
+    let idx = this.index
+
+    // prompt occupy about 3 lines
+    const heightLimit = this.height - 3
+
+    signale.info(
+      'HistorySearcher down()',
+      { len, vis, idx },
+    )
+
     if (len > vis && idx === vis - 1) {
-      return this.scrollDown();
+      const nextChoice: ChoiceItem = this.choices[idx + 1]
+      const nextRows: number = calcStringRowsTerminal(nextChoice.message, this.width)
+      const visibleRowList: number[] = this.visible.map(
+        choice => calcStringRowsTerminal(choice.message, this.width),
+      )
+      let totalRows = visibleRowList.reduce((a, b) => a + b, 0) + nextRows
+
+      do {
+        if (!visibleRowList.length) {
+          return this.alert()
+        }
+        totalRows = totalRows - visibleRowList.shift()
+        scrollDownInPlace(this.choices)
+        idx -= 1
+      } while (totalRows > heightLimit)
     }
-    this.index = (idx + 1) % len;
-    if (this.isDisabled()) {
-      return this.down();
-    }
-    return this.render();
+
+    this.index = (idx + 1) % len
+
+    return this.render()
   }
 
   /**
@@ -340,11 +363,13 @@ export default class HistorySearcher extends AutoComplete {
 
     if (submitted) {
       this.stdout.write(ansi.erase.line)
-      this.stdout.write(ansi.cursor.up().repeat(calcStringRows(value, this.width)))
-      signale.info('HistorySearcher submitted value', [
-        calcStringRows(value, this.width),
-        stringify(value),
-      ])
+      this.stdout.write(
+        ansi.cursor.up()
+          .repeat(calcStringRowsTerminal(
+            value,
+            this.width,
+          )),
+      )
     }
   }
 
