@@ -12,5 +12,9 @@
 : 1568797119:0;cat <<< 123
 : 1568797120:0;where php
 : 1568797121:0;pwgen --help
-: 1568797123:0;echo zsh-history-enquirer
-: 1568797124:0;echo "\e[33m\\n Enhance history search, review and choose (ctrl+R) \n"
+: 1568797123:0;echo "\
+    Enhance history search (ctrl+R), \
+    review and choose, \
+    multiline is also supported \
+" > /dev/null
+: 1568797124:0;echo zsh-history-enquirer

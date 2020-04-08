@@ -56,7 +56,7 @@ npm i -g zsh-history-enquirer --unsafe-perm
 You can use a one-line command (which will also install node via nvm)
 
 ```bash
-curl -#sSL https://github.com/zthxxx/zsh-history-enquirer/raw/master/installer.zsh | zsh
+curl -#sSL https://github.com/zthxxx/zsh-history-enquirer/raw/master/scripts/installer.zsh | zsh
 ```
 
 ### manually without oh-my-zsh
@@ -64,7 +64,7 @@ curl -#sSL https://github.com/zthxxx/zsh-history-enquirer/raw/master/installer.z
 If you don't use `oh-my-zsh`, you can manually add the `source` plugin file to your `.zshrc` after npm is installed and manually remove the `source` command when it is uninstalled.
 
 ```bash
-echo 'source `npm root -g`/zsh-history-enquirer/zsh-history-enquirer.plugin.zsh' >> ~/.zshrc
+echo 'source `npm root -g`/zsh-history-enquirer/scripts/zsh-history-enquirer.plugin.zsh' >> ~/.zshrc
 ```
 
 ## Usage

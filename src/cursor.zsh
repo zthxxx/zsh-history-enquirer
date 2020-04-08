@@ -1,9 +1,10 @@
 #!/usr/bin/env zsh
+# https://stackoverflow.com/questions/2575037/how-to-get-the-cursor-position-in-bash
 
-# ./cursor.zsh 
+# ./cursor.zsh
 # output --> <row> <col>
 
-echo -ne '\033[6n' > /dev/tty
+echo -ne '\u001b[6n' > /dev/tty
 
 read -t 1 -s -d 'R' pos < /dev/tty
 pos="${pos##*\[}"

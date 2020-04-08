@@ -14,3 +14,7 @@ yarn.lock
 coverage
 
 *.log
+
+.zshrc
+.zcompdump-*
+.zsh_history
