@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env zsh
 
 # https://www.tcl.tk/man/expect5.31/expect.1.html
 # https://zh.wikipedia.org/wiki/%E6%8E%A7%E5%88%B6%E5%AD%97%E7%AC%A6
@@ -6,25 +6,26 @@
 # https://en.wikipedia.org/wiki/ANSI_escape_code
 
 
-# Cursor Up        <ESC>[{COUNT}A
-# Cursor Down      <ESC>[{COUNT}B
-# Cursor Right     <ESC>[{COUNT}C
-# Cursor Left      <ESC>[{COUNT}D
-
+# WARNING: this expect can run only  with zsh theme `jovial`
 
 # because use cursor.zsh will display cursor stdout in expect
-# assume default cursor in col 7
-echo "#!/usr/bin/env zsh
-  # row col (only col for use)
-  echo 0 7
-" > ./dist/cursor.zsh
+# assume default cursor in col 6 in jovial ("╰──➤  ")
+echo "echo 0 6" > ./dist/cursor.zsh
+
+local ORIGIN_HISTFILE="${HISTFILE}"
 
 
 ZDOTDIR="`pwd`/scripts" \
-stdbuf -i0 -o0 -e0 expect -c '
-  spawn -noecho stdbuf -i0 -o0 -e0 zsh -il
+expect -c '
+  spawn -noecho zsh -il
+  stty raw
 
   set ESC "\u001b\["
+
+  # Cursor Up        <ESC>[{COUNT}A
+  # Cursor Down      <ESC>[{COUNT}B
+  # Cursor Right     <ESC>[{COUNT}C
+  # Cursor Left      <ESC>[{COUNT}D
   set CURSOR_UP "A"
   set CURSOR_DOWN "B"
   set CURSOR_RIGHT "C"
@@ -48,53 +49,185 @@ stdbuf -i0 -o0 -e0 expect -c '
     send_tty -- "${ESC}${len}${CURSOR_LEFT}"
   }
 
-  expect zthxxx {
+  ##################################
+  # zsh-history-enquirer
+
+  expect "──➤" {
     slowly "echo zsh-"
   }
 
   expect history {
-    sleep .5
+    sleep .2
     # Ctrl + E
-    send -s "\x05"
+    send "\x05"
   }
 
   expect enquirer {
     sleep .3
-    send -s "\n"
+    send "\n"
   }
 
-  expect zthxxx {
-    sleep .3
+  ##################################
+  # echo multiline
+
+  expect "──➤" {
+    sleep .5
     # Ctrl + R
-    send -s "\x12"
+    send "\x12"
   }
 
-  expect author {
+  expect "earlier" {
     global ESC CURSOR_DOWN
-    sleep .3
-    send -s "${ESC}${CURSOR_DOWN}"
+    sleep .4
+    send "${ESC}${CURSOR_DOWN}"
   }
 
-  expect echo {
-    sleep 0.2
-    send -s "\n"
+  expect "earlier" {
+    sleep .6
+    send "\n"
   }
 
-  expect zthxxx {
-    sleep 0.2
-    send -s "\n"
+  expect supported {
+    sleep .5
+    send "\n"
   }
 
-  expect zthxxx {
-    sleep 0.2
-    send -s "\n"
-  }
-  expect zthxxx {
-    sleep 0.2
-    send -s "\n"
-  }
-  expect zthxxx {
+  ##################################
+  # scroll down and choose author zthxxx
+
+  expect "──➤" {
     sleep 1
+    # Ctrl + L
+    send "\x0c"
+    sleep .2
+  }
+
+  expect "──➤" {
+    sleep 1
+    # Ctrl + R
+    send "\x12"
+  }
+
+  for { set i 0}  {$i < 9} {incr i} {
+    expect "earlier" {
+      if {$i == 0} {
+        sleep .5
+      }
+
+      global ESC CURSOR_DOWN
+      sleep .13
+      send "${ESC}${CURSOR_DOWN}"
+    }
+  }
+
+  expect "author zthxxx" {
+    sleep .9
+    send "\n"
+  }
+
+  ##################################
+  # inpurt zthxxxxxxxxxxxxxxxxxx
+
+  expect "author zthxxx" {
+    sleep .5
+    slowly "xxxxxxxxxxxxxxx"
+    send "\n"
+  }
+
+  ##################################
+  # search and input echo
+
+  expect "──➤" {
+    sleep 1
+    # Ctrl + L
+    send "\x0c"
+    sleep .2
+  }
+
+  expect "──➤" {
+    sleep 1.2
+    # Ctrl + R
+    send "\x12"
+    sleep .2
+  }
+
+  foreach chr {e c h o} {
+    expect "command" {
+      if {$chr == "e"} {
+        sleep .25
+      }
+
+      sleep .25
+      send "$chr"
+    }
+  }
+
+
+  for { set i 0}  {$i < 4} {incr i} {
+    expect "command" {
+      global ESC CURSOR_DOWN
+      sleep .3
+      send "${ESC}${CURSOR_DOWN}"
+    }
+  }
+
+  expect "command" {
+    sleep .5
+    send "\n"
+  }
+
+  expect "command" {
+    sleep .5
+    send "\n"
+  }
+
+
+  ##################################
+  # input git & choose where git
+
+  expect "──➤" {
+    sleep .5
+    slowly "git"
+  }
+
+  # because aleady input `git`
+  # cursor in col 6 + 3 = 9 ("╰──➤  git")
+  exec echo "echo 0 9" > ./dist/cursor.zsh
+
+  expect "status" {
+    sleep .5
+    # Ctrl + R
+    send "\x12"
+    sleep .2
+  }
+
+  expect "iso" {
+    global ESC CURSOR_DOWN
+    sleep .5
+    send "${ESC}${CURSOR_DOWN}"
+  }
+
+  expect "iso" {
+    sleep .7
+    send "\n"
+  }
+
+  expect "where git" {
+    sleep .8
+    send "\n"
+  }
+
+  ##################################
+  # exit
+
+  expect "──➤" {
+    sleep 3
+
+    set timeout 1
+    send -- " "
+    expect NOTTHING
+    send -- "\x08"
+
     # Ctrl+D
     send "\x04"
   }
@@ -105,3 +238,4 @@ stdbuf -i0 -o0 -e0 expect -c '
 
 cp -f ./src/cursor.zsh ./dist/cursor.zsh
 git checkout -q ./tests/history.txt
+export HISTFILE="${ORIGIN_HISTFILE}"
