@@ -8,12 +8,11 @@
 ln -fs ~/.zshrc ./scripts/.zshrc
 
 # asciinema & control record
-stty rows 20 columns 72
+stty rows 25 columns 72
 clear
 asciinema rec \
   --overwrite ./images/zsh-record.cast \
   -c './scripts/control-record.zsh'
 
 # post-record
-rm -rf ./srcipts/.zshrc ./srcipts.zcompdump-*
-git checkout -q ./tests/history.txt
+rm -rf ./scripts/.zshrc ./scripts/.zsh_history ./scripts/.zcompdump-*

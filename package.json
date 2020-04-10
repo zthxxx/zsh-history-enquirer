@@ -1,6 +1,6 @@
 {
   "name": "zsh-history-enquirer",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "zsh history search plugin by enquirer",
   "main": "index.js",
   "bin": {
@@ -9,12 +9,12 @@
   "scripts": {
     "test": "jest",
     "test:coverage": "jest && npm run coverage",
-    "build": "npm run clean && npm run build:rollup && npm run build:site",
+    "build": "npm run clear && npm run build:rollup && npm run build:site",
     "build:rollup": "rollup -c",
-    "build:dev": "npm run clean && rollup -c -w",
+    "build:dev": "npm run clear && rollup -c -w",
     "docs": "eloc open intro.md -i 'images/**' --progress",
     "build:site": "eloc build intro.md -i '{CNAME,images/**}' --title 'zsh-history-enquirer' --progress",
-    "clean": "rimraf dist public coverage",
+    "clear": "rimraf dist public coverage",
     "coverage": "cat ./coverage/lcov.info | coveralls",
     "record": "./scripts/record.zsh",
     "render": "./scripts/render-record.zsh",
@@ -22,7 +22,7 @@
     "postinstall": "env zsh -il ./scripts/postinstall.zsh",
     "postuninstall": "npm run rm-plugin:config && npm run rm-plugin:file",
     "prepublishOnly": "npm run build && npm test",
-    "postpublish": "npm run clean",
+    "postpublish": "npm run clear",
     "warn:zsh": "echo '\\n\\n!! this is a plugin for zsh, please install zsh at first \\n\\n' >&2",
     "rm-plugin:config": "perl -i -pe 's/.*zsh-history-enquirer.*//gms' ${HOME}/.zshrc",
     "rm-plugin:file": "rm -rf ${ZSH_CUSTOM:-${ZSH}/custom}/plugins/zsh-history-enquirer",
@@ -103,9 +103,15 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "collectCoverage": true,
     "transform": {
       "\\.ts$": "ts-jest"
-    }
+    },
+    "collectCoverage": true,
+    "collectCoverageFrom": [
+      "src/*.{js,ts}",
+      "!**/node_modules/**",
+      "!**/dist/**",
+      "!**/scripts/**"
+    ]
   }
 }

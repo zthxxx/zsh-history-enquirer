@@ -5,6 +5,7 @@ import { SearchFunction } from '../src'
 
 
 const searchHistory = search as any as SearchFunction
+const testHistoryFile = path.join(__dirname, 'history.txt')
 
 const pasteStartKey: Keyperss = {
   name: 'undefined',
@@ -34,7 +35,7 @@ const pasteEndKey: Keyperss = {
 test('search `echo` in history', async () => {
   const searcher = await searchHistory({
     input: 'author',
-    historyFile: path.join(__dirname, 'history.txt'),
+    historyFile: testHistoryFile,
   })
 
   searcher.once('run', async() => {
@@ -50,7 +51,7 @@ test('search `echo` in history', async () => {
 test('search multiple words in history', async () => {
   const searcher = await searchHistory({
     input: 'log iso',
-    historyFile: path.join(__dirname, 'history.txt'),
+    historyFile: testHistoryFile,
   })
 
   searcher.once('run', async() => {
@@ -65,7 +66,7 @@ test('search multiple words in history', async () => {
 test('paste text in terminal', async () => {
   const searcher = await searchHistory({
     input: '',
-    historyFile: path.join(__dirname, 'history.txt'),
+    historyFile: testHistoryFile,
   })
 
   searcher.once('run', async() => {
@@ -91,7 +92,7 @@ test('paste text in terminal', async () => {
 test('number and paste number in terminal', async () => {
   const searcher = await searchHistory({
     input: '',
-    historyFile: path.join(__dirname, 'history.txt'),
+    historyFile: testHistoryFile,
   })
 
   searcher.once('run', async() => {
@@ -118,24 +119,25 @@ test('number and paste number in terminal', async () => {
 test('pageUp', async () => {
   const searcher = await searchHistory({
     input: '',
-    historyFile: path.join(__dirname, 'history.txt'),
+    historyFile: testHistoryFile,
   })
 
   searcher.once('run', async() => {
     await searcher.render()
+    await searcher.pageUp()
     await searcher.pageUp()
     await searcher.render()
     await searcher.submit()
   })
 
   const result = await searcher.run()
-  expect(result).toBe('echo zsh-history-enquirer')
+  expect(result).toBe('pwgen --help')
 })
 
 test('pageDown', async () => {
   const searcher = await searchHistory({
     input: '',
-    historyFile: path.join(__dirname, 'history.txt'),
+    historyFile: testHistoryFile,
   })
 
   searcher.once('run', async() => {
@@ -152,7 +154,7 @@ test('pageDown', async () => {
 test('test cancel', async () => {
   const searcher = await searchHistory({
     input: '',
-    historyFile: path.join(__dirname, 'history.txt'),
+    historyFile: testHistoryFile,
   })
 
   searcher.once('run', async() => {
@@ -174,7 +176,7 @@ test('test cancel', async () => {
 test('test cancel ctrl+c', async () => {
   const searcher = await searchHistory({
     input: '',
-    historyFile: path.join(__dirname, 'history.txt'),
+    historyFile: testHistoryFile,
   })
 
   searcher.once('run', async() => {
@@ -197,7 +199,7 @@ test('test cancel ctrl+c', async () => {
 test('search not match in history', async () => {
   const searcher = await searchHistory({
     input: '3jdfn2-9jgf',
-    historyFile: path.join(__dirname, 'history.txt'),
+    historyFile: testHistoryFile,
   })
 
   searcher.once('run', async() => {
