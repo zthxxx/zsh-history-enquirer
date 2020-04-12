@@ -93,6 +93,16 @@ const calcStringRowsTerminal = (input: string, columns: number): number => {
 
 /**
  * performance optimization with
+ * enquirer/lib/utils.js scrollUp
+ */
+const scrollUpInPlace = <T = any>(list: T[]): T[] => {
+  const last = list.pop()
+  list.unshift(last)
+  return list
+}
+
+/**
+ * performance optimization with
  * enquirer/lib/utils.js scrollDown
  */
 const scrollDownInPlace = <T = any>(list: T[]): T[] => {
@@ -118,7 +128,6 @@ export default class HistorySearcher extends AutoComplete {
   private pastingStep: null | 'starting' | 'started' | 'ending' | 'ended'
   private isDisabled: () => boolean
   private alert: () => void
-  private up: () => void
   private scrollUp: () => void
   private scrollDown: () => void
   private sections: () => any
@@ -312,7 +321,26 @@ export default class HistorySearcher extends AutoComplete {
   }
 
   /**
+   * scroll optimize performance for in place
+   */
+  up() {
+    const len = this.choices.length
+    const vis = this.visible.length
+    let idx = this.index
+
+    if (len > vis && idx === 0) {
+      scrollUpInPlace(this.choices)
+      idx += 1
+    }
+
+    this.index = ((idx - 1 % len) + len) % len
+
+    return this.render()
+  }
+
+  /**
    * scroll when multiline command
+   * and optimize performance for in place
    */
   down() {
     const len = this.choices.length
