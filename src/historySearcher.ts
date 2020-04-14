@@ -1,5 +1,6 @@
 import colors from 'ansi-colors'
 import tty from 'tty'
+import throttle from 'lodash/throttle'
 import { Prompt } from 'enquirer'
 import ansi from 'enquirer/lib/ansi'
 import AutoComplete from 'enquirer/lib/prompts/autocomplete'
@@ -134,7 +135,6 @@ export default class HistorySearcher extends AutoComplete {
   public submit: () => void
   public cancel: (err?: string) => void
   public keypress: (char: string | number, key?: Keyperss) => void
-  public render: PromptInstance['render']
   public run: PromptInstance['run']
   public once: PromptInstance['once']
 
@@ -377,6 +377,11 @@ export default class HistorySearcher extends AutoComplete {
 
     return this.render()
   }
+
+  /**
+   * throttle render() for combo and paste
+   */
+  render = throttle(super.render, 81)
 
   /**
    * when submit, restore curcor from output row to input row
