@@ -1,6 +1,6 @@
 {
   "name": "zsh-history-enquirer",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "description": "zsh history search plugin by enquirer",
   "main": "index.js",
   "bin": {
@@ -18,15 +18,14 @@
     "coverage": "cat ./coverage/lcov.info | coveralls",
     "record": "./scripts/record.zsh",
     "render": "./scripts/render-record.zsh",
-    "preinstall": "command -v zsh || (npm run warn:zsh && exit 1) && npm run no-spotlight",
+    "preinstall": "command -v zsh || (npm run warn:zsh && exit 1)",
     "postinstall": "env zsh -il ./scripts/postinstall.zsh",
     "postuninstall": "npm run rm-plugin:config && npm run rm-plugin:file",
     "prepublishOnly": "npm run build && npm test",
     "postpublish": "npm run clear",
     "warn:zsh": "echo '\\n\\n!! this is a plugin for zsh, please install zsh at first \\n\\n' >&2",
     "rm-plugin:config": "perl -i -pe 's/.*zsh-history-enquirer.*//gms' ${HOME}/.zshrc",
-    "rm-plugin:file": "rm -rf ${ZSH_CUSTOM:-${ZSH}/custom}/plugins/zsh-history-enquirer",
-    "no-spotlight": "mkdir -p ./node_modules; touch ./node_modules/.metadata_never_index"
+    "rm-plugin:file": "rm -rf ${ZSH_CUSTOM:-${ZSH}/custom}/plugins/zsh-history-enquirer"
   },
   "repository": "zthxxx/zsh-history-enquirer",
   "publishConfig": {
