@@ -1,0 +1,64 @@
+# https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions
+
+name: Build for commit
+
+on:
+  push:
+    branches:
+      - '*'
+    tags-ignore:
+      - '*'
+  pull_request:
+    branches:
+      - '*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Addon packages
+        run:
+          sudo apt install zsh
+
+      - name: Checkout
+        # https://github.com/actions/checkout
+        uses: actions/checkout@v2
+        with:
+          # Number of commits to fetch. 0 indicates all history.
+          # all history for changelog
+          fetch-depth: 0
+
+      - name: Setup node
+        # https://github.com/actions/setup-node
+        uses: actions/setup-node@v1
+        with:
+          node-version: 14.x
+          registry-url: https://registry.npmjs.org
+
+      - name: Install
+        run: |
+          env
+          npm ci
+
+      - name: Unit test
+        # test for source code
+        run: |
+          npm test
+
+      - name: Build package
+        run: |
+          npm run build
+
+      - name: Coveralls
+        # https://github.com/coverallsapp/github-action
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy site
+        if: ${{ github.ref == 'refs/heads/master' }}
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: public

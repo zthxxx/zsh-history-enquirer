@@ -1,3 +1,5 @@
+// https://rollupjs.org/guide/en/#configuration-files
+
 import builtins from 'builtin-modules'
 import json from '@rollup/plugin-json'
 import commonjs from '@rollup/plugin-commonjs'
@@ -15,13 +17,14 @@ export default {
   output: {
     file: 'dist/index.js',
     format: 'cjs',
+    exports: 'auto',
   },
   watch: {
     include: 'src',
   },
   external: [
     ...builtins,
-    ...Object.keys(packageJson.dependencies),
+    ...Object.keys(packageJson.dependencies ?? {}),
     'signale/signale',
   ],
   treeshake: {
