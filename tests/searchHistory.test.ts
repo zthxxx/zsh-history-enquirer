@@ -39,9 +39,7 @@ test('search `echo` in history', async () => {
   })
 
   searcher.once('run', async() => {
-    await searcher.render()
     await searcher.submit()
-    await searcher.cancel()
   })
 
   const result = await searcher.run()
@@ -55,7 +53,6 @@ test('search multiple words in history', async () => {
   })
 
   searcher.once('run', async() => {
-    await searcher.render()
     await searcher.submit()
   })
 
@@ -69,9 +66,7 @@ test('paste text in terminal', async () => {
     historyFile: testHistoryFile,
   })
 
-  searcher.once('run', async() => {
-    await searcher.render()
-
+  searcher.once('run', async () => {
     await searcher.keypress(null, pasteStartKey)
     await searcher.keypress('~')
     await searcher.keypress('s')
@@ -95,9 +90,7 @@ test('number and paste number in terminal', async () => {
     historyFile: testHistoryFile,
   })
 
-  searcher.once('run', async() => {
-    await searcher.render()
-
+  searcher.once('run', async () => {
     await searcher.keypress(2)
     await searcher.keypress(3)
 
@@ -122,8 +115,7 @@ test('pageUp', async () => {
     historyFile: testHistoryFile,
   })
 
-  searcher.once('run', async() => {
-    await searcher.render()
+  searcher.once('run', async () => {
     await searcher.pageUp()
     await searcher.pageUp()
     await searcher.render()
@@ -140,8 +132,7 @@ test('pageDown', async () => {
     historyFile: testHistoryFile,
   })
 
-  searcher.once('run', async() => {
-    await searcher.render()
+  searcher.once('run', async () => {
     await searcher.pageDown()
     await searcher.render()
     await searcher.submit()
@@ -157,8 +148,7 @@ test('test cancel', async () => {
     historyFile: testHistoryFile,
   })
 
-  searcher.once('run', async() => {
-    await searcher.render()
+  searcher.once('run', async () => {
     await searcher.keypress(2)
     await searcher.keypress(3)
     await searcher.keypress(3)
@@ -179,8 +169,7 @@ test('test cancel ctrl+c', async () => {
     historyFile: testHistoryFile,
   })
 
-  searcher.once('run', async() => {
-    await searcher.render()
+  searcher.once('run', async () => {
     await searcher.keypress(2)
     await searcher.keypress(3)
     await searcher.keypress(3)
@@ -202,8 +191,7 @@ test('search not match in history', async () => {
     historyFile: testHistoryFile,
   })
 
-  searcher.once('run', async() => {
-    await searcher.render()
+  searcher.once('run', async () => {
     await searcher.submit()
     await searcher.cancel()
   })

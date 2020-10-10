@@ -1,10 +1,11 @@
 {
+  "ts-node": {
+    "transpileOnly": true
+  },
   "compilerOptions": {
     "target": "es2017",
     "module": "commonjs",
     "lib": ["esnext"],
-
-    "outDir": "dist",
 
     "strict": false,
     "sourceMap": false,

@@ -21,18 +21,10 @@ export interface Keyperss {
 }
 
 export interface ChoiceItem {
+  index: number,
   name: string,
-  normalized: boolean,
   message: string,
   value: string,
-  input: string,
-  index: number,
-  cursor: number,
-  level: number,
-  indent: string,
-  path: string,
-  enabled: boolean,
-  reset: Function[],
 }
 
 export interface PromptState {
@@ -67,6 +59,7 @@ export type PromptOptions = ConstructorParameters<typeof Prompt>[0]
 export type PromptInstance = InstanceType<typeof Prompt>
 
 export interface ExtraOptions {
+  choices: string[],
   limit?: number,
   highlight?: () => void,
   initCol?: number,
@@ -237,7 +230,7 @@ export default class HistorySearcher extends AutoComplete {
       rows += calcStringRowsTerminal(choice.message, width)
 
       // prompt occupy about 3 lines
-      if (rows > this.height - 3) {
+      if (rows >= this.height - 3) {
         break
       }
 
@@ -273,6 +266,17 @@ export default class HistorySearcher extends AutoComplete {
     }
     if (input) return super.format()
     return ansi.code.show
+  }
+
+  reset() {
+    const { choices } = this.options
+    this.state.choices = []
+    this.choices = choices.map((line, index) => ({
+      index,
+      message: line,
+      name: line,
+      value: line,
+    }))
   }
 
   restore() {
@@ -370,7 +374,7 @@ export default class HistorySearcher extends AutoComplete {
         totalRows = totalRows - visibleRowList.shift()
         scrollDownInPlace(this.choices)
         idx -= 1
-      } while (totalRows > heightLimit)
+      } while (totalRows >= heightLimit)
     }
 
     this.index = (idx + 1) % len
@@ -381,7 +385,7 @@ export default class HistorySearcher extends AutoComplete {
   /**
    * throttle render() for combo and paste
    */
-  render = throttle(super.render, 81)
+  render = throttle(super.render, 81, { leading: true })
 
   /**
    * when submit, restore curcor from output row to input row
