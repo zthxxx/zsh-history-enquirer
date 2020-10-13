@@ -4,6 +4,7 @@
   },
   "compilerOptions": {
     "target": "es2017",
+    "noEmit": true,
     "module": "commonjs",
     "lib": ["esnext"],
 

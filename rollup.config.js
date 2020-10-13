@@ -5,10 +5,10 @@ import json from '@rollup/plugin-json'
 import commonjs from '@rollup/plugin-commonjs'
 import resolve from '@rollup/plugin-node-resolve'
 import strip from '@rollup/plugin-strip'
-import typescript from 'rollup-plugin-typescript'
-import copy from 'rollup-plugin-copy'
-import filesize from 'rollup-plugin-filesize'
+import typescript from '@rollup/plugin-typescript'
 import progress from 'rollup-plugin-progress'
+import filesize from 'rollup-plugin-filesize'
+import copy from 'rollup-plugin-copy'
 import packageJson from './package.json'
 
 
@@ -35,15 +35,15 @@ export default {
     copy({
       targets: [
         { src: 'src/*.zsh', dest: 'dist/' },
-      ]
+      ],
     }),
     resolve(),
     json(),
+    typescript(),
     commonjs({
-      include: 'node_modules/**',
+      extensions: ['.js', '.ts'],
       sourceMap: false,
     }),
-    typescript(),
     strip({
       include: [
         '**/*.js',
