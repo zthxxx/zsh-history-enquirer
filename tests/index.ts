@@ -1,6 +1,6 @@
 import path from 'path'
 import searchHistory from '..'
-import { SearchFunction } from '../src'
+import type { SearchFunction } from '../src'
 
 
 (searchHistory as any as SearchFunction)({

@@ -1,7 +1,7 @@
 import path from 'path'
 import search from '..'
 import HistorySearcher, { Keyperss, SIGINT_CODE } from '../src/historySearcher'
-import { SearchFunction } from '../src'
+import type { SearchFunction } from '../src'
 
 
 const searchHistory = search as any as SearchFunction
