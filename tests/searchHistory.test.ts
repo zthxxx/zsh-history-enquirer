@@ -1,6 +1,6 @@
 import path from 'path'
 import search from '..'
-import HistorySearcher, { Keyperss, SIGINT_CODE } from '../src/historySearcher'
+import { Keyperss, SIGINT_CODE } from '../src/historySearcher'
 import type { SearchFunction } from '../src'
 
 
@@ -31,6 +31,18 @@ const pasteEndKey: Keyperss = {
   action: undefined
 }
 
+/**
+ * normalized and mock tty for CI runner
+ * because in GitHub Action CI, stdin / stdout is not tty,
+ * and also cannot read /dev/ttys
+ */
+beforeAll(() => {
+  process.stdout.rows = 30
+  process.stdout.columns = 80
+  process.stdin.isTTY = true
+  process.stdout.isTTY = true
+  process.stdin.setRawMode = () => process.stdin
+})
 
 test('search `echo` in history', async () => {
   const searcher = await searchHistory({

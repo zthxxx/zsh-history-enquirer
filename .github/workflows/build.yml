@@ -46,15 +46,15 @@ jobs:
         run: |
           npm test
 
-      - name: Build package
-        run: |
-          npm run build
-
       - name: Coveralls
         # https://github.com/coverallsapp/github-action
         uses: coverallsapp/github-action@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build package
+        run: |
+          npm run build
 
       - name: Deploy site
         if: ${{ github.ref == 'refs/heads/master' }}
