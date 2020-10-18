@@ -1,14 +1,15 @@
+import type Events from 'events'
+import type tty from 'tty'
 import colors from 'ansi-colors'
-import tty from 'tty'
 import throttle from 'lodash/throttle'
-import { Prompt } from 'enquirer'
+import type { Prompt } from 'enquirer'
 import ansi from 'enquirer/lib/ansi'
 import AutoComplete from 'enquirer/lib/prompts/autocomplete'
 import Select from 'enquirer/lib/prompts/select'
 import signale from './signale'
 
 
-export interface Keyperss {
+export interface Keypress {
   name: string,
   ctrl: boolean,
   meta: boolean,
@@ -20,12 +21,7 @@ export interface Keyperss {
   action: string,
 }
 
-export interface ChoiceItem {
-  index: number,
-  name: string,
-  message: string,
-  value: string,
-}
+export type ChoiceItem = string
 
 export interface PromptState {
   name: string,
@@ -45,6 +41,7 @@ export interface PromptState {
   width: number,
   promptLine: boolean,
   choices: ChoiceItem[],
+  visible: ChoiceItem[],
   initCol: number,
   stdin: tty.ReadStream,
   stdout: tty.WriteStream,
@@ -64,9 +61,6 @@ export interface ExtraOptions {
   highlight?: () => void,
   initCol?: number,
 }
-
-AutoComplete.prototype.pointer = Select.prototype.pointer
-AutoComplete.prototype.render = Select.prototype.render
 
 export const SIGINT_CODE = 3
 const { stringify } = JSON
@@ -105,6 +99,42 @@ const scrollDownInPlace = <T = any>(list: T[]): T[] => {
   return list
 }
 
+/**
+ * @TODO: pipeline docs
+ * this.run()
+ * this.initialize()
+ *   - this.reset()
+ *     - set this.state.choices this.state.visible
+ * this.start()
+ *   - keypress.listen()
+ * this.render()
+ *   - this.renderChoices() (use this.visible)
+ *      - this.choiceMessage()
+ *        this.format()
+ *        this.pointer()
+ *   - this.restore
+ *
+ * this.keypress() - dispatch
+ *   - this.append()
+ *     this.delete()
+ *     this.deleteForward()
+ *       - this.complete()
+ *         this.suggest
+ *         set visible
+ *     this.up()
+ *     this.down()
+ *     this.pageUP()
+ *     this.pageDown()
+ *     this.home()
+ *     this.end()
+ *        - scroll visible
+ *          set index
+ *
+ * this.submit()
+ * this.close()
+ * this.emit('submit', this.focused())
+ *
+ */
 export default class HistorySearcher extends AutoComplete {
   private state: PromptState
   private options: PromptOptions & ExtraOptions
@@ -113,11 +143,10 @@ export default class HistorySearcher extends AutoComplete {
   private stdout: tty.WriteStream
   private styles: any
   private input: string
+  private cursor: number
   private limit: number
-  private choices: ChoiceItem[]
   private visible: ChoiceItem[]
-  private focused: ChoiceItem
-  private value: ChoiceItem['name']
+  private value: ChoiceItem
   private index: number
   private pastingStep: null | 'starting' | 'started' | 'ending' | 'ended'
   private isDisabled: () => boolean
@@ -125,17 +154,28 @@ export default class HistorySearcher extends AutoComplete {
   private scrollUp: () => void
   private scrollDown: () => void
   private sections: () => any
-  public submit: () => void
   public cancel: (err?: string) => void
-  public keypress: (char: string | number, key?: Keyperss) => void
+  public keypress: (char: string | number, key?: Keypress) => void
   public run: PromptInstance['run']
   public once: PromptInstance['once']
+  private emit: Events['emit']
 
+  /**
+   * throttle render() for combo and paste
+   * skip AutoComplete.render highlight for performance
+   */
+  render = throttle(Select.prototype.render, 81, { leading: true })
+
+  /**
+   * need pointer style like Select, while AutoComplete is empty
+   */
+  pointer = Select.prototype.pointer
 
   constructor(options) {
     super(options)
 
-    signale.info('HistorySearcher size', { width: this.width, height: this.height })
+    this.input = options.input ?? ''
+    this.cursor += options.input.length
 
     /**
      * pastingStep: null | starting | started | ending | ended
@@ -163,53 +203,23 @@ export default class HistorySearcher extends AutoComplete {
       }
       return (ansi.erase.line + ansi.cursor.prevLine()).repeat(rows - 1) + erasePrompt
     }
+
+    signale.info('HistorySearcher size', { width: this.width, height: this.height })
   }
 
-  number(ch: string) {
-    return this.dispatch(ch)
+  get choices() {
+    return this.state.choices
   }
 
-  dispatch(ch: string, key?: Keyperss) {
-    // https://github.com/enquirer/enquirer/blob/2.3.2/lib/keypress.js#L104
-    // https://github.com/enquirer/enquirer/blob/2.3.2/lib/keypress.js#L209
-    const { sequence } = key || {}
-    // [BUG enquirer] bracketed paste mode
-    // content will be wrapped by the sequences `\e[200~` and `\e[201~`
-    // https://cirw.in/blog/bracketed-paste
-    if (sequence === '\u001b[200') {
-      this.pastingStep = 'starting'
-      signale.info('Keyperss start pasting \\e[200~')
-      return
-    } else if (this.pastingStep === 'starting' && sequence === '~') {
-      this.pastingStep = 'started'
-      signale.info('Keyperss in pasting')
-      return
-    } else if (this.pastingStep === 'started' && sequence === '\u001b[201') {
-      this.pastingStep = 'ending'
-      signale.info('Keyperss ending pasting \\e[201~')
-      return
-    } else if (this.pastingStep === 'ending' && sequence === '~') {
-      this.pastingStep = 'ended'
-      signale.info('Keyperss end pasted')
-      return
-    }
-
-    signale.info(
-      'HistorySearcher dispatch',
-      {
-        char: stringify(ch),
-        key,
-      },
-    )
-    return super.dispatch(ch)
+  set choices(choices: ChoiceItem[]) {
+    this.state.choices = choices
   }
 
-  suggest(input = this.input, choices = this.state.choices) {
-    let result = choices
-    for (const item of input.toLowerCase().split(' ').filter(Boolean)) {
-      result = result.filter(({ message }) => message.toLowerCase().includes(item))
-    }
-    return result
+  reset() {
+    const { choices } = this.options
+    this.choices = choices
+    this.visible = this.suggest(this.input, choices)
+    signale.info('HistorySearcher reset()', { input: this.input })
   }
 
   /**
@@ -226,8 +236,19 @@ export default class HistorySearcher extends AutoComplete {
     let rows = 0
     const { width } = this
 
-    for (let choice of this.choices) {
-      rows += calcStringRowsTerminal(choice.message, width)
+    for (let choice of this.visible) {
+      const choiceRows = calcStringRowsTerminal(choice, width)
+      rows += choiceRows
+
+
+      signale.info('HistorySearcher renderChoices()', {
+        choiceRows,
+        choice: choice.slice(0, 10),
+        rows,
+        width,
+        height: this.height,
+        limit,
+      })
 
       // prompt occupy about 3 lines
       if (rows >= this.height - 3) {
@@ -246,17 +267,18 @@ export default class HistorySearcher extends AutoComplete {
     return super.renderChoices()
   }
 
+
   choiceMessage(choice: ChoiceItem, index: number) {
     const input = this.input
     const shader = this.options.highlight
       ? this.options.highlight.bind(this)
       : this.styles.placeholder
 
-    let message = choice.message
+    let message = choice
     for (const item of new Set(input.toLowerCase().split(' ').filter(Boolean))) {
       message = message.replace(item, shader(item))
     }
-    return super.choiceMessage({ ...choice, message }, index)
+    return choice
   }
 
   format() {
@@ -268,17 +290,7 @@ export default class HistorySearcher extends AutoComplete {
     return ansi.code.show
   }
 
-  reset() {
-    const { choices } = this.options
-    this.state.choices = []
-    this.choices = choices.map((line, index) => ({
-      index,
-      message: line,
-      name: line,
-      value: line,
-    }))
-  }
-
+  /** clean screen output */
   restore() {
     const { width, limit } = this
     const { rest } = this.sections()
@@ -306,34 +318,84 @@ export default class HistorySearcher extends AutoComplete {
     this.stdout.write(ansi.cursor.right(this.options.initCol))
   }
 
-  pageUp() {
-    const { limit } = this
-    this.choices = [...this.choices.slice(-limit), ...this.choices.slice(0, -limit)]
-    while (this.isDisabled()) {
-      this.up()
-    }
-    this.render()
+  number(ch: string) {
+    return this.dispatch(ch)
   }
 
-  pageDown() {
-    const { limit } = this
-    this.choices = [...this.choices.slice(limit), ...this.choices.slice(0, limit)]
-    while (this.isDisabled()) {
-      this.down()
+  dispatch(ch: string, key?: Keypress) {
+    // https://github.com/enquirer/enquirer/blob/2.3.2/lib/keypress.js#L104
+    // https://github.com/enquirer/enquirer/blob/2.3.2/lib/keypress.js#L209
+    const { sequence } = key || {}
+    // [BUG enquirer] bracketed paste mode
+    // content will be wrapped by the sequences `\e[200~` and `\e[201~`
+    // https://cirw.in/blog/bracketed-paste
+    if (sequence === '\u001b[200') {
+      this.pastingStep = 'starting'
+      signale.info('Keypress start pasting \\e[200~')
+      return
+    } else if (this.pastingStep === 'starting' && sequence === '~') {
+      this.pastingStep = 'started'
+      signale.info('Keypress in pasting')
+      return
+    } else if (this.pastingStep === 'started' && sequence === '\u001b[201') {
+      this.pastingStep = 'ending'
+      signale.info('Keypress ending pasting \\e[201~')
+      return
+    } else if (this.pastingStep === 'ending' && sequence === '~') {
+      this.pastingStep = 'ended'
+      signale.info('Keypress end pasted')
+      return
     }
-    this.render()
+
+    signale.info(
+      'HistorySearcher dispatch',
+      {
+        char: stringify(ch),
+        key,
+      },
+    )
+    return super.dispatch(ch)
+  }
+
+  async complete() {
+    this.visible = this.suggest(this.input, this.choices)
+    this.index = Math.min(Math.max(this.visible.length - 1, 0), this.index)
+    await this.render()
+  }
+
+  suggest(input = this.input, choices = this.choices) {
+    signale.info('HistorySearcher suggest', { input })
+
+    let result = choices
+
+    const keywords = input.toLowerCase().split(' ').filter(Boolean)
+
+    if (!keywords.length) {
+      return result.slice()
+    }
+
+    for (const keyword of input.toLowerCase().split(' ').filter(Boolean)) {
+      result = result.filter((message) => message.toLowerCase().includes(keyword))
+    }
+    return result
   }
 
   /**
    * scroll optimize performance for in place
    */
   up() {
-    const len = this.choices.length
+    const choices = this.state.visible
+    const len = choices.length
     const vis = this.visible.length
     let idx = this.index
 
+    signale.info(
+      'HistorySearcher up()',
+      { len, vis, idx },
+    )
+
     if (len > vis && idx === 0) {
-      scrollUpInPlace(this.choices)
+      scrollUpInPlace(choices)
       idx += 1
     }
 
@@ -347,7 +409,8 @@ export default class HistorySearcher extends AutoComplete {
    * and optimize performance for in place
    */
   down() {
-    const len = this.choices.length
+    const choices = this.state.visible
+    const len = choices.length
     const vis = this.visible.length
     let idx = this.index
 
@@ -360,10 +423,10 @@ export default class HistorySearcher extends AutoComplete {
     )
 
     if (len > vis && idx === vis - 1) {
-      const nextChoice: ChoiceItem = this.choices[idx + 1]
-      const nextRows: number = calcStringRowsTerminal(nextChoice.message, this.width)
+      const nextChoice: ChoiceItem = choices[idx + 1]
+      const nextRows: number = calcStringRowsTerminal(nextChoice, this.width)
       const visibleRowList: number[] = this.visible.map(
-        choice => calcStringRowsTerminal(choice.message, this.width),
+        choice => calcStringRowsTerminal(choice, this.width),
       )
       let totalRows = visibleRowList.reduce((a, b) => a + b, 0) + nextRows
 
@@ -372,7 +435,7 @@ export default class HistorySearcher extends AutoComplete {
           return this.alert()
         }
         totalRows = totalRows - visibleRowList.shift()
-        scrollDownInPlace(this.choices)
+        scrollDownInPlace(choices)
         idx -= 1
       } while (totalRows >= heightLimit)
     }
@@ -382,10 +445,52 @@ export default class HistorySearcher extends AutoComplete {
     return this.render()
   }
 
-  /**
-   * throttle render() for combo and paste
-   */
-  render = throttle(super.render, 81, { leading: true })
+  pageUp() {
+    const { limit } = this
+    this.visible = [
+      ...this.state.visible.slice(-limit),
+      ...this.state.visible.slice(0, -limit),
+    ]
+    this.render()
+  }
+
+  pageDown() {
+    const { limit } = this
+    this.visible = [
+      ...this.state.visible.slice(limit),
+      ...this.state.visible.slice(0, limit),
+    ]
+    this.render()
+  }
+
+  home() {
+    this.visible = this.suggest(this.input, this.choices)
+    this.index = 0
+    return this.render()
+  }
+
+  end() {
+    const choices = this.suggest(this.input, this.choices)
+    const pos = choices.length - this.limit;
+    this.visible = choices.slice(pos).concat(choices.slice(0, pos))
+    this.index = this.limit - 1;
+    return this.render();
+  }
+
+  get focused() {
+    return this.visible[this.index]
+  }
+
+  async submit() {
+    this.state.submitted = true
+    await this.render()
+    await this.close()
+
+    const result = this.focused ?? this.input
+    signale.info('HistorySearcher submit()', { result })
+
+    this.emit('submit', result)
+  }
 
   /**
    * when submit, restore curcor from output row to input row

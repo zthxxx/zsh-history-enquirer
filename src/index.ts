@@ -52,6 +52,7 @@ export default async function searchHistory(options: SearchOptions): ReturnType<
     name: 'history',
     message: 'reverse search history',
     promptLine: false,
+    input,
     choices: lines,
     // shell prompt start col without input buffer
     initCol: cursor.x - input.length,
@@ -63,12 +64,6 @@ export default async function searchHistory(options: SearchOptions): ReturnType<
     onRun(prompt) {
       signale.info('HistorySearcher onRun start')
       signale.info('HistorySearcher start', { input })
-
-      if (input.length) {
-        prompt.input = input
-        prompt.cursor += input.length
-        prompt.choices = prompt.suggest()
-      }
 
       signale.info(
         'HistorySearcher onRun choices',

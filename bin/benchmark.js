@@ -11,7 +11,7 @@
  *   time ./bin/benchmark.js
  * ```
  */
-const searchHistory = require('../dist')
+const searchHistory = require('..')
 
 searchHistory({
   input: '',
@@ -19,10 +19,11 @@ searchHistory({
   historyFile: 'tests/benchmark-history.data',
 })
   .then((searcher) => {
-    searcher.once('run', () => {
-      searcher.submit()
+    searcher.once('run', async () => {
+      await searcher.render()
+
+      await searcher.submit()
     })
     return searcher.run()
   })
   .then(console.log)
-  .then(() => process.exit(0))
