@@ -1,13 +1,13 @@
 import path from 'path'
 import search from '..'
-import { Keyperss, SIGINT_CODE } from '../src/historySearcher'
+import { Keypress, SIGINT_CODE } from '../src/historySearcher'
 import type { SearchFunction } from '../src'
 
 
 const searchHistory = search as any as SearchFunction
 const testHistoryFile = path.join(__dirname, 'history.txt')
 
-const pasteStartKey: Keyperss = {
+const pasteStartKey: Keypress = {
   name: 'undefined',
   ctrl: false,
   meta: false,
@@ -19,7 +19,7 @@ const pasteStartKey: Keyperss = {
   action: undefined
 }
 
-const pasteEndKey: Keyperss = {
+const pasteEndKey: Keypress = {
   name: 'undefined',
   ctrl: false,
   meta: false,
