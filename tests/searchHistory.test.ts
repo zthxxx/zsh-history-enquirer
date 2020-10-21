@@ -204,14 +204,29 @@ test('search not match in history', async () => {
   })
 
   searcher.once('run', async () => {
-    await searcher.submit()
     await searcher.cancel()
   })
 
   try {
+    // run() will throw error with origin input
     await searcher.run()
+    // this expect will not triggered
     expect(true).toBe(false)
   } catch (result) {
     expect(result).toBe('3jdfn2-9jgf')
   }
+})
+
+test('search not match in history, but confirm', async () => {
+  const searcher = await searchHistory({
+    input: '3jdfn2-9jgf',
+    historyFile: testHistoryFile,
+  })
+
+  searcher.once('run', async () => {
+    await searcher.submit()
+  })
+
+  const result = await searcher.run()
+  expect(result).toBe('3jdfn2-9jgf')
 })
