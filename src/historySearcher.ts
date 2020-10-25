@@ -11,14 +11,14 @@ import signale from './signale'
 
 export interface Keypress {
   name: string,
-  ctrl: boolean,
-  meta: boolean,
-  shift: boolean,
-  option: boolean,
+  ctrl?: boolean,
+  meta?: boolean,
+  shift?: boolean,
+  option?: boolean,
   sequence: string,
   raw: string,
   code: string,
-  action: string,
+  action?: string,
 }
 
 export type ChoiceItem = string
@@ -526,4 +526,3 @@ export default class HistorySearcher extends AutoComplete {
     return this.state.cancelled ? this.input : super.error(err)
   }
 }
-

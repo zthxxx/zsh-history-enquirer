@@ -1,34 +1,51 @@
 import path from 'path'
 import search from '..'
-import { Keypress, SIGINT_CODE } from '../src/historySearcher'
 import type { SearchFunction } from '../src'
+import HistorySearcher, { Keypress, SIGINT_CODE } from '../src/historySearcher'
 
-
-const searchHistory = search as any as SearchFunction
 const testHistoryFile = path.join(__dirname, 'history.txt')
 
 const pasteStartKey: Keypress = {
   name: 'undefined',
-  ctrl: false,
-  meta: false,
-  shift: false,
-  option: false,
   sequence: '\u001b[200',
   raw: '',
   code: '[200',
-  action: undefined
 }
 
 const pasteEndKey: Keypress = {
   name: 'undefined',
-  ctrl: false,
-  meta: false,
-  shift: false,
-  option: false,
   sequence: '\u001b[201',
   raw: '',
   code: '[201',
-  action: undefined
+}
+
+const searchHistory = async (
+  input: string,
+  onRun: (searcher: HistorySearcher) => void,
+): Promise<string> => {
+  const searcher = await (search as any as SearchFunction)({
+    input,
+    historyFile: testHistoryFile,
+  })
+
+  searcher.once('run', () => onRun(searcher))
+
+  return searcher.run()
+}
+
+const keypress = async (
+  searcher: HistorySearcher,
+  keys: (string | number | [string, Keypress] | (() => void))[],
+) => {
+  for (const key of keys) {
+    if (key instanceof Array) {
+      await searcher.keypress(...key)
+    } else if (key instanceof Function) {
+      await key.call(searcher)
+    } else if (['string', 'number'].includes(typeof key)) {
+      await searcher.keypress(key)
+    }
+  }
 }
 
 /**
@@ -37,196 +54,398 @@ const pasteEndKey: Keypress = {
  * and also cannot read /dev/ttys
  */
 beforeAll(() => {
-  process.stdout.rows = 30
   process.stdout.columns = 80
+  process.stdout.rows = 15
   process.stdin.isTTY = true
   process.stdout.isTTY = true
   process.stdin.setRawMode = () => process.stdin
 })
 
-test('search `echo` in history', async () => {
-  const searcher = await searchHistory({
-    input: 'author',
-    historyFile: testHistoryFile,
-  })
 
-  searcher.once('run', async() => {
-    await searcher.submit()
-  })
+test('search author in history', async () => {
+  const result = await searchHistory(
+    'author',
+    async (searcher) => {
+      await searcher.submit()
+    },
+  )
 
-  const result = await searcher.run()
   expect(result).toBe('echo author zthxxx')
 })
 
-test('search multiple words in history', async () => {
-  const searcher = await searchHistory({
-    input: 'log iso',
-    historyFile: testHistoryFile,
-  })
+test('keypress author for search', async () => {
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      await keypress(
+        searcher,
+        ['a', 'u', 't', 'h'],
+      )
+      await searcher.submit()
+    },
+  )
 
-  searcher.once('run', async() => {
-    await searcher.submit()
-  })
+  expect(result).toBe('echo author zthxxx')
+})
 
-  const result = await searcher.run()
+test('base submit', async () => {
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('echo zsh-history-enquirer')
+})
+
+
+test('keypress down', async () => {
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      await searcher.down()
+      await searcher.down()
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('pwgen --help')
+})
+
+test('keypress down scroll', async () => {
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      await keypress(
+        searcher,
+        Array(8).fill(searcher.down),
+      )
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('cd Documents')
+})
+
+test('keypress down and up', async () => {
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      await searcher.down()
+      await searcher.down()
+      await searcher.down()
+      await searcher.up()
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('pwgen --help')
+})
+
+test('keypress up scroll', async () => {
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      await searcher.up()
+      await searcher.up()
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('command-1')
+})
+
+test('keypress up scroll with multiline command', async () => {
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      await keypress(
+        searcher,
+        Array(8).fill(searcher.up),
+      )
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('command-7')
+})
+
+test('keypress pageDown', async () => {
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      await searcher.down()
+      await searcher.pageDown()
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('cd Documents')
+})
+
+test('keypress pageUp', async () => {
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      await searcher.up()
+      await searcher.pageUp()
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('command-7')
+})
+
+test('keypress home', async () => {
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      await searcher.down()
+      await searcher.pageDown()
+      await searcher.home()
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('echo zsh-history-enquirer')
+})
+
+test('keypress end', async () => {
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      await searcher.up()
+      await searcher.pageUp()
+      await searcher.end()
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('command-0')
+})
+
+test('keypress search command in history', async () => {
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      await keypress(
+        searcher,
+        [
+          'c', 'o', 'm', 'm', 'a', 'n', 'd',
+          searcher.down,
+        ],
+      )
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('command-15')
+})
+
+test('keypress search and scroll', async () => {
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      await keypress(
+        searcher,
+        [
+          'c', 'o', 'm', 'm', 'a', 'n', 'd',
+          ...Array(11).fill(searcher.down),
+        ],
+      )
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('command-5')
+})
+
+test('search command and scroll', async () => {
+  const result = await searchHistory(
+    'command',
+    async (searcher) => {
+      await keypress(
+        searcher,
+        Array(7).fill(searcher.down),
+      )
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('command-9')
+})
+
+test('search git', async () => {
+  const result = await searchHistory(
+    'git',
+    async (searcher) => {
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('git status')
+})
+
+test('search command and scroll', async () => {
+  const result = await searchHistory(
+    'command',
+    async (searcher) => {
+      await keypress(
+        searcher,
+        Array(7).fill(searcher.down),
+      )
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('command-9')
+})
+
+test('search, scroll, press home', async () => {
+  const result = await searchHistory(
+    'command',
+    async (searcher) => {
+      await keypress(
+        searcher,
+        Array(7).fill(searcher.down),
+      )
+      await searcher.home()
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('echo earlier command')
+})
+
+test('search, scroll, press end', async () => {
+  const result = await searchHistory(
+    'command',
+    async (searcher) => {
+      await keypress(
+        searcher,
+        Array(10).fill(searcher.up),
+      )
+      await searcher.end()
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('command-0')
+})
+
+test('search multiple words', async () => {
+  const result = await searchHistory(
+    'log iso',
+    async (searcher) => {
+      await searcher.submit()
+    },
+  )
+
   expect(result).toBe('git log --pretty=fuller --date=iso -n 1')
 })
 
 test('paste text in terminal', async () => {
-  const searcher = await searchHistory({
-    input: '',
-    historyFile: testHistoryFile,
-  })
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      await keypress(
+        searcher,
+        [
+          [null, pasteStartKey], '~',
+          's', 't',
+          [null, pasteEndKey], '~',
+          'a', 't',
+        ],
+      )
+      await searcher.submit()
+    },
+  )
 
-  searcher.once('run', async () => {
-    await searcher.keypress(null, pasteStartKey)
-    await searcher.keypress('~')
-    await searcher.keypress('s')
-    await searcher.keypress('t')
-    await searcher.keypress(null, pasteEndKey)
-    await searcher.keypress('~')
-    await searcher.keypress('a')
-    await searcher.keypress('t')
-
-    await searcher.render()
-    await searcher.submit()
-  })
-
-  const result = await searcher.run()
   expect(result).toBe('git status')
 })
 
-test('number and paste number in terminal', async () => {
-  const searcher = await searchHistory({
-    input: '',
-    historyFile: testHistoryFile,
-  })
+test('input number and paste number in terminal', async () => {
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      await keypress(
+        searcher,
+        [
+          2, 3,
+          [null, pasteStartKey], '~',
+          3, 3,
+          [null, pasteEndKey], '~',
+        ],
+      )
+      await searcher.submit()
+    },
+  )
 
-  searcher.once('run', async () => {
-    await searcher.keypress(2)
-    await searcher.keypress(3)
-
-    await searcher.keypress(null, pasteStartKey)
-    await searcher.keypress('~')
-    await searcher.keypress(3)
-    await searcher.keypress(3)
-    await searcher.keypress(null, pasteEndKey)
-    await searcher.keypress('~')
-
-    await searcher.render()
-    await searcher.submit()
-  })
-
-  const result = await searcher.run()
   expect(result).toBe('233333')
 })
 
-test('pageUp', async () => {
-  const searcher = await searchHistory({
-    input: '',
-    historyFile: testHistoryFile,
-  })
-
-  searcher.once('run', async () => {
-    await searcher.pageUp()
-    await searcher.pageUp()
-    await searcher.render()
-    await searcher.submit()
-  })
-
-  const result = await searcher.run()
-  expect(result).toBe('pwgen --help')
-})
-
-test('pageDown', async () => {
-  const searcher = await searchHistory({
-    input: '',
-    historyFile: testHistoryFile,
-  })
-
-  searcher.once('run', async () => {
-    await searcher.pageDown()
-    await searcher.render()
-    await searcher.submit()
-  })
-
-  const result = await searcher.run()
-  expect(result).toBe('233333')
-})
-
-test('test cancel', async () => {
-  const searcher = await searchHistory({
-    input: '',
-    historyFile: testHistoryFile,
-  })
-
-  searcher.once('run', async () => {
-    await searcher.keypress(2)
-    await searcher.keypress(3)
-    await searcher.keypress(3)
-    await searcher.keypress(3)
-    await searcher.cancel('some error message')
-  })
+test('cancel error', async () => {
   try {
-    await searcher.run()
+    await searchHistory(
+      '',
+      async (searcher) => {
+        await keypress(
+          searcher,
+          [2, 3, 3, 3],
+        )
+        await searcher.cancel('some error message')
+        await searcher.submit()
+      },
+    )
     expect(true).toBe(false)
   } catch (result) {
     expect(result).toBe('2333')
   }
 })
 
-test('test cancel ctrl+c', async () => {
-  const searcher = await searchHistory({
-    input: '',
-    historyFile: testHistoryFile,
-  })
-
-  searcher.once('run', async () => {
-    await searcher.keypress(2)
-    await searcher.keypress(3)
-    await searcher.keypress(3)
-    await searcher.keypress(3)
-    await searcher.cancel(String.fromCharCode(SIGINT_CODE))
-  })
+test('cancel ctrl+c', async () => {
   try {
-    await searcher.run()
+    await searchHistory(
+      '',
+      async (searcher) => {
+        await keypress(
+          searcher,
+          [2, 3, 3, 3],
+        )
+        await searcher.cancel(String.fromCharCode(SIGINT_CODE))
+        await searcher.submit()
+      },
+    )
+
     expect(true).toBe(false)
   } catch (result) {
     expect(result).toBe('2333')
   }
 })
 
-
-test('search not match in history', async () => {
-  const searcher = await searchHistory({
-    input: '3jdfn2-9jgf',
-    historyFile: testHistoryFile,
-  })
-
-  searcher.once('run', async () => {
-    await searcher.cancel()
-  })
-
+test('search not match and cancel', async () => {
   try {
-    // run() will throw error with origin input
-    await searcher.run()
-    // this expect will not triggered
+    await searchHistory(
+      '3jdfn2-9jgf',
+      async (searcher) => {
+        await searcher.cancel()
+      },
+    )
+
     expect(true).toBe(false)
   } catch (result) {
     expect(result).toBe('3jdfn2-9jgf')
   }
 })
 
-test('search not match in history, but confirm', async () => {
-  const searcher = await searchHistory({
-    input: '3jdfn2-9jgf',
-    historyFile: testHistoryFile,
-  })
+test('search not match, but confirm', async () => {
+  const result = await searchHistory(
+    '3jdfn2-9jgf',
+    async (searcher) => {
+      await searcher.submit()
+    },
+  )
 
-  searcher.once('run', async () => {
-    await searcher.submit()
-  })
-
-  const result = await searcher.run()
   expect(result).toBe('3jdfn2-9jgf')
 })
