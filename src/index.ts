@@ -58,9 +58,7 @@ export default async function searchHistory(options: SearchOptions): ReturnType<
     initCol: cursor.x - input.length,
     stdin,
     stdout,
-    get limit() {
-      return Math.min(15, stdout.rows - 2)
-    },
+    limit: 15,
     onRun(prompt) {
       signale.info('HistorySearcher onRun start')
       signale.info('HistorySearcher start', { input })
