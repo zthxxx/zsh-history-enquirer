@@ -1,23 +1,16 @@
 import path from 'path'
 import search from '..'
 import type { SearchFunction } from '../src'
-import HistorySearcher, { Keypress, SIGINT_CODE } from '../src/historySearcher'
+import type { default as HistorySearcher, Keypress } from '../src/historySearcher'
+import {
+  pasteStart,
+  pasteEnd,
+  ctrlC,
+  esc,
+} from './metaKeys'
+
 
 const testHistoryFile = path.join(__dirname, 'history.txt')
-
-const pasteStartKey: Keypress = {
-  name: 'undefined',
-  sequence: '\u001b[200',
-  raw: '',
-  code: '[200',
-}
-
-const pasteEndKey: Keypress = {
-  name: 'undefined',
-  sequence: '\u001b[201',
-  raw: '',
-  code: '[201',
-}
 
 const searchHistory = async (
   input: string,
@@ -40,8 +33,10 @@ const keypress = async (
   for (const key of keys) {
     if (key instanceof Array) {
       await searcher.keypress(...key)
+
     } else if (key instanceof Function) {
       await key.call(searcher)
+
     } else if (['string', 'number'].includes(typeof key)) {
       await searcher.keypress(key)
     }
@@ -54,8 +49,9 @@ const keypress = async (
  * and also cannot read /dev/ttys
  */
 beforeAll(() => {
-  process.stdout.columns = 80
   process.stdout.rows = 15
+
+  process.stdout.columns = 80
   process.stdin.isTTY = true
   process.stdout.isTTY = true
   process.stdin.setRawMode = () => process.stdin
@@ -90,7 +86,7 @@ test('keypress author for search', async () => {
 
 test('base submit', async () => {
   const result = await searchHistory(
-    '',
+    undefined,
     async (searcher) => {
       await searcher.submit()
     },
@@ -117,6 +113,23 @@ test('keypress down scroll', async () => {
   const result = await searchHistory(
     '',
     async (searcher) => {
+      await keypress(
+        searcher,
+        Array(8).fill(searcher.down),
+      )
+      await searcher.submit()
+    },
+  )
+
+  expect(result).toBe('cd Documents')
+})
+
+test('keypress down scroll with small limit', async () => {
+  const result = await searchHistory(
+    '',
+    async (searcher) => {
+      searcher.options.limit = 4
+
       await keypress(
         searcher,
         Array(8).fill(searcher.down),
@@ -352,9 +365,9 @@ test('paste text in terminal', async () => {
       await keypress(
         searcher,
         [
-          [null, pasteStartKey], '~',
+          [null, pasteStart], '~',
           's', 't',
-          [null, pasteEndKey], '~',
+          [null, pasteEnd], '~',
           'a', 't',
         ],
       )
@@ -373,9 +386,9 @@ test('input number and paste number in terminal', async () => {
         searcher,
         [
           2, 3,
-          [null, pasteStartKey], '~',
+          [null, pasteStart], '~',
           3, 3,
-          [null, pasteEndKey], '~',
+          [null, pasteEnd], '~',
         ],
       )
       await searcher.submit()
@@ -395,7 +408,6 @@ test('cancel error', async () => {
           [2, 3, 3, 3],
         )
         await searcher.cancel('some error message')
-        await searcher.submit()
       },
     )
     expect(true).toBe(false)
@@ -404,17 +416,39 @@ test('cancel error', async () => {
   }
 })
 
-test('cancel ctrl+c', async () => {
+test('cancel with ctrl+c', async () => {
   try {
     await searchHistory(
       '',
       async (searcher) => {
         await keypress(
           searcher,
-          [2, 3, 3, 3],
+          [
+            2, 3, 3, 3,
+            [ctrlC.sequence, ctrlC],
+          ],
         )
-        await searcher.cancel(String.fromCharCode(SIGINT_CODE))
-        await searcher.submit()
+      },
+    )
+
+    expect(true).toBe(false)
+  } catch (result) {
+    expect(result).toBe('2333')
+  }
+})
+
+test('cancel with esc', async () => {
+  try {
+    await searchHistory(
+      '',
+      async (searcher) => {
+        await keypress(
+          searcher,
+          [
+            2, 3, 3, 3,
+            [esc.sequence, esc],
+          ],
+        )
       },
     )
 
@@ -443,6 +477,9 @@ test('search not match, but confirm', async () => {
   const result = await searchHistory(
     '3jdfn2-9jgf',
     async (searcher) => {
+      await searcher.up()
+      await searcher.down()
+      await searcher.up()
       await searcher.submit()
     },
   )

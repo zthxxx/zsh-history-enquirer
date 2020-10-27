@@ -10,6 +10,7 @@ searchHistory({
 })
   .then((searcher) => {
     searcher.stdout.rows = 15
+    searcher.stdout.columns = 80
     return searcher.run()
   })
   .then(console.log)

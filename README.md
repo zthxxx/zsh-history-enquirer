@@ -1,7 +1,7 @@
 <h1 align="center">zsh-history-enquirer</h1>
 
 <p align="center">
-  <a href="https://travis-ci.org/zthxxx/zsh-history-enquirer" target="_blank" rel="noopener noreferrer"><img src="https://travis-ci.org/zthxxx/zsh-history-enquirer.svg" alt="Build Status" /></a>
+  <a href="https://github.com/zthxxx/zsh-history-enquirer/actions?query=workflow%3A%22build%22" target="_blank" rel="noopener noreferrer"><img src="https://github.com/zthxxx/zsh-history-enquirer/workflows/build/badge.svg" alt="Build Status" /></a>
   <a href="https://coveralls.io/github/zthxxx/zsh-history-enquirer" target="_blank" rel="noopener noreferrer"><img src="https://badgen.net/coveralls/c/github/zthxxx/zsh-history-enquirer" alt="Build Status" /></a>
   <a href="https://www.npmjs.com/package/zsh-history-enquirer" target="_blank" rel="noopener noreferrer"><img src="https://badgen.net/npm/v/zsh-history-enquirer" alt="NPM Version" /></a>
   <a href="https://www.npmjs.com/package/zsh-history-enquirer" target="_blank" rel="noopener noreferrer"><img src="https://badgen.net/npm/dt/zsh-history-enquirer" alt="NPM Downloads" /></a>
