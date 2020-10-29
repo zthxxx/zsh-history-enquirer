@@ -1,6 +1,5 @@
 import type Events from 'events'
 import type tty from 'tty'
-import colors from 'ansi-colors'
 import throttle from 'lodash/throttle'
 import type { Prompt } from 'enquirer'
 import ansi from 'enquirer/lib/ansi'
@@ -64,6 +63,7 @@ export interface ExtraOptions {
   choices: string[],
   limit?: number,
   highlight?: () => void,
+  /** shell prompt takes columns, different with custom shell theme */
   initCol?: number,
 }
 
@@ -72,15 +72,17 @@ const { stringify } = JSON
 
 // @TODO: pointer length from Prompt.pointer()
 const POINTER_LENGTH = 2
-const POINTER_PLACEHOLDER = Array.from({ length: POINTER_LENGTH })
-  .fill(' ')
-  .join('')
+const POINTER_PLACEHOLDER = ' '.repeat(POINTER_LENGTH)
 
 
-const calcStringRowsTerminal = (input: string, columns: number): number => {
-  return `${POINTER_PLACEHOLDER}${input}`
+/**
+ * calculate how many rows the text takes up within terminal columns
+ */
+const calcTextTakeRows = (text: string, columns: number): number => {
+  return `${POINTER_PLACEHOLDER}${text}`
     .split('\n')
-    .map(line => Math.ceil(line.length / columns))
+    // empty line is also considered take a row
+    .map(line => Math.ceil((line.length || 1) / columns))
     .reduce((a, b) => a + b, 0)
 }
 
@@ -88,20 +90,20 @@ const calcStringRowsTerminal = (input: string, columns: number): number => {
  * performance optimization with
  * enquirer/lib/utils.js scrollUp
  */
-const scrollUpInPlace = <T = any>(list: T[]): T[] => {
-  const last = list.pop()
-  list.unshift(last)
-  return list
+const scrollUpInPlace = <T = any>(list: T[], size: number = 1) => {
+  for (let i = 0; i < size; i ++) {
+    list.unshift(list.pop())
+  }
 }
 
 /**
  * performance optimization with
  * enquirer/lib/utils.js scrollDown
  */
-const scrollDownInPlace = <T = any>(list: T[]): T[] => {
-  const first = list.shift()
-  list.push(first)
-  return list
+const scrollDownInPlace = <T = any>(list: T[], size: number = 1) => {
+  for (let i = 0; i < size; i ++) {
+    list.push(list.shift())
+  }
 }
 
 /**
@@ -113,10 +115,12 @@ const scrollDownInPlace = <T = any>(list: T[]): T[] => {
  * this.start()
  *   - keypress.listen()
  * this.render()
+ *   - this.format()
  *   - this.renderChoices() (use this.visible)
  *      - this.choiceMessage()
- *        this.format()
  *        this.pointer()
+ *   - this.clear()
+ *      - ansi.clear()
  *   - this.restore
  *
  * this.keypress() - dispatch
@@ -151,15 +155,9 @@ export default class HistorySearcher extends AutoComplete {
   private cursor: number
   private limit: number
   private visible: ChoiceItem[]
-  private value: ChoiceItem
   private index: number
   private pastingStep: null | 'starting' | 'started' | 'ending' | 'ended'
-  private isDisabled: () => boolean
   private alert: () => void
-  private scrollUp: () => void
-  private scrollDown: () => void
-  private sections: () => any
-  public cancel: (err?: string) => void
   public keypress: (char: string | number, key?: Keypress) => void
   public run: PromptInstance['run']
   public once: PromptInstance['once']
@@ -169,7 +167,7 @@ export default class HistorySearcher extends AutoComplete {
    * throttle render() for combo and paste
    * skip AutoComplete.render highlight for performance
    */
-  render = throttle(Select.prototype.render, 81, { leading: true })
+  render = throttle(Select.prototype.render, 72, { leading: true })
 
   /**
    * need pointer style like Select, while AutoComplete is empty
@@ -195,20 +193,7 @@ export default class HistorySearcher extends AutoComplete {
     // start with initial col position rather than 0 default
     this.stdout.write(ansi.cursor.to(options.initCol))
 
-    // overwrite, replace erase first line with erasePrompt (only erase from initial to end)
-    ansi.clear = (input: string, columns = process.stdout.columns) => {
-      // [BUG enquirer] cursor not always at the beginning when prompt start
-      const erasePrompt = ansi.cursor.to(options.initCol) + ansi.erase.lineEnd
-      let width = str => [...colors.unstyle(str)].length
-      let lines = input.split(/\r?\n/)
-      let rows = 0
-      for (let line of lines) {
-        rows += 1 + Math.floor(Math.max(width(line) - 1, 0) / columns)
-      }
-      return (ansi.erase.line + ansi.cursor.prevLine()).repeat(rows - 1) + erasePrompt
-    }
-
-    signale.info('HistorySearcher size', { width: this.width, height: this.height })
+    signale.debug('HistorySearcher size', { width: this.width, height: this.height })
   }
 
   get choices() {
@@ -223,7 +208,7 @@ export default class HistorySearcher extends AutoComplete {
     const { choices } = this.options
     this.choices = choices
     this.visible = this.suggest(this.input, choices)
-    signale.info('HistorySearcher reset()', { input: this.input })
+    signale.debug('HistorySearcher reset()', { input: this.input })
   }
 
   /**
@@ -234,7 +219,7 @@ export default class HistorySearcher extends AutoComplete {
    * rewrite `enquirer/lib/prompts/select.js`
    */
   async renderChoices(): Promise<string> {
-    const { options, width, height } = this
+    const { options, index, width, height } = this
     /**
      * prompt occupy 3 lines reserved
      * be consistent in `this.down()`
@@ -245,40 +230,53 @@ export default class HistorySearcher extends AutoComplete {
     let rows = 0
 
     for (let choice of this.state.visible) {
-      const choiceRows = calcStringRowsTerminal(choice, width)
-      rows += choiceRows
+      const choiceRows = calcTextTakeRows(choice, width)
+      signale.debug('HistorySearcher: renderChoices()', 'choiceRows', choiceRows, { choice })
+      const nextRows = rows + choiceRows
 
       signale.info('HistorySearcher renderChoices()', {
         choiceRows,
         choice: choice.slice(0, 10),
-        rows,
+        rows: nextRows,
         width,
         height: this.height,
         limit,
       })
 
-      if (rows >= heightLimit) {
+      if (nextRows >= heightLimit) {
         break
       }
 
+      rows += choiceRows
       limit += 1
 
       if (limit >= options.limit) {
-        signale.info('HistorySearcher renderChoices() trigger max limit', { limit })
+        signale.debug('HistorySearcher renderChoices() trigger max limit', { limit })
         break
       }
     }
 
     this.limit = limit
 
+    /** when pageDown, origin index will greater than limit */
+    if (index >= limit) {
+      this.index = limit -1
+    }
+
+    /**
+     * if empty choices to display, rows will be 0,
+     * but it will show `No matching choices` message in next line,
+     * so actually the minimum size is 1
+     */
+    this.state.size = Math.max(1, rows)
+
     return super.renderChoices()
   }
 
   choiceMessage(choice: ChoiceItem, index: number) {
     const input = this.input
-    const shader = this.options.highlight
-      ? this.options.highlight.bind(this)
-      : this.styles.placeholder
+    // @TODO: this.options.highlight
+    const shader = this.styles.placeholder
 
     let message = choice
     for (const item of new Set(input.toLowerCase().split(' ').filter(Boolean))) {
@@ -289,43 +287,47 @@ export default class HistorySearcher extends AutoComplete {
 
   /** format input area output */
   format() {
-    const { input, cancelled } = this.state
-    signale.info('HistorySearcher format()', { input, cancelled })
+    const { input } = this
+    const { submitted, cancelled } = this.state
+    signale.debug('HistorySearcher format()', { input, submitted, cancelled })
 
-    if (cancelled) {
+    if (input) {
       return input
     }
 
-    if (input) return super.format()
     return ansi.code.show
   }
 
-  /** clean screen output */
-  restore() {
-    const { width, limit } = this
-    const { rest } = this.sections()
-    super.restore()
+  /**
+   * overwrite, replace erase first line with erasePrompt (only erase from initial to end)
+   * used in this.render() - this.clear()
+   */
+  clear(rows: number = 0) {
+    signale.debug('HistorySearcher clear()', { rows })
+    const { options } = this
 
-    // [BUG enquirer]`prompt.restore` dont calculate if line width more than termainal columns
-    const rows = rest
-      .map(line => colors.unstyle(line))
-      .map(line => calcStringRowsTerminal(line, width))
-      .reduce((a, b) => a + b, 0)
+    const erasePrompt: string = ansi.cursor.to(options.initCol, null) + ansi.erase.lineEnd
 
-    this.state.size = rows
-    this.stdout.write(ansi.cursor.up(rows - rest.length))
-
-    signale.info(
-      'HistorySearcher restore()',
-      {
-        limit,
-        rows,
-        'rest.length': rest.length,
-      },
+    this.stdout.write(
+      ansi.cursor.down(rows)
+      + (ansi.erase.line + ansi.cursor.prevLine()).repeat(rows)
+      + erasePrompt,
     )
+  }
 
-    // append initial position
-    this.stdout.write(ansi.cursor.right(this.options.initCol))
+  /** restore cursor position */
+  restore() {
+    const { width, limit, options, cursor } = this
+
+    // `state.size` computed in `this.renderChoices()`
+    const rows = this.state.size
+
+    signale.debug('HistorySearcher restore()', { limit, rows, width, cursor })
+
+    this.stdout.write(
+      ansi.cursor.up(rows)
+      + ansi.cursor.to(options.initCol + cursor, null),
+    )
   }
 
   number(ch: string) {
@@ -341,23 +343,23 @@ export default class HistorySearcher extends AutoComplete {
     // https://cirw.in/blog/bracketed-paste
     if (sequence === '\u001b[200') {
       this.pastingStep = 'starting'
-      signale.info('Keypress start pasting \\e[200~')
+      signale.debug('Keypress start pasting \\e[200~')
       return
     } else if (this.pastingStep === 'starting' && sequence === '~') {
       this.pastingStep = 'started'
-      signale.info('Keypress in pasting')
+      signale.debug('Keypress in pasting')
       return
     } else if (this.pastingStep === 'started' && sequence === '\u001b[201') {
       this.pastingStep = 'ending'
-      signale.info('Keypress ending pasting \\e[201~')
+      signale.debug('Keypress ending pasting \\e[201~')
       return
     } else if (this.pastingStep === 'ending' && sequence === '~') {
       this.pastingStep = 'ended'
-      signale.info('Keypress end pasted')
+      signale.debug('Keypress end pasted')
       return
     }
 
-    signale.info(
+    signale.debug(
       'HistorySearcher dispatch',
       {
         char: stringify(ch),
@@ -373,8 +375,8 @@ export default class HistorySearcher extends AutoComplete {
     await this.render()
   }
 
-  suggest(input = this.input, choices = this.choices) {
-    signale.info('HistorySearcher suggest', { input })
+  suggest(input: string, choices: ChoiceItem[]) {
+    signale.debug('HistorySearcher suggest', { input })
 
     let result = choices
 
@@ -384,7 +386,7 @@ export default class HistorySearcher extends AutoComplete {
       return result.slice()
     }
 
-    for (const keyword of input.toLowerCase().split(' ').filter(Boolean)) {
+    for (const keyword of keywords) {
       result = result.filter((message) => message.toLowerCase().includes(keyword))
     }
     return result
@@ -399,7 +401,7 @@ export default class HistorySearcher extends AutoComplete {
     const vis = this.visible.length
     let idx = this.index
 
-    signale.info(
+    signale.debug(
       'HistorySearcher up()',
       { len, vis, idx },
     )
@@ -435,7 +437,7 @@ export default class HistorySearcher extends AutoComplete {
      */
     const heightLimit = this.height - 3
 
-    signale.info(
+    signale.debug(
       'HistorySearcher down()',
       { len, vis, idx },
     )
@@ -446,9 +448,9 @@ export default class HistorySearcher extends AutoComplete {
 
     if (len > vis && idx === vis - 1) {
       const nextChoice: ChoiceItem = choices[idx + 1]
-      const nextRows: number = calcStringRowsTerminal(nextChoice, this.width)
+      const nextRows: number = calcTextTakeRows(nextChoice, this.width)
       const visibleRowList: number[] = visible.map(
-        choice => calcStringRowsTerminal(choice, this.width),
+        choice => calcTextTakeRows(choice, this.width),
       )
       let totalRows = visibleRowList.reduce((a, b) => a + b, 0) + nextRows
 
@@ -466,19 +468,15 @@ export default class HistorySearcher extends AutoComplete {
 
   pageUp() {
     const { limit } = this
-    this.visible = [
-      ...this.state.visible.slice(-limit),
-      ...this.state.visible.slice(0, -limit),
-    ]
+    const choices = this.state.visible
+    scrollUpInPlace(choices, limit)
     this.render()
   }
 
   pageDown() {
     const { limit } = this
-    this.visible = [
-      ...this.state.visible.slice(limit),
-      ...this.state.visible.slice(0, limit),
-    ]
+    const choices = this.state.visible
+    scrollDownInPlace(choices, limit)
     this.render()
   }
 
@@ -500,44 +498,44 @@ export default class HistorySearcher extends AutoComplete {
     return this.visible[this.index]
   }
 
-  async submit() {
-    this.state.submitted = true
-    await this.render()
-    await this.close()
-
-    const result = this.focused ?? this.input
-    signale.info('HistorySearcher submit()', { result })
-
-    this.emit('submit', result)
-  }
-
   /**
-   * when submit, restore curcor from output row to input row
+   * when submit, restore cursor from output row to input row
    *
    * when cancel, erase and leave origin input
    */
   async close() {
-    const { value } = this
-    const { input, submitted } = this.state
-    await super.close()
-    if (!input) return
+    const { focused, input } = this
+    const { submitted, cancelled } = this.state
 
-    if (submitted) {
-      this.stdout.write(ansi.erase.line)
-      this.stdout.write(
-        ansi.cursor.up()
-          .repeat(calcStringRowsTerminal(
-            value,
-            this.width,
-          )),
-      )
-    }
+    signale.debug('HistorySearcher close()', { input, focused, submitted, cancelled })
+    this.emit('close')
   }
 
-  error(err) {
+  async submit() {
+    signale.debug('HistorySearcher submit()')
+    this.state.submitted = true
+
+    await this.close()
+
+    const result = this.focused ?? this.input
+    signale.debug('HistorySearcher submit()', { result })
+
+    this.emit('submit', result)
+  }
+
+  async cancel(err?: string) {
+    signale.debug('HistorySearcher cancel()', { err })
+    this.state.cancelled = true
+
+    await this.close()
+
+    this.emit('cancel', await this.error(err))
+  }
+
+  error(err?: string): string {
     if (err !== undefined) {
       if (err === String.fromCharCode(SIGINT_CODE)) {
-        signale.info('HistorySearcher cancel, terminated with SIGINT')
+        signale.debug('HistorySearcher cancel, terminated with SIGINT')
       } else {
         signale.error('HistorySearcher ERROR', stringify(err), new Error(err).stack)
       }

@@ -12,4 +12,3 @@ searchHistory({
   .then(() => process.exit(0))
   .catch(console.log)
   .then(() => process.exit(0))
-  .catch(() => process.exit(1))
