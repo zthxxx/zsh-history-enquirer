@@ -15,7 +15,7 @@ export type SearchFunction = (options: SearchOptions) => Promise<HistorySearcher
 
 
 export default async function searchHistory(options: SearchOptions): ReturnType<SearchFunction> {
-  signale.info('searchHistory start')
+  signale.debug('searchHistory start')
   const { input = '', historyCommand, historyFile } = options
 
   const [
@@ -26,8 +26,8 @@ export default async function searchHistory(options: SearchOptions): ReturnType<
     history(historyCommand, historyFile),
   ])
 
-  signale.info('searchHistory cursor', cursor)
-  signale.info(
+  signale.debug('searchHistory cursor', cursor)
+  signale.debug(
     'searchHistory lines',
     {
       lines: lines.length,
@@ -37,12 +37,12 @@ export default async function searchHistory(options: SearchOptions): ReturnType<
 
   const stdin = process.stdin.isTTY ? process.stdin : getStdin()
   const stdout = process.stdout.isTTY ? process.stdout : getStdout()
-  signale.info(
+  signale.debug(
     'searchHistory stdin',
     stdin.constructor.name,
     ['isTTY', stdin.isTTY],
   )
-  signale.info(
+  signale.debug(
     'searchHistory stdout',
     stdout.constructor.name,
     ['isTTY', stdout.isTTY],
@@ -60,10 +60,10 @@ export default async function searchHistory(options: SearchOptions): ReturnType<
     stdout,
     limit: 15,
     onRun(prompt) {
-      signale.info('HistorySearcher onRun start')
-      signale.info('HistorySearcher start', { input })
+      signale.debug('HistorySearcher onRun start')
+      signale.debug('HistorySearcher start', { input })
 
-      signale.info(
+      signale.debug(
         'HistorySearcher onRun choices',
         {
           choices: prompt.choices.length,
