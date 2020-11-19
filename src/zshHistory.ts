@@ -32,5 +32,5 @@ export default async function history(
      *     in history
      *   '
      */
-    .map(line => line.replaceAll('\\n', '\n'))
+    .map(line => line.replace(/\\n/g, '\n'))
 }

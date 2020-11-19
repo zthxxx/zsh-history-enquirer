@@ -479,7 +479,9 @@ test('search not match, but confirm', async () => {
     async (searcher) => {
       await searcher.up()
       await searcher.down()
+      await searcher.pageDown()
       await searcher.up()
+      await searcher.pageUp()
       await searcher.submit()
     },
   )

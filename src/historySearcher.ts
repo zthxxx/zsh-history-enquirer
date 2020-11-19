@@ -407,7 +407,8 @@ export default class HistorySearcher extends AutoComplete {
     )
 
     if (!len) {
-      return this.alert()
+      this.alert()
+      return
     }
 
     if (len > vis && idx === 0) {
@@ -417,7 +418,7 @@ export default class HistorySearcher extends AutoComplete {
 
     this.index = ((idx - 1 % len) + len) % len
 
-    return this.render()
+    this.render()
   }
 
   /**
@@ -443,7 +444,8 @@ export default class HistorySearcher extends AutoComplete {
     )
 
     if (!vis) {
-      return this.alert()
+      this.alert()
+      return
     }
 
     if (len > vis && idx === vis - 1) {
@@ -463,12 +465,18 @@ export default class HistorySearcher extends AutoComplete {
 
     this.index = (idx + 1) % len
 
-    return this.render()
+    this.render()
   }
 
   pageUp() {
     const { limit } = this
     const choices = this.state.visible
+
+    if (!choices.length) {
+      this.alert()
+      return
+    }
+
     scrollUpInPlace(choices, limit)
     this.render()
   }
@@ -476,6 +484,12 @@ export default class HistorySearcher extends AutoComplete {
   pageDown() {
     const { limit } = this
     const choices = this.state.visible
+
+    if (!choices.length) {
+      this.alert()
+      return
+    }
+
     scrollDownInPlace(choices, limit)
     this.render()
   }
