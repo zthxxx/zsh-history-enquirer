@@ -5,7 +5,7 @@
   "compilerOptions": {
     "target": "es2017",
     "noEmit": true,
-    "module": "commonjs",
+    "module": "esnext",
     "lib": ["esnext"],
 
     "strict": false,

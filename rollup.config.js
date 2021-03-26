@@ -5,14 +5,7 @@ import json from '@rollup/plugin-json'
 import commonjs from '@rollup/plugin-commonjs'
 import resolve from '@rollup/plugin-node-resolve'
 import strip from '@rollup/plugin-strip'
-/**
- * because `@rollup/plugin-typescript` run in `buildStart` life cycle,
- * it compile ts file at rollup first,
- * so it is incompatible with `@rollup/plugin-strip`
- *
- * https://github.com/rollup/plugins/issues/42#issuecomment-724236099
- */
-import typescript from 'rollup-plugin-typescript'
+import typescript from '@rollup/plugin-typescript'
 import progress from 'rollup-plugin-progress'
 import filesize from 'rollup-plugin-filesize'
 import copy from 'rollup-plugin-copy'
@@ -32,7 +25,6 @@ export default {
   external: [
     ...builtins,
     ...Object.keys(packageJson.dependencies ?? {}),
-    'signale/signale',
   ],
   treeshake: {
     moduleSideEffects: false,
