@@ -1,9 +1,11 @@
 {
+  "$schema": "http://json.schemastore.org/renovate",
   "extends": [
     "config:base",
     "group:allNonMajor"
   ],
-  "rangeStrategy": "bump",
-  "schedule": ["before 12am on Tuesday"],
-  "timezone": "Asia/Shanghai"
+  "repositories": [
+    "zthxxx/zsh-history-enquirer"
+  ],
+  "rangeStrategy": "bump"
 }
