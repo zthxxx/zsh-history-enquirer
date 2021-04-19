@@ -113,5 +113,8 @@
       "!**/dist/**",
       "!**/scripts/**"
     ]
+  },
+  "renovate": {
+    "enabled": false
   }
 }
