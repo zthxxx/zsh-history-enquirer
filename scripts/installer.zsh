@@ -1,5 +1,7 @@
 #!/usr/bin/env zsh
 
+set -ex
+
 # curl -sSL https://github.com/zthxxx/zsh-history-enquirer/raw/master/scripts/installer.zsh | zsh
 {
   local package_name="zsh-history-enquirer"
