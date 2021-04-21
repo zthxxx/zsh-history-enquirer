@@ -27,6 +27,8 @@ module.exports = {
   rangeStrategy: 'bump',
   labels: ['dependencies', 'renovate'],
   rebaseWhen: 'behind-base-branch',
+  branchConcurrentLimit: 4,
+  prConcurrentLimit: 4,
 
   logLevel: 'debug',
   printConfig: true,
