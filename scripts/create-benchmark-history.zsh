@@ -5,7 +5,7 @@
 # create test history data for `bin/benchmark.js`
 # when cwd is project root
 #
-# ./scripts/create-benchmark-history.zsh
+# $ scripts/create-benchmark-history.zsh
 
 createHistory() {
   local -i i=0

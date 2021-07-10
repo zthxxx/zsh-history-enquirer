@@ -23,7 +23,7 @@
     "postuninstall": "npm-run-all rm-plugin:config rm-plugin:file",
     "postpublish": "npm run clean",
     "warn:zsh": "echo '\\n\\n!! this is a plugin for zsh, please install zsh at first \\n\\n' >&2",
-    "benchmark": "time ./bin/benchmark.js",
+    "benchmark": "./scripts/benchmark.zsh",
     "rm-plugin:config": "perl -i -pe 's/.*zsh-history-enquirer.*//gms' ${HOME}/.zshrc",
     "rm-plugin:file": "rm -rf ${ZSH_CUSTOM:-${ZSH}/custom}/plugins/zsh-history-enquirer"
   },
