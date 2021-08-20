@@ -1,22 +1,64 @@
 {
-  "ts-node": {
-    "transpileOnly": true
-  },
   "compilerOptions": {
-    "target": "es2017",
-    "noEmit": true,
     "module": "esnext",
-    "lib": ["esnext"],
-
-    "strict": false,
+    "noEmit": true,
+    "noEmitOnError": false,
+    "declaration": false,
+    "declarationMap": false,
+    "moduleResolution": "node",
+    "target": "es2017",
+    "lib": [
+      "esnext",
+    ],
+    "resolveJsonModule": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    // https://www.typescriptlang.org/tsconfig#strict
+    "strict": true,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "strictFunctionTypes": false,
+    "noUnusedLocals": true,
+    "skipLibCheck": true,
     "sourceMap": false,
     "allowJs": true,
+    // https://www.typescriptlang.org/tsconfig#composite
+    "composite": false,
+    // https://www.typescriptlang.org/tsconfig#incremental
+    "incremental": false,
+    // https://www.typescriptlang.org/tsconfig#preserveWatchOutput
+    "preserveWatchOutput": true,
+    // https://www.typescriptlang.org/tsconfig#esModuleInterop
     "esModuleInterop": true,
-
-    "moduleResolution": "node",
-    "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true
+    // https://www.typescriptlang.org/tsconfig#allowSyntheticDefaultImports
+    "allowSyntheticDefaultImports": true,
+    // https://www.typescriptlang.org/tsconfig#isolatedModules
+    "isolatedModules": true,
+    /**
+     * https://www.typescriptlang.org/tsconfig#useDefineForClassFields
+     * https://www.typescriptlang.org/docs/handbook/release-notes/typescript-3-7.html#the-usedefineforclassfields-flag-and-the-declare-property-modifier
+     */
+    "useDefineForClassFields": false,
+    // https://www.typescriptlang.org/tsconfig#downlevelIteration
+    "downlevelIteration": true,
+    "forceConsistentCasingInFileNames": true,
   },
-  "include": ["src"],
-  "exclude": ["dist"]
+  "include": [
+    "src",
+  ],
+  "exclude": [
+    "dist",
+  ],
+  /**
+   * these options are overrides used only by ts-node
+   * https://github.com/TypeStrong/ts-node
+   */
+  "ts-node": {
+    // It is faster to skip typechecking.
+    // Remove if you want ts-node to do typechecking.
+    "transpileOnly": true,
+    "compilerOptions": {
+      "module": "commonjs",
+    },
+  }
 }

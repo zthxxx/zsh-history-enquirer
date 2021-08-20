@@ -9,10 +9,7 @@ try {
   // ts module `src` for dev
   if (!require.extensions['.ts']) {
     require('ts-node').register({
-      project: require('path').join(__dirname, 'tsconfig.json'),
-      compilerOptions: {
-        module: 'commonjs',
-      },
+      project: require.resolve('./tsconfig.json'),
     })
   }
   const index = require('./src').default

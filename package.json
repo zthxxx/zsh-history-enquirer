@@ -7,20 +7,18 @@
     "fcenquire": "bin/index.js"
   },
   "scripts": {
-    "test": "jest",
-    "test:coverage": "npm-run-all test coverage",
+    "clean": "rimraf dist public coverage debug.log",
+    "test": "jest tests",
     "build": "npm-run-all clean build:rollup build:site",
     "build:rollup": "rollup -c",
     "build:dev": "npm run clean && rollup -c -w",
     "docs": "eloc open intro.md -i 'images/**' --progress",
     "build:site": "eloc build intro.md -i '{CNAME,images/**}' --title 'zsh-history-enquirer' --progress",
-    "clean": "rimraf dist public coverage",
-    "coverage": "cat ./coverage/lcov.info | coveralls",
     "record": "./scripts/record.zsh",
     "render": "./scripts/render-record.zsh",
     "preinstall": "command -v zsh || (npm run warn:zsh && exit 1)",
     "postinstall": "env zsh -il ./scripts/postinstall.zsh",
-    "postuninstall": "npm-run-all rm-plugin:config rm-plugin:file",
+    "postuninstall": "npm run rm-plugin:config && npm run rm-plugin:file",
     "postpublish": "npm run clean",
     "warn:zsh": "echo '\\n\\n!! this is a plugin for zsh, please install zsh at first \\n\\n' >&2",
     "benchmark": "./scripts/benchmark.zsh",
@@ -72,7 +70,6 @@
     "@types/node": "16.9.1",
     "@types/signale": "1.4.2",
     "builtin-modules": "3.2.0",
-    "coveralls": "3.1.1",
     "eloc": "1.3.1",
     "enquirer": "2.3.6",
     "execa": "5.1.1",
@@ -100,17 +97,6 @@
   "commitlint": {
     "extends": [
       "@commitlint/config-conventional"
-    ]
-  },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "collectCoverage": true,
-    "collectCoverageFrom": [
-      "src/*.{js,ts}",
-      "!**/node_modules/**",
-      "!**/dist/**",
-      "!**/scripts/**"
     ]
   },
   "renovate": {

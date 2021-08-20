@@ -1,5 +1,6 @@
 // https://rollupjs.org/guide/en/#configuration-files
 
+import { defineConfig } from 'rollup'
 import builtins from 'builtin-modules'
 import json from '@rollup/plugin-json'
 import commonjs from '@rollup/plugin-commonjs'
@@ -12,7 +13,7 @@ import copy from 'rollup-plugin-copy'
 import packageJson from './package.json'
 
 
-export default {
+export default defineConfig({
   input: 'src/index.ts',
   output: {
     file: 'dist/index.js',
@@ -53,4 +54,4 @@ export default {
     }),
     filesize(),
   ],
-}
+})
