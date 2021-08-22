@@ -337,10 +337,11 @@ export default class HistorySearcher extends AutoComplete {
   dispatch(ch: string, key?: Keypress) {
     // https://github.com/enquirer/enquirer/blob/2.3.2/lib/keypress.js#L104
     // https://github.com/enquirer/enquirer/blob/2.3.2/lib/keypress.js#L209
-    const { sequence } = key || {}
+    const { sequence, ctrl, meta, option } = key || {} as Keypress
+
     // [BUG enquirer] bracketed paste mode
     // content will be wrapped by the sequences `\e[200~` and `\e[201~`
-    // https://cirw.in/blog/bracketed-paste
+    // https://www.xfree86.org/current/ctlseqs.html#Bracketed%20Paste%20Mode
     if (sequence === '\u001b[200') {
       this.pastingStep = 'starting'
       signale.debug('Keypress start pasting \\e[200~')
@@ -362,11 +363,14 @@ export default class HistorySearcher extends AutoComplete {
     signale.debug(
       'HistorySearcher dispatch',
       {
-        char: stringify(ch),
+        char: ch,
         key,
       },
     )
-    return super.dispatch(ch)
+
+    if (ch && !ctrl && !meta && !option) {
+      return super.dispatch(ch)
+    }
   }
 
   async complete() {
