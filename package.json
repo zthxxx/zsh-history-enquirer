@@ -68,7 +68,7 @@
     "@rollup/plugin-node-resolve": "10.0.0",
     "@rollup/plugin-strip": "2.0.1",
     "@rollup/plugin-typescript": "8.2.1",
-    "@types/node": "12.20.15",
+    "@types/node": "14.17.14",
     "@types/signale": "1.4.1",
     "builtin-modules": "3.2.0",
     "coveralls": "3.1.1",
