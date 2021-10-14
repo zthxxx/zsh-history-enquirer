@@ -53,7 +53,7 @@ npm i -g zsh-history-enquirer --unsafe-perm
 
 ### one-line command
 
-You can use a one-line command (which will also install node via nvm)
+You can use a one-line command (which will auto install node via nvm, if node command not found)
 
 ```bash
 curl -#sSL https://github.com/zthxxx/zsh-history-enquirer/raw/master/scripts/installer.zsh | zsh

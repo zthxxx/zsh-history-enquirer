@@ -1,28 +1,37 @@
 #!/usr/bin/env zsh
 
-set -ex
+# bash strict mode (https://gist.github.com/mohanpedala/1e2ff5661761d3abd0385e8223e16425)
+set -xo pipefail
 
-# curl -sSL https://github.com/zthxxx/zsh-history-enquirer/raw/master/scripts/installer.zsh | zsh
-{
-  local package_name="zsh-history-enquirer"
+local package_name="zsh-history-enquirer"
 
-  # install nodejs
-  if [[ ! $commands[node] ]]; then
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | zsh
-
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-
-    nvm install --lts
-    # nvm is not compatible with the npm config "prefix" option
-    # Run `nvm use --delete-prefix` to unset it
-    nvm use --delete-prefix --lts
-    npm i -g npm
+# install via nvm if node not found
+if [[ ! $commands[node] ]]; then
+  if [[ -z "${NVM_DIR}" ]]; then
+    NVM_DIR="$HOME/.nvm"
   fi
 
-  # access to install for root
-  # https://stackoverflow.com/questions/49084929/npm-sudo-global-installation-unsafe-perm
-  # https://docs.npmjs.com/misc/config#unsafe-perm
-  npm i -g ${package_name} --unsafe-perm
-}
+  if [[ ! -d ${NVM_DIR} ]]; then
+    # https://github.com/nvm-sh/nvm
+    set +x
+    echo '[info] not found node or nvm, will install them'
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | zsh
+    set -x
+  fi
+
+  export NVM_DIR="$HOME/.nvm"
+  \. "$NVM_DIR/nvm.sh"  # This loads nvm
+
+  # install node lts if nvm haven't default version
+  if ! nvm list default; then
+    nvm install --lts
+  fi
+
+  nvm use default
+fi
+
+# access to install for root
+# use `--unsafe-perm` for compatible with npm@6 in root
+# https://stackoverflow.com/questions/49084929/npm-sudo-global-installation-unsafe-perm
+# https://docs.npmjs.com/cli/v6/using-npm/config#unsafe-perm
+npm i -g ${package_name} --unsafe-perm
