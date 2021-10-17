@@ -17,10 +17,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Addon packages
-        run:
-          sudo apt install zsh
-
       - name: Checkout
         # https://github.com/actions/checkout
         uses: actions/checkout@v2
@@ -29,22 +25,8 @@ jobs:
           # all history for changelog
           fetch-depth: 0
 
-      - name: Setup node
-        # https://github.com/actions/setup-node
-        uses: actions/setup-node@v2
-        with:
-          node-version: 14.x
-          registry-url: https://registry.npmjs.org
-
-      - name: Install
-        run: |
-          env
-          npm ci
-
-      - name: Unit test
-        # test for source code
-        run: |
-          npm test
+      - name: Prepare for building
+        uses: ./.github/actions/prepare
 
       - name: Coveralls
         # https://github.com/coverallsapp/github-action

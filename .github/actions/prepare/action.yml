@@ -1,0 +1,33 @@
+# https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions#example-using-an-action-in-the-same-repository-as-the-workflow
+# https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions
+
+name: Env Prepare
+description: 'prepare for building environment'
+runs:
+  using: "composite"
+  steps:
+    - name: Addon packages
+      shell: bash
+      run:
+        sudo apt install zsh
+
+    - name: Setup node
+      # https://github.com/actions/setup-node
+      uses: actions/setup-node@v2
+      with:
+        node-version: 16.x
+        registry-url: https://registry.npmjs.org
+
+    - name: Install
+      shell: bash
+      run: |
+        env
+        node --version
+        npm --version
+        npm ci
+
+    - name: Unit test
+      shell: bash
+      # test for source code
+      run: |
+        npm test
