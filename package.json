@@ -1,10 +1,10 @@
 {
   "name": "zsh-history-enquirer",
-  "version": "1.2.5",
+  "version": "1.3.0",
   "description": "zsh history search plugin by enquirer",
   "main": "index.js",
   "bin": {
-    "fcenquire": "bin/index.js"
+    "zsh-history-enquirer": "bin/index.js"
   },
   "scripts": {
     "clean": "rimraf dist public coverage debug.log",
@@ -56,7 +56,9 @@
     "scripts",
     "bin",
     "dist",
-    "index.js"
+    "index.js",
+    "init.zsh",
+    "zsh-history-enquirer.plugin.zsh"
   ],
   "devDependencies": {
     "@commitlint/cli": "8.3.6",

@@ -32,6 +32,12 @@ A plugin that **enhances zsh history search interaction**, with review and choos
 
 ## Install
 
+### antigen
+
+```bash
+antigen bundle zthxxx/zsh-history-enquirer
+```
+
 ### oh-my-zsh
 
 If you are using [`oh-my-zsh`](https://github.com/robbyrussell/oh-my-zsh), **all you need to do is one npm command.**
@@ -42,14 +48,6 @@ npm i -g zsh-history-enquirer
 
 The install/uninstall hooks will be correctly setup in your `oh-my-zsh` plugins and config. Manually editing `.zshrc` is **no longer necessary**
 
-### root
-
-For **root**, you must use the `--unsafe-perm` option for `npm`.
-
-```bash
-# https://stackoverflow.com/questions/49084929/npm-sudo-global-installation-unsafe-perm
-npm i -g zsh-history-enquirer --unsafe-perm
-```
 
 ### one-line command
 
