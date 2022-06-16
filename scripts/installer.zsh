@@ -30,8 +30,4 @@ if [[ ! $commands[node] ]]; then
   nvm use default
 fi
 
-# access to install for root
-# use `--unsafe-perm` for compatible with npm@6 in root
-# https://stackoverflow.com/questions/49084929/npm-sudo-global-installation-unsafe-perm
-# https://docs.npmjs.com/cli/v6/using-npm/config#unsafe-perm
-npm i -g ${package_name} --unsafe-perm
+npm i -g ${package_name}

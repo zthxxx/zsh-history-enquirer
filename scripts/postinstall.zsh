@@ -1,5 +1,13 @@
 #!/usr/bin/env zsh
 
+if [[ -n ${_INIT_ZSH_HISTORY_ENQUIRER_INSTALL} ]]; then
+  # means the install called by `init.zsh` maybe via `antigen`,
+  # so, no need to modify any config file
+
+  exit 0
+fi
+
+
 if [[ -z $ZSH ]]; then
   echo "
   \e[33m
@@ -15,7 +23,7 @@ local plugins_dir="${ZSH_CUSTOM:-"${ZSH}/custom"}/plugins"
 
 mkdir -p ${plugins_dir}/${package_name}
 
-ln -fs "`pwd`/scripts/${package_name}.plugin.zsh" "${plugins_dir}/${package_name}/"
+ln -fs "`pwd`/${package_name}.plugin.zsh" "${plugins_dir}/${package_name}/"
 
 # it's same as `realpath`, but `realpath` is GNU only and not builtin
 prel-realpath() {

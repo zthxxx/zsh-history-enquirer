@@ -1,9 +1,9 @@
 # replace '^R' search of zsh-history-enquirer in zsh
 
 function history_enquire() {
-  # fcenquire is the bin name of zsh-history-enquirer
-  if [[ -e $commands[fcenquire] ]]; then
-    BUFFER=$(fcenquire "$LBUFFER")
+  # `zsh-history-enquirer` is also the bin name of package
+  if [[ -e $commands[zsh-history-enquirer] ]]; then
+    BUFFER=$(zsh-history-enquirer "$LBUFFER")
     CURSOR=$#BUFFER
     zle -R -c
   else
