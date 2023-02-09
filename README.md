@@ -57,6 +57,18 @@ You can use a one-line command (which will auto install node via nvm, if node co
 curl -#sSL https://github.com/zthxxx/zsh-history-enquirer/raw/master/scripts/installer.zsh | zsh
 ```
 
+### [Homebrew](https://brew.sh)
+
+```bash
+brew install zsh-history-enquirer
+```
+
+```bash
+# .zshrc
+autoload -U history_enquire
+history_enquire
+```
+
 ### manually without oh-my-zsh
 
 If you don't use `oh-my-zsh`, you can manually add the `source` plugin file to your `.zshrc` after npm is installed and manually remove the `source` command when it is uninstalled.
