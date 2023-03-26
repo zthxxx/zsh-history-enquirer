@@ -62,7 +62,7 @@ curl -#sSL https://github.com/zthxxx/zsh-history-enquirer/raw/master/scripts/ins
 If you don't use `oh-my-zsh`, you can manually add the `source` plugin file to your `.zshrc` after npm is installed and manually remove the `source` command when it is uninstalled.
 
 ```bash
-echo 'source `npm root -g`/zsh-history-enquirer/scripts/zsh-history-enquirer.plugin.zsh' >> ~/.zshrc
+echo 'source `npm root -g`/zsh-history-enquirer/zsh-history-enquirer.plugin.zsh' >> ~/.zshrc
 ```
 
 ## Usage
