@@ -25,7 +25,7 @@ jobs:
     steps:
       - name: Checkout
         # https://github.com/actions/checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Renovate
         # https://github.com/renovatebot/github-action
