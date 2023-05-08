@@ -61,8 +61,8 @@
     "zsh-history-enquirer.plugin.zsh"
   ],
   "devDependencies": {
-    "@commitlint/cli": "8.3.6",
-    "@commitlint/config-conventional": "8.3.6",
+    "@commitlint/cli": "17.6.3",
+    "@commitlint/config-conventional": "17.6.3",
     "@rollup/plugin-commonjs": "21.0.1",
     "@rollup/plugin-json": "4.1.0",
     "@rollup/plugin-node-resolve": "10.0.0",
