@@ -12,6 +12,12 @@
 # assume default cursor in col 6 in jovial ("╰──➤  ")
 echo "echo 0 6" > ./dist/cursor.zsh
 
+# https://zsh.sourceforge.io/Doc/Release/Options.html#History
+# for ensures that commands are added to the history immediately
+setopt INC_APPEND_HISTORY
+# records the timestamp of each command
+setopt EXTENDED_HISTORY
+
 local ORIGIN_HISTFILE="${HISTFILE}"
 
 

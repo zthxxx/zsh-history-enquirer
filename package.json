@@ -2,6 +2,10 @@
   "name": "zsh-history-enquirer",
   "version": "1.3.0",
   "description": "zsh history search plugin by enquirer",
+  "repository": "zthxxx/zsh-history-enquirer",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org"
+  },
   "main": "index.js",
   "bin": {
     "zsh-history-enquirer": "bin/index.js"
@@ -9,25 +13,22 @@
   "scripts": {
     "clean": "rimraf dist public coverage debug.log",
     "test": "jest tests",
+    "test:zsh": "tests/zsh-widget.test.zsh",
     "build": "npm-run-all clean build:rollup build:site",
     "build:rollup": "rollup -c",
     "build:dev": "npm run clean && rollup -c -w",
     "docs": "eloc open intro.md -i 'images/**' --progress",
     "build:site": "eloc build intro.md -i '{CNAME,images/**}' --title 'zsh-history-enquirer' --progress",
-    "record": "./scripts/record.zsh",
-    "render": "./scripts/render-record.zsh",
+    "record": "scripts/record.zsh",
+    "render": "scripts/render-record.zsh",
     "preinstall": "command -v zsh || (npm run warn:zsh && exit 1)",
-    "postinstall": "env zsh -il ./scripts/postinstall.zsh",
+    "postinstall": "env zsh -il scripts/postinstall.zsh",
     "postuninstall": "npm run rm-plugin:config && npm run rm-plugin:file",
     "postpublish": "npm run clean",
     "warn:zsh": "echo '\\n\\n!! this is a plugin for zsh, please install zsh at first \\n\\n' >&2",
-    "benchmark": "./scripts/benchmark.zsh",
+    "benchmark": "scripts/benchmark.zsh",
     "rm-plugin:config": "perl -i -pe 's/.*zsh-history-enquirer.*//gms' ${HOME}/.zshrc",
     "rm-plugin:file": "rm -rf ${ZSH_CUSTOM:-${ZSH}/custom}/plugins/zsh-history-enquirer"
-  },
-  "repository": "zthxxx/zsh-history-enquirer",
-  "publishConfig": {
-    "registry": "https://registry.npmjs.org"
   },
   "keywords": [
     "zsh",
