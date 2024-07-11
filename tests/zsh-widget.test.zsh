@@ -1,7 +1,6 @@
 ZDOTDIR="`pwd`/tests/testing-home" \
 expect -c '
   spawn -noecho zsh -il
-  stty raw
   set timeout 20
 
   set ESC "\u001b\["

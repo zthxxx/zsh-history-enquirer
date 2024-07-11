@@ -25,9 +25,17 @@ mkdir -p ${plugins_dir}/${package_name}
 
 ln -fs "`pwd`/${package_name}.plugin.zsh" "${plugins_dir}/${package_name}/"
 
+is-command() { command -v $@ &> /dev/null; }
+
 # it's same as `realpath`, but `realpath` is GNU only and not builtin
 prel-realpath() {
-  perl -MCwd -e 'print Cwd::realpath($ARGV[0]),qq<\n>' $1
+  if is-command realpath; then
+    realpath $1
+  elif is-command readlink; then
+    readlink -f $1
+  else
+    perl -MCwd -e 'print Cwd::realpath($ARGV[0]),qq<\n>' $1
+  fi
 }
 
 local zsh_config_file="$(prel-realpath ${HOME}/.zshrc)"
