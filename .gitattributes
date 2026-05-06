@@ -1,0 +1,20 @@
+# Generated lockfiles — never merge as text.
+pnpm-lock.yaml               merge=binary
+package-lock.json            merge=binary
+yarn.lock                    merge=binary
+
+# Linguist hints: present source as Go-first.
+*.go    text diff=golang linguist-language=Go
+go.sum  text linguist-generated
+
+# Documentation
+*.md    text diff=markdown linguist-documentation
+
+# zsh sources are treated as shell, with eol forced to LF so the script
+# stays runnable when checked out on Windows hosts.
+*.zsh   text eol=lf linguist-language=Shell
+*.sh    text eol=lf linguist-language=Shell
+
+# Generated files.
+docs/**/*.png                  filter=lfs diff=lfs merge=lfs -text
+images/**                      filter=lfs diff=lfs merge=lfs -text

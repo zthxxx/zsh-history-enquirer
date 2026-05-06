@@ -1,0 +1,14 @@
+{
+  "name": "zsh-history-enquirer-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Repo-level dev tooling for zsh-history-enquirer (markdownlint, commitlint, etc.). Not published.",
+  "scripts": {
+    "lint:md": "markdownlint-cli2 \"**/*.md\""
+  },
+  "devDependencies": {
+    "@commitlint/cli": "19.5.0",
+    "@commitlint/config-conventional": "19.5.0",
+    "markdownlint-cli2": "0.14.0"
+  }
+}

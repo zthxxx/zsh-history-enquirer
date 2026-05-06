@@ -1,0 +1,162 @@
+# https://golangci-lint.run/usage/configuration/
+version: "2"
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+output:
+  sort-order:
+    - linter
+    - severity
+    - file
+
+linters:
+  enable:
+    # bugs
+    - govet
+    - staticcheck
+    - errcheck
+    - bodyclose
+    - durationcheck
+    - nilerr
+    - noctx
+    - rowserrcheck
+    - sqlclosecheck
+
+    # style & convention
+    - revive
+    - misspell
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - whitespace
+    - predeclared
+
+    # security
+    - gosec
+
+    # performance
+    - prealloc
+
+    # code quality
+    - gocritic
+    - errname
+    - errorlint
+    - goconst
+    - godot
+    - makezero
+    - nakedret
+    - nestif
+    - nolintlint
+    - tparallel
+    - wastedassign
+
+    # modernization
+    - intrange
+    - copyloopvar
+
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: var-declaration
+        - name: var-naming
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+        - opinionated
+      disabled-checks:
+        - hugeParam
+        - rangeValCopy
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+      # fmt.Print* family is implicitly excluded. Extend the exclusion to
+      # writer-bound variants and common UI helpers — these write user-
+      # facing text to io.Writer sinks where a write failure has no
+      # meaningful recovery path.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (io.Writer).Write
+        - (*bytes.Buffer).Write
+        - (*bytes.Buffer).WriteString
+        - (*strings.Builder).Write
+        - (*strings.Builder).WriteString
+        - (*strings.Builder).WriteByte
+        - (*os.File).Write
+        - (*os.File).WriteString
+
+    nestif:
+      min-complexity: 6
+
+    nakedret:
+      max-func-lines: 30
+
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+
+    misspell:
+      locale: US
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - goconst
+          - gocritic
+          - errcheck
+          - unparam
+      # The renderer emits ANSI escape sequences. The leading ``
+      # confuses misspell; permit it.
+      - path: 'internal/(ansi|ui)/'
+        linters:
+          - misspell
+    paths:
+      - vendor
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/zthxxx/zsh-history-enquirer
+
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 5

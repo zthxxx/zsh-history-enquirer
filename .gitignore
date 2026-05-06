@@ -1,0 +1,59 @@
+# Build artifacts
+/bin/
+/dist/
+/release/
+/coverage.out
+/coverage.html
+
+# Go binaries on host
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test
+*.test
+
+# pgregory.net/rapid replay state files (regenerated each run)
+**/testdata/rapid/
+
+# Dependency
+/vendor/
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug
+*.log
+.logs
+.cache
+__debug_bin*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Local overrides — machine-specific, never tracked
+*.local.*
+
+# go-task local state
+.task/
+
+# act runtime artifacts
+/.act/
+
+# npm-workspace generated packages (esbuild-style platform pkgs are
+# rendered from templates at release time and never tracked).
+/npm-workspace/build/
+/npm-workspace/packages/@zsh-history-enquirer/

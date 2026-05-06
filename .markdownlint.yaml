@@ -1,0 +1,36 @@
+# https://github.com/DavidAnson/markdownlint/blob/main/schema/.markdownlint.yaml
+
+default: true
+
+# MD003 - Heading style
+MD003:
+  style: atx
+
+# MD007 - Unordered list indentation
+MD007:
+  indent: 2
+
+# MD012 - Consecutive blank lines
+MD012:
+  maximum: 3
+
+# MD013 - Line length
+MD013: false
+
+# MD024 - Multiple headings with the same content (allow under different parents)
+MD024:
+  siblings_only: true
+
+# MD033 - Inline HTML (allowed; README has alignment HTML, kbd, etc.)
+MD033: false
+
+# MD041 - First line in file should be a top level heading
+MD041: false
+
+# MD046 - Code block style
+MD046:
+  style: fenced
+
+# MD048 - Code fence style
+MD048:
+  style: backtick

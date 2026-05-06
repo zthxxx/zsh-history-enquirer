@@ -1,0 +1,286 @@
+# Usage: https://taskfile.dev/usage/
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+---
+
+version: "3"
+
+set: [pipefail]
+shopt: [globstar]
+
+silent: false
+
+vars:
+  APP_NAME: zsh-history-enquirer
+  BUILD_DIR: bin
+  PKG_PATH: github.com/zthxxx/zsh-history-enquirer
+  CMD_PATH: ./cmd/zsh-history-enquirer
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+  COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo "unknown"
+  DATE:
+    sh: date -u '+%Y-%m-%dT%H:%M:%SZ'
+  LDFLAGS: >-
+    -s -w
+    -X {{.PKG_PATH}}/pkg/version.version={{.VERSION}}
+    -X {{.PKG_PATH}}/pkg/version.commit={{.COMMIT}}
+    -X {{.PKG_PATH}}/pkg/version.date={{.DATE}}
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list-all
+
+  # ---------------------------------------------------------------------------
+  # Build
+  # ---------------------------------------------------------------------------
+
+  build:
+    desc: Build the host binary (CGO disabled → fully static)
+    env:
+      CGO_ENABLED: "0"
+    cmds:
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.APP_NAME}} {{.CMD_PATH}}
+    sources:
+      - ./**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/{{.APP_NAME}}"
+
+  build:linux:
+    desc: Build linux/amd64 binary for e2e tests
+    env:
+      CGO_ENABLED: "0"
+      GOOS: linux
+      GOARCH: amd64
+    cmds:
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.APP_NAME}}-linux-amd64 {{.CMD_PATH}}
+    sources:
+      - ./**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/{{.APP_NAME}}-linux-amd64"
+
+  build:all:
+    desc: Cross-compile for all release platforms
+    cmds:
+      - bash scripts/build-all.sh
+
+  build:release:
+    desc: Build release binaries with checksums
+    cmds:
+      - bash scripts/build-all.sh
+      - cd {{.BUILD_DIR}} && (sha256sum {{.APP_NAME}}-* 2>/dev/null || shasum -a 256 {{.APP_NAME}}-*) > checksums.txt
+
+  # ---------------------------------------------------------------------------
+  # Run
+  # ---------------------------------------------------------------------------
+
+  run:
+    desc: Run the application against the user's $HISTFILE (interactive only)
+    cmds:
+      - go run -ldflags "{{.LDFLAGS}}" {{.CMD_PATH}} {{.CLI_ARGS}}
+
+  # ---------------------------------------------------------------------------
+  # Tests
+  # ---------------------------------------------------------------------------
+
+  test:
+    desc: Run all tests CI runs (unit + e2e)
+    cmds:
+      - task: test:unit
+      - task: test:e2e
+
+  test:unit:
+    desc: Run Go unit tests with race detection
+    cmds:
+      - go test -race -count=1 -coverprofile=coverage.out ./...
+
+  test:property:
+    desc: Run property-based tests only
+    cmds:
+      - go test -race -count=1 -run "TestProperty" ./...
+
+  test:cover:
+    desc: Show test coverage in browser
+    deps: [test:unit]
+    cmds:
+      - go tool cover -html=coverage.out -o coverage.html
+      - open coverage.html 2>/dev/null || xdg-open coverage.html 2>/dev/null || true
+
+  # ---------------------------------------------------------------------------
+  # E2E — docker is the only sanctioned host. The :one-via-act variants
+  # exist so a developer can validate the GitHub Actions runner contract
+  # locally before pushing.
+  # ---------------------------------------------------------------------------
+
+  test:e2e:
+    desc: Run all e2e scenarios in docker (debian + alpine)
+    deps: [build:linux]
+    cmds:
+      - for: { var: 'TARGETS', as: TARGET, split: ' ' }
+        cmd: TARGET={{.TARGET}} task ci:e2e:run
+    vars:
+      TARGETS: debian alpine
+
+  test:e2e:one:
+    desc: "Run a single e2e target (usage: task test:e2e:one TARGET=debian)"
+    deps: [build:linux]
+    cmds:
+      - TARGET={{.TARGET}} task ci:e2e:run
+    requires:
+      vars: [TARGET]
+
+  test:e2e:via-act:
+    desc: "Run the full CI e2e job under act (usage: task test:e2e:via-act TARGET=debian)"
+    cmds:
+      - act push --container-architecture linux/amd64 -j e2e --matrix target:{{.TARGET}} --rm
+    requires:
+      vars: [TARGET]
+
+  # ---------------------------------------------------------------------------
+  # Local CI helpers
+  # ---------------------------------------------------------------------------
+
+  ci:
+    desc: Run full CI pipeline locally via act (lint + test + build + e2e)
+    cmds:
+      - act push --container-architecture linux/amd64 --rm
+
+  ci:lint:go:
+    desc: CI lint — golangci-lint
+    cmds:
+      - task: lint:go
+
+  ci:lint:md:
+    desc: CI lint — markdownlint
+    cmds:
+      - task: lint:md
+
+  ci:unit:
+    desc: CI unit tests with coverage
+    cmds:
+      - go test -race -count=1 -coverprofile=coverage.out ./...
+
+  ci:build:
+    desc: "CI build — single target via GOOS/GOARCH (usage: GOOS=linux GOARCH=amd64 task ci:build)"
+    env:
+      CGO_ENABLED: "0"
+    cmds:
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.APP_NAME}}-${GOOS}-${GOARCH} {{.CMD_PATH}}
+
+  ci:release:package:
+    desc: Flatten download-artifact dist/**/zsh-history-enquirer-* into release/ + checksums.txt
+    cmds:
+      - mkdir -p release
+      - find dist -type f -name '{{.APP_NAME}}-*' -exec cp {} release/ \;
+      - cd release && (sha256sum {{.APP_NAME}}-* 2>/dev/null || shasum -a 256 {{.APP_NAME}}-*) > checksums.txt
+
+  ci:release:bump-homebrew-tap:
+    desc: "CI — open a PR bumping zsh-history-enquirer Formula in zthxxx/homebrew-tap (usage: VERSION=v2.0.0 task ci:release:bump-homebrew-tap)"
+    cmds:
+      - bash scripts/ci/bump-homebrew-tap.sh "{{.VERSION}}"
+    requires:
+      vars: [VERSION]
+
+  ci:release:publish-npm:
+    desc: "CI — render and publish all npm platform packages + the umbrella package (usage: VERSION=v2.0.0 task ci:release:publish-npm)"
+    cmds:
+      - bash scripts/release/build-npm.sh "{{.VERSION}}" --publish
+    requires:
+      vars: [VERSION]
+
+  ci:e2e:run:
+    desc: "CI e2e — build target image and run scenarios (usage: TARGET=debian task ci:e2e:run)"
+    cmds:
+      - |
+        HASH=$(sha256sum e2e/${TARGET}/Dockerfile e2e/run.sh | head -c 12)
+        IMAGE="{{.APP_NAME}}-e2e-${TARGET}:${HASH}"
+        if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+          docker build -f e2e/${TARGET}/Dockerfile -t "$IMAGE" e2e
+          docker images --format '{{`{{.Repository}}:{{.Tag}}`}}' \
+            | grep "^{{.APP_NAME}}-e2e-${TARGET}:" | grep -v ":${HASH}$" \
+            | xargs -r docker rmi 2>/dev/null || true
+        fi
+        docker run --rm \
+          -v "$(pwd)/{{.BUILD_DIR}}/{{.APP_NAME}}-linux-amd64:/usr/local/bin/{{.APP_NAME}}:ro" \
+          -v "$(pwd)/plugin/{{.APP_NAME}}.plugin.zsh:/opt/{{.APP_NAME}}/plugin.zsh:ro" \
+          -v "$(pwd)/e2e/scenarios:/scenarios:ro" \
+          -v "$(pwd)/e2e/run.sh:/run.sh:ro" \
+          -e TARGET=${TARGET} \
+          "$IMAGE" \
+          /run.sh
+    requires:
+      vars: [TARGET]
+
+  # ---------------------------------------------------------------------------
+  # Lint / Fmt
+  # ---------------------------------------------------------------------------
+
+  lint:
+    desc: Run all linters
+    cmds:
+      - task: lint:go
+      - task: lint:md
+
+  lint:go:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  lint:go:fix:
+    desc: Run golangci-lint with --fix
+    cmds:
+      - golangci-lint run --fix ./...
+
+  lint:md:
+    desc: Run markdownlint via bun (npm fallback if no bun)
+    cmds:
+      - 'command -v bun >/dev/null && bun markdownlint-cli2 "**/*.md" || npx --yes markdownlint-cli2 "**/*.md"'
+
+  fmt:
+    desc: Format Go source files
+    cmds:
+      - gofmt -w .
+      - 'command -v goimports >/dev/null && goimports -w -local {{.PKG_PATH}} . || true'
+
+  tidy:
+    desc: Tidy Go modules
+    cmds:
+      - go mod tidy
+
+  check:
+    desc: Run all local checks (fmt, lint, all tests including e2e)
+    cmds:
+      - task: fmt
+      - task: lint
+      - task: test
+
+  check:fast:
+    desc: Run fast local checks (fmt, lint, unit tests only — no docker)
+    cmds:
+      - task: fmt
+      - task: lint
+      - task: test:unit
+
+  # ---------------------------------------------------------------------------
+  # Setup / clean
+  # ---------------------------------------------------------------------------
+
+  clean:
+    desc: Clean build artifacts and caches
+    cmds:
+      - rm -rf {{.BUILD_DIR}} dist release
+      - rm -f coverage.out coverage.html
+      - rm -rf npm-workspace/build npm-workspace/packages/@zsh-history-enquirer
+
+  setup:
+    desc: Install developer tooling
+    cmds:
+      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
+      - go install golang.org/x/tools/cmd/goimports@latest
+      - go install github.com/evilmartians/lefthook/v2@latest
+      - lefthook install

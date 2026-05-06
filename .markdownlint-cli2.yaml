@@ -1,0 +1,10 @@
+globs:
+  - "**/*.md"
+  - "!**/node_modules/**"
+  - "!**/.claude/**"
+  - "!**/.specstory/**"
+  - "!**/dist/**"
+  - "!**/release/**"
+  - "!**/bin/**"
+  - "!**/coverage.out"
+  - "!**/.task/**"
