@@ -140,6 +140,79 @@ func drainEvents(ch <-chan Event, n int, timeout time.Duration) []Event {
 	return got
 }
 
+// TestReader_Events_PasteEvent drives a bracketed-paste through the
+// reader to verify the Reader → Parser handoff preserves the paste
+// payload as a single event (not split per-byte).
+func TestReader_Events_PasteEvent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("pty unsupported on windows")
+	}
+
+	master, slave, err := pty.Open()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = master.Close()
+		_ = slave.Close()
+	})
+
+	t1, err := tty.NewFromFile(slave)
+	require.NoError(t, err)
+	require.NoError(t, t1.EnterRaw())
+	t.Cleanup(func() { _ = t1.LeaveRaw() })
+
+	r := NewReader(t1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events := r.Events(ctx)
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		_, _ = io.WriteString(master, "\x1b[200~git status\x1b[201~")
+	}()
+
+	got := drainEvents(events, 1, 2*time.Second)
+	require.Len(t, got, 1, "paste must arrive as exactly ONE event")
+	pe, ok := got[0].(PasteEvent)
+	require.True(t, ok, "expected PasteEvent, got %T", got[0])
+	require.Equal(t, "git status", pe.Payload)
+}
+
+// TestReader_Events_EscFlushTimerDelivers verifies the FlushEsc
+// timer path: a lone ESC byte must produce a KeyEsc event after
+// the 50ms flush window, not stay buffered indefinitely.
+func TestReader_Events_EscFlushTimerDelivers(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("pty unsupported on windows")
+	}
+
+	master, slave, err := pty.Open()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = master.Close()
+		_ = slave.Close()
+	})
+
+	t1, err := tty.NewFromFile(slave)
+	require.NoError(t, err)
+	require.NoError(t, t1.EnterRaw())
+	t.Cleanup(func() { _ = t1.LeaveRaw() })
+
+	r := NewReader(t1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events := r.Events(ctx)
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		_, _ = io.WriteString(master, "\x1b")
+	}()
+
+	// Allow the 50ms flush plus 100ms poll plus margin.
+	got := drainEvents(events, 1, 1*time.Second)
+	require.Len(t, got, 1, "lone ESC must be emitted within ~150ms")
+	require.Equal(t, KeyEvent{Key: KeyEsc}, got[0])
+}
+
 // Defensive compile-time check: the unix package must export the
 // poll constants we depend on. A future Go-x-sys reshuffle that
 // removes these would otherwise break us at runtime.
