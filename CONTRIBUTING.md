@@ -38,7 +38,7 @@ load against the project's `go 1.25.0` go.mod, plus `goimports`,
 ## Workflow
 
 ```bash
-task check:fast       # fmt + lint (go + arch + md + sh + zsh) + unit tests
+task check:fast       # fmt + lint (go + arch + md + sh + zsh + js) + unit tests
 task check            # the above + e2e in Docker
 task test:e2e         # e2e on debian + alpine
 task test:e2e:one TARGET=debian   # one target only
