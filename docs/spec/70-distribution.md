@@ -34,29 +34,42 @@ This is the same shape `esbuild` uses; it works because npm's
 `optionalDependencies` are installed only on matching platforms, leaving
 the user with exactly one platform binary and ~50 KB of overhead.
 
-The platform packages are **not** committed to git. They are generated
-at release time from a template in `npm/templates/platform/`.
-The release CI step:
+The platform packages are **not** committed to git. They are
+rendered at release time from a template in `npm/templates/platform/`.
+The release CI flow:
 
-1. `task build:all` cross-compiles every target.
-2. For each target, render the template into
-   `npm/packages/<os>-<arch>/`, copy the binary in, set the
-   correct `os`/`cpu` fields, bump the version, and `npm publish`.
-3. Render and publish the top-level `npm/packages/zsh-history-enquirer/`
-   with a matching version and the correct `optionalDependencies` map.
+1. `task ci:build` (matrix over GOOS/GOARCH) cross-compiles every
+   target into an artifact named `zsh-history-enquirer-<os>-<arch>`.
+2. The release job downloads all 4 artifacts, runs
+   `task ci:release:package` to flatten into `release/` and append
+   `checksums.txt`, then uploads as a GitHub Release.
+3. The publish-npm job:
+   - For each platform: render the template into
+     `npm/build/<os>-<arch>/`, copy the binary in, set the correct
+     `os`/`cpu` fields, bump the version, and `npm publish`.
+   - Render and publish the umbrella under `npm/build/zsh-history-enquirer/`
+     with a matching version and the correct `optionalDependencies`
+     map. The umbrella publishes **last**, after all platform
+     packages are live.
 
-The top-level package and the template directory **are** committed to
-git so the CI step is deterministic.
+The umbrella source (`npm/packages/zsh-history-enquirer/`) and the
+template directory (`npm/templates/platform/`) **are** committed
+to git so the CI step is deterministic. The render output
+(`npm/build/`) is gitignored.
 
 ## Homebrew (secondary)
 
 A release tag triggers a workflow that:
 
-1. Builds darwin-arm64, linux-amd64, linux-arm64.
-2. Uploads them to a GitHub Release with `checksums.txt`.
+1. Builds all four targets — `darwin-{arm64,amd64}` and
+   `linux-{arm64,amd64}`. Homebrew picks the right one at install
+   time via `on_macos`/`on_linux` + `Hardware::CPU` checks.
+2. Uploads them to a GitHub Release with `checksums.txt` (5 entries:
+   the four binaries plus `zsh-history-enquirer.plugin.zsh`).
 3. Opens a PR against `zthxxx/homebrew-tap` rewriting
-   `Formula/zsh-history-enquirer.rb` with the new version + per-platform
-   sha256s. The PR shape mirrors the `hams` formula bumper.
+   `Formula/zsh-history-enquirer.rb` with the new version + four
+   binary sha256s + the plugin sha256. The PR shape mirrors the
+   `hams` formula bumper.
 
 ## Plugin file location
 
