@@ -175,6 +175,87 @@ func TestParser_UTF8SplitAcrossReads(t *testing.T) {
 	require.Equal(t, RuneEvent{R: '世'}, got[0])
 }
 
+// TestParser_CtrlByteTable exhaustively pins each Ctrl-* mapping.
+// The ctrlByte() switch was at 25% coverage with only the
+// happy-path C/U/R cases exercised; this ensures that A/B/D/E/F/
+// K/L/N/P/W/Y all decode correctly and that unmapped bytes fall
+// through to KeyUnknown.
+func TestParser_CtrlByteTable(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		in   byte
+		want Key
+	}{
+		{0x01, KeyCtrlA},
+		{0x02, KeyCtrlB},
+		{0x03, KeyCtrlC},
+		{0x04, KeyCtrlD},
+		{0x05, KeyCtrlE},
+		{0x06, KeyCtrlF},
+		{0x0b, KeyCtrlK},
+		{0x0c, KeyCtrlL},
+		{0x0e, KeyCtrlN},
+		{0x10, KeyCtrlP},
+		{0x12, KeyCtrlR},
+		{0x15, KeyCtrlU},
+		{0x17, KeyCtrlW},
+		{0x19, KeyCtrlY},
+		// 0x07 (BEL) → unknown; 0x0f (Ctrl-O) → unknown.
+		{0x07, KeyUnknown},
+		{0x0f, KeyUnknown},
+	}
+	for _, tc := range cases {
+		got := ctrlByte(tc.in)
+		require.Equalf(t, tc.want, got,
+			"ctrlByte(0x%02x) = %v, want %v", tc.in, got, tc.want)
+	}
+}
+
+// TestParser_CSIUnknownIgnored — an unrecognized CSI final byte
+// (e.g. 'Z' for Shift-Tab in some terminals) must not corrupt the
+// FSM. The next character should still parse normally.
+func TestParser_CSIUnknownIgnored(t *testing.T) {
+	t.Parallel()
+
+	p := NewParser()
+	got := feedAll(p, "\x1b[Zx")
+	require.Equal(t, []Event{RuneEvent{R: 'x'}}, got,
+		"unknown CSI must be silently dropped, then 'x' must reach normal state")
+}
+
+// TestParser_NULDropped ensures NUL bytes (0x00) are silently
+// swallowed — they appear in some pastes and must not produce a
+// rune event or stall the FSM.
+func TestParser_NULDropped(t *testing.T) {
+	t.Parallel()
+
+	p := NewParser()
+	got := feedAll(p, "a\x00b")
+	require.Equal(t, []Event{
+		RuneEvent{R: 'a'},
+		RuneEvent{R: 'b'},
+	}, got)
+}
+
+// TestParser_GarbageUTF8Recovers — a stream of invalid UTF-8
+// continuation bytes must not pin memory. The parser caps the
+// internal buffer at UTFMax (4 bytes) and resets after that.
+func TestParser_GarbageUTF8Recovers(t *testing.T) {
+	t.Parallel()
+
+	p := NewParser()
+	// Eight 0x80 bytes (continuation-only) — valid neither as start
+	// of a rune nor as continuation of one.
+	got := feedAll(p, "\x80\x80\x80\x80\x80\x80\x80\x80a")
+	// At minimum we expect 'a' to come through eventually. The
+	// recovery path may emit RuneError(s) along the way.
+	require.NotEmpty(t, got)
+	last, ok := got[len(got)-1].(RuneEvent)
+	require.True(t, ok, "last event must be a rune")
+	require.Equal(t, 'a', last.R)
+}
+
 // TestProperty_Parser_ChunkBoundaryInvariance asserts that splitting
 // the same input at any byte boundary yields the same Event sequence
 // as feeding it whole. The parser is a finite-state machine and
