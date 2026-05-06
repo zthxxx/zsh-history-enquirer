@@ -370,3 +370,7 @@ tasks:
       - go install github.com/fe3dback/go-arch-lint@latest
       - go install github.com/evilmartians/lefthook/v2@latest
       - lefthook install
+      # shellcheck is platform-installed (no go install path). The
+      # lint:sh task degrades gracefully if it's missing but CI
+      # always has it (apt-get install -y shellcheck in ci.yml).
+      - 'command -v shellcheck >/dev/null || echo "(optional) install shellcheck for task lint:sh — brew install shellcheck OR apt-get install shellcheck"'
