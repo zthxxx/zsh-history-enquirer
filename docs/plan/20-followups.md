@@ -148,3 +148,36 @@ Each entry must include:
   Documented in this iteration's commit; the Taskfile already
   carries act-based recipes ready to use once an image is
   configured in `.actrc`. Resolved in this iteration's commit.
+
+* **2026-05-07** — CI workflow's `on: push: branches: '*'` was
+  silently never triggering for the `refactor/golang/dev` branch
+  because GitHub Actions' `*` glob in branch filters matches
+  single-segment refs only. The first run after the branch was
+  pushed to origin had to be discovered via `gh api .../events`
+  showing pushes-without-runs. Fixed by switching to `**`. Without
+  this, every "CI runs on push" promise in the README was
+  unenforced. Resolved in this iteration's commit.
+
+* **2026-05-07** — `golangci-lint v2.1.6` was built with Go 1.24
+  and refused to load against go.mod's `go 1.25.0` (forced by the
+  `go.uber.org/fx@v1.24` dependency). Bumped to `v2.12.2` in CI
+  and dropped the redundant `toolchain go1.26.2` from go.mod.
+  Resolved in this iteration's commit.
+
+* **2026-05-07** — `internal/app/run.go` was ~280 lines doing
+  configuration, fx orchestration, TTY setup, render loop, and
+  debug logging in one function (architect agent's earlier
+  flagged this). Split into init.go (geometry + cursor probe
+  fallback), loop.go (event loop + trailing flush), debug.go
+  (ZHE_DEBUG file open + structured loggers). Each file ≤ ~120
+  lines; the new pure helpers (computeInitCol, clampCursor,
+  handleProbeFallback) are individually unit-tested, lifting
+  internal/app coverage 5% → 22%. Resolved in this iteration's
+  commit.
+
+* **2026-05-07** — Repo was missing CONTRIBUTING.md, CHANGELOG.md,
+  ISSUE_TEMPLATE/, PULL_REQUEST_TEMPLATE.md — standard hygiene
+  for a "world-wide collaboration" project. Added all four with
+  prompts that nudge contributors toward project conventions
+  (spec/design/plan workflow, multi-line e2e, conventional
+  commits). Resolved in this iteration's commit.
