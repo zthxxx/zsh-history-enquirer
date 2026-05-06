@@ -117,3 +117,38 @@ func TestRender_PreFirstFrame(t *testing.T) {
 	require.Contains(t, frame.Pre, "\x1b[4G",
 		"first frame's Pre must place the cursor at initCol=4")
 }
+
+// TestRender_LimitMin1WithGiantEntry covers the
+// `limit==0 && len(Filter)>0` fallback in renderBody. When the
+// only filter entry wraps to more rows than heightLimit, the
+// dynamic-limit walk produces limit=0; the fallback bumps it to 1
+// so the user sees at least the first row of that giant entry
+// rather than an empty picker.
+func TestRender_LimitMin1WithGiantEntry(t *testing.T) {
+	t.Parallel()
+
+	huge := "huge\n" + strings.Repeat("L\n", 30) + "tail"
+	// 5-row terminal — heightLimit = 2; huge wraps to ~32 rows.
+	m := NewModel("", []string{huge}, 5, 80, 1, 1, DefaultMaxLimit)
+	frame := m.Render(RenderOptions{})
+
+	require.Equal(t, 1, frame.Limit,
+		"giant entry alone must still produce limit=1 (drawing at least the head)")
+	require.Contains(t, stripHighlight(frame.Body), "huge",
+		"the head of the giant entry must be in the rendered body")
+}
+
+// TestRender_NegativeIdxClampedToZero exercises the `m.Idx < 0`
+// clamp in renderBody. A model that's been mutated to a negative
+// Idx (defensive guard rail) must still render with focus on row 0.
+func TestRender_NegativeIdxClampedToZero(t *testing.T) {
+	t.Parallel()
+
+	m := NewModel("", []string{"a", "b"}, 15, 80, 1, 1, DefaultMaxLimit)
+	m.Idx = -7 // pathological state — guard must clamp it
+	frame := m.Render(RenderOptions{})
+
+	require.Equal(t, 0, m.Idx, "negative Idx must clamp to 0")
+	require.Contains(t, frame.Body, pointerSelected+"a",
+		"row 0 must be the focused entry after clamp")
+}
