@@ -25,6 +25,29 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — `task lint:sh` and `task lint:arch` had a
+  silent-masking bug from a single-line shell chain:
+
+  ```yaml
+  command -v X >/dev/null && X check || (echo "not installed" >&2)
+  ```
+
+  When `X` IS installed AND finds violations, the `&&` branch
+  fails, the `||` fires, the script prints the misleading "not
+  installed" message and exits 0. Real shellcheck / go-arch-lint
+  failures were silently masked — particularly bad for arch-lint
+  because the gate exists exactly to catch layering violations.
+  Replaced both with `if/else` blocks that exit cleanly only when
+  the binary is truly absent, otherwise propagate the lint exit
+  code. Resolved in this iteration's commits.
+
+  Note: the markdownlint version of the same chain (`bun ... ||
+  npx ...`) is *correct* because both branches are full lint
+  commands, so a bun-install-but-no-package failure correctly falls
+  back to npx. Tried to "fix" that one too in the same iteration
+  and broke the fallback path; reverted with an inline comment so
+  future readers don't try the same revert.
+
 * **2026-05-07** — Homebrew formula installed only the binary, not
   the plugin file. The README and the formula's caveats both
   pointed at `$(brew --prefix)/share/zsh-history-enquirer/plugin.zsh`,
