@@ -42,6 +42,22 @@ var Module = fx.Module("app",
 	fx.Invoke(invokeRun),
 )
 
+// preserveOnError enforces the widget contract that BUFFER never
+// blanks the user's typed input on widget error. If Run returned a
+// non-nil result we keep it; otherwise we synthesize a result from
+// the original input so the umbrella's PrintResult writes it back to
+// stdout. Returns nil when there is genuinely nothing to print
+// (no error AND no input).
+func preserveOnError(r *RunResult, err error, input string) *RunResult {
+	if r != nil {
+		return r
+	}
+	if err != nil && input != "" {
+		return &RunResult{Output: input}
+	}
+	return nil
+}
+
 // invokeRun is the only Invoke in the fx graph. It bridges from the
 // constructed providers to the (synchronous) Run() entrypoint.
 func invokeRun(
@@ -63,7 +79,12 @@ func invokeRun(
 			result, err := Run(context.Background(), cfg, t, loader, stderr)
 
 			// Always print the result — even canceled paths produce
-			// the user's original input as Result.
+			// the user's original input as Result. On hard early-error
+			// paths (raw-mode failed, geometry read failed) Run can
+			// return (nil, err); preserveOnError patches that to a
+			// synthesized result from cfg.Input so BUFFER never blanks
+			// the user's typed input.
+			result = preserveOnError(result, err, cfg.Input)
 			if result != nil {
 				PrintResult(stdout, result)
 			}

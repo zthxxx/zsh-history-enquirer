@@ -25,6 +25,21 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — Widget contract had a latent gap on hard
+  early-error paths in the binary. The npm shim correctly echoed
+  argv back when the platform sub-package was missing, but if the
+  Go binary itself started and then failed in `t.EnterRaw()` or
+  `readGeometry()`, `Run` returned `(nil, err)` and the umbrella
+  `invokeRun` skipped `PrintResult` (guarded on non-nil result).
+  Stdout was then empty, `BUFFER=$(...)` resolved to "", and the
+  user's `$LBUFFER` was silently destroyed. Added
+  `preserveOnError(result, err, cfg.Input)` in `internal/app/module.go`
+  that synthesizes a `RunResult` from `cfg.Input` whenever the
+  result is nil and an error fired. Property-style table test in
+  `module_test.go` pins all four (result, err) × (input) quadrants.
+  The widget contract now holds across every early-error code path,
+  not just the ones I happened to test interactively.
+
 * **2026-05-07** — `build-npm.sh` published every version under
   npm's `latest` dist-tag because the publish call had no `--tag`.
   The release.yml workflow comment said pre-releases (`v1.0.0-rc.1`)

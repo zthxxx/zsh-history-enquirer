@@ -104,6 +104,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   routed real shellcheck / go-arch-lint violations to the "not
   installed" message and exited 0. Replaced with `if/else` so
   violations actually fail the task.
+- **`BUFFER=$(...)` blanked user input on hard early errors in the
+  binary itself.** The npm shim's missing-binary fallback was wired,
+  but if the binary started, hit a raw-mode-enter or geometry-read
+  failure, and returned `(nil, err)`, the umbrella `invokeRun` never
+  printed anything to stdout — `BUFFER=$(...)` then resolved to the
+  empty string and ate the user's typed `$LBUFFER`. Added
+  `preserveOnError` which synthesizes a result from `cfg.Input` so
+  the widget contract holds even on early-error paths.
 
 ### Distribution
 

@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"testing"
@@ -176,5 +177,69 @@ func TestStderr_DefaultsToOSStderr(t *testing.T) {
 
 	if Stderr != os.Stderr {
 		t.Errorf("Stderr default is not os.Stderr (got %v)", Stderr)
+	}
+}
+
+// preserveOnError encodes the widget contract: BUFFER must never blank
+// the user's typed input on widget error. The four cases below pin
+// every quadrant of (result, err) × (input).
+func TestPreserveOnError(t *testing.T) {
+	t.Parallel()
+
+	bang := errors.New("boom")
+	cases := []struct {
+		name    string
+		in      *RunResult
+		err     error
+		input   string
+		wantNil bool
+		wantOut string
+	}{
+		{
+			name:    "result-passes-through",
+			in:      &RunResult{Output: "git status"},
+			err:     bang,
+			input:   "git",
+			wantOut: "git status",
+		},
+		{
+			name:    "nil-result-with-error-synthesizes-from-input",
+			in:      nil,
+			err:     bang,
+			input:   "git log",
+			wantOut: "git log",
+		},
+		{
+			name:    "nil-result-with-error-and-empty-input-stays-nil",
+			in:      nil,
+			err:     bang,
+			input:   "",
+			wantNil: true,
+		},
+		{
+			name:    "nil-result-no-error-stays-nil",
+			in:      nil,
+			err:     nil,
+			input:   "git log",
+			wantNil: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := preserveOnError(tc.in, tc.err, tc.input)
+			if tc.wantNil {
+				if got != nil {
+					t.Fatalf("want nil, got %+v", got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("want non-nil result with %q, got nil", tc.wantOut)
+			}
+			if got.Output != tc.wantOut {
+				t.Fatalf("Output = %q, want %q", got.Output, tc.wantOut)
+			}
+		})
 	}
 }
