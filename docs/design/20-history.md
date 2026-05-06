@@ -25,7 +25,7 @@ func FixtureLoader(path string) Loader
 type Options struct {
     HistFile  string // override for $HISTFILE; empty → user default
     HistSize  int    // override for HISTSIZE; 0 → 100000
-    ZshScript string // override for the inline script; empty → built-in
+    ZshBinary string // override for the zsh binary path; empty → "zsh"
 }
 ```
 
