@@ -25,6 +25,16 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — `build-npm.sh` published every version under
+  npm's `latest` dist-tag because the publish call had no `--tag`.
+  The release.yml workflow comment said pre-releases (`v1.0.0-rc.1`)
+  should publish under `next`, but the implementation didn't honour
+  it — a pre-release would have replaced the stable `latest` install.
+  Fix: derive `NPM_TAG` from the version string (`*-*` → `next`,
+  else `latest`) and pass `--tag` to both platform-package and
+  umbrella publishes. The contract in spec/80-release-process is
+  now actually enforced.
+
 * **2026-05-07** — `task lint:sh` and `task lint:arch` had a
   silent-masking bug from a single-line shell chain:
 
