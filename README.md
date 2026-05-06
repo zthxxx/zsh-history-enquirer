@@ -107,6 +107,13 @@ pnpm add -g zsh-history-enquirer
 yarn global add zsh-history-enquirer
 ```
 
+For pre-release versions (alpha / beta / rc tags) use the
+`next` dist-tag:
+
+```bash
+npm install -g zsh-history-enquirer@next
+```
+
 Add to `~/.zshrc`:
 
 ```bash
