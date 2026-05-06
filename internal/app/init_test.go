@@ -3,8 +3,13 @@ package app
 import (
 	"bytes"
 	"errors"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/zthxxx/zsh-history-enquirer/internal/tty"
 )
@@ -159,4 +164,63 @@ func TestHandleError_NonNilStillReturnsZero(t *testing.T) {
 	if !strings.Contains(buf.String(), "boom") {
 		t.Fatalf("stderr should contain error message, got %q", buf.String())
 	}
+}
+
+// TestOpenDebugLog_Unset returns io.Discard when ZHE_DEBUG is not
+// set. Discarder is the load-bearing default — production runs
+// must not pay any cost for diagnostic logging.
+func TestOpenDebugLog_Unset(t *testing.T) {
+	t.Setenv("ZHE_DEBUG", "")
+	w := openDebugLog()
+	require.Equal(t, io.Discard, w)
+}
+
+// TestOpenDebugLog_Writable opens a real file and verifies writes
+// land on disk.
+func TestOpenDebugLog_Writable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "zhe.log")
+	t.Setenv("ZHE_DEBUG", path)
+
+	w := openDebugLog()
+	require.NotEqual(t, io.Discard, w)
+
+	_, err := io.WriteString(w, "hello\n")
+	require.NoError(t, err)
+	if c, ok := w.(io.Closer); ok {
+		_ = c.Close()
+	}
+
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, "hello\n", string(got))
+}
+
+// TestOpenDebugLog_UnwritableFallsBackToDiscard — pointing
+// ZHE_DEBUG at an unwritable path (e.g., a directory or a
+// nonexistent parent) must not crash the picker; we degrade to
+// io.Discard so diagnostics are best-effort.
+func TestOpenDebugLog_UnwritableFallsBackToDiscard(t *testing.T) {
+	// /this/path/does/not/exist will fail OpenFile with ENOENT.
+	t.Setenv("ZHE_DEBUG", "/this/path/does/not/exist/zhe.log")
+	require.Equal(t, io.Discard, openDebugLog())
+}
+
+// TestDebugProbe_DiscardIsNoOp — debugProbe must not write when the
+// destination is io.Discard or nil. Saves cost on the production
+// path.
+func TestDebugProbe_DiscardIsNoOp(t *testing.T) {
+	t.Parallel()
+	debugProbe(io.Discard, cursorResult{row: 1, col: 1}, "", 24, 80)
+	debugProbe(nil, cursorResult{row: 1, col: 1}, "", 24, 80)
+}
+
+// TestDebugProbe_WritesProbeAndGeom — debugProbe writes both lines
+// to the destination when it is a real writer.
+func TestDebugProbe_WritesProbeAndGeom(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	debugProbe(&buf, cursorResult{row: 7, col: 42}, "log", 24, 80)
+	require.Contains(t, buf.String(), "row=7 col=42")
+	require.Contains(t, buf.String(), "leftover=\"log\"")
+	require.Contains(t, buf.String(), "rows=24 cols=80")
 }
