@@ -123,8 +123,11 @@ cp "${UMBRELLA_SRC}/bin/cli.js"  "${umbrella}/bin/cli.js"
 # inside npm/packages/. Single source of truth: any plugin fix lands
 # in plugin/ and flows through to the npm release at build time.
 cp "plugin/zsh-history-enquirer.plugin.zsh" "${umbrella}/plugin/"
+# README is short and npm-specific (the full README has too many
+# images/badges to render well on npmjs.com); LICENSE comes from the
+# project root so the legally-binding MIT text is always shipped.
 cp "${UMBRELLA_SRC}/README.md"   "${umbrella}/README.md"
-cp "${UMBRELLA_SRC}/LICENSE"     "${umbrella}/LICENSE"
+cp "LICENSE"                     "${umbrella}/LICENSE"
 chmod +x "${umbrella}/bin/cli.js"
 
 # Build optionalDependencies map.
