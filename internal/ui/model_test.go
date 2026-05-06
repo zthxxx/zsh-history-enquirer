@@ -139,6 +139,75 @@ func TestModel_DownScrollsBeyondVisible(t *testing.T) {
 	require.Contains(t, m.Focused(), "command-")
 }
 
+// TestModel_PageUpFromTop — pressing PageUp at the top of an
+// already-rotated filter wraps to the bottom, matching the legacy
+// "infinite list" UX.
+func TestModel_PageUpFromTop(t *testing.T) {
+	t.Parallel()
+	m := newTestModel("")
+	m.Render(RenderOptions{})
+	first := m.Focused()
+	m.Update(keys.KeyEvent{Key: keys.KeyPageUp})
+	m.Render(RenderOptions{PrevSize: m.Limit})
+	// PageUp at idx=0 rotates the list; the focus is now on the
+	// new visible[0], which was previously somewhere lower in the
+	// filter.
+	require.NotEqual(t, first, m.Focused(),
+		"PageUp at top must rotate; got the same focus")
+}
+
+// TestModel_HomeResetsFilter — Home recomputes filter and resets
+// idx to 0 (the most recent matching entry).
+func TestModel_HomeResetsFilter(t *testing.T) {
+	t.Parallel()
+	m := newTestModel("")
+	m.Render(RenderOptions{})
+	for range 5 {
+		m.Update(keys.KeyEvent{Key: keys.KeyDown})
+		m.Render(RenderOptions{PrevSize: m.Limit})
+	}
+	moved := m.Focused()
+	m.Update(keys.KeyEvent{Key: keys.KeyHome})
+	m.Render(RenderOptions{PrevSize: m.Limit})
+	// Home brings us back to the freshest filter — the topmost
+	// entry of choices (after reverse-dedupe in newTestModel that's
+	// "echo zsh-history-enquirer" per sampleChoices()).
+	require.NotEqual(t, moved, m.Focused(),
+		"Home should reset focus to the top of the freshest filter")
+}
+
+// TestModel_UpAtTopRotates — pressing Up at the top of the
+// visible window rotates the visible list rather than alerting.
+func TestModel_UpAtTopRotates(t *testing.T) {
+	t.Parallel()
+	m := newTestModel("")
+	m.Render(RenderOptions{})
+	first := m.Focused()
+	m.Update(keys.KeyEvent{Key: keys.KeyUp})
+	m.Render(RenderOptions{PrevSize: m.Limit})
+	require.NotEqual(t, first, m.Focused(),
+		"Up at top of visible window should rotate the list")
+}
+
+// TestModel_BackspaceShortensInput
+func TestModel_BackspaceOnEmptyInputIsNoOp(t *testing.T) {
+	t.Parallel()
+	m := newTestModel("")
+	require.Empty(t, m.Input)
+	m.Update(keys.KeyEvent{Key: keys.KeyBackspace})
+	require.Empty(t, m.Input)
+}
+
+// TestModel_UnknownKeyIsIgnored — random keys (e.g. KeyTab,
+// KeyDelete with no specific handler) must not panic or terminate.
+func TestModel_UnknownKeyIsIgnored(t *testing.T) {
+	t.Parallel()
+	m := newTestModel("git")
+	terminate := m.Update(keys.KeyEvent{Key: keys.KeyTab})
+	require.False(t, terminate, "Tab should not terminate the picker")
+	require.Equal(t, "git", m.Input, "Tab should not modify input")
+}
+
 func TestModel_ResizeUpdatesGeometry(t *testing.T) {
 	t.Parallel()
 	m := newTestModel("")
