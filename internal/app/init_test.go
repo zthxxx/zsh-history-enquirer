@@ -11,7 +11,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/zthxxx/zsh-history-enquirer/internal/keys"
 	"github.com/zthxxx/zsh-history-enquirer/internal/tty"
+	"github.com/zthxxx/zsh-history-enquirer/internal/ui"
 )
 
 func TestComputeInitCol_Normal(t *testing.T) {
@@ -223,4 +225,26 @@ func TestDebugProbe_WritesProbeAndGeom(t *testing.T) {
 	require.Contains(t, buf.String(), "row=7 col=42")
 	require.Contains(t, buf.String(), "leftover=\"log\"")
 	require.Contains(t, buf.String(), "rows=24 cols=80")
+}
+
+// TestDebugEvent_DiscardIsNoOp pins the io.Discard / nil short-
+// circuit on debugEvent. The hot loop calls this once per event;
+// production must not pay the fmt.Fprintf cost. m can be nil
+// because the no-op path returns before dereferencing it.
+func TestDebugEvent_DiscardIsNoOp(t *testing.T) {
+	t.Parallel()
+	debugEvent(io.Discard, "key", keys.PasteEvent{Payload: "a"}, nil)
+	debugEvent(nil, "key", keys.PasteEvent{Payload: "a"}, nil)
+}
+
+// TestDebugEvent_WritesWhenEnabled covers the active branch with a
+// real bytes.Buffer + a minimal Model. The output format is
+// stable enough to grep ("[zhe] <label>:").
+func TestDebugEvent_WritesWhenEnabled(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	m := ui.NewModel("typed-input", []string{}, 24, 80, 1, 1, 15)
+	debugEvent(&buf, "key", keys.RuneEvent{R: 'a'}, m)
+	require.Contains(t, buf.String(), "[zhe] key:")
+	require.Contains(t, buf.String(), "input=\"typed-input\"")
 }
