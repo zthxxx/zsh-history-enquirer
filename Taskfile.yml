@@ -340,16 +340,20 @@ tasks:
   lint:md:
     desc: Run markdownlint via bun (npx fallback if no bun)
     cmds:
-      # Pick one runner up front rather than `&& bun ... || npx ...`,
-      # which previously ran npx as a fallback even when bun simply
-      # found violations — leading to doubled output and wasted time
-      # on real-failure cases.
-      - |
-        if command -v bun >/dev/null; then
-          bun markdownlint-cli2 "**/*.md"
-        else
-          npx --yes markdownlint-cli2 "**/*.md"
-        fi
+      # The `&& bun ... || npx ...` chain handles three cases:
+      #   1. bun installed + bun-cached markdownlint-cli2: bun runs.
+      #   2. bun installed but no markdownlint-cli2 in cache (fails
+      #      with 'Script not found'): || fires, npx runs.
+      #   3. bun not installed: command -v fails, || fires, npx runs.
+      #
+      # Edge case: when bun runs and finds lint violations, it
+      # exits non-zero, so npx ALSO runs and finds the same
+      # violations — output prints twice. We accept this trade-off
+      # because the alternative (`if bun then bun else npx`) breaks
+      # case 2 entirely, which is a real and common contributor
+      # state on systems where bun is installed but
+      # ~/.bun/install/cache hasn't seen markdownlint-cli2.
+      - 'command -v bun >/dev/null && bun markdownlint-cli2 "**/*.md" || npx --yes markdownlint-cli2 "**/*.md"'
 
   fmt:
     desc: Format Go source files
