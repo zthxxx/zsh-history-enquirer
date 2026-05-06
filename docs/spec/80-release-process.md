@@ -25,7 +25,10 @@ For tag `vX.Y.Z`:
 1. **GitHub Release** at the tag with:
    - The four cross-platform binaries
      (`zsh-history-enquirer-{darwin,linux}-{arm64,amd64}`).
-   - `checksums.txt` (sha256, one entry per binary).
+   - `zsh-history-enquirer.plugin.zsh` (the widget file, separate
+     asset so the Homebrew formula's `resource "plugin"` stanza
+     can fetch it).
+   - `checksums.txt` (sha256, one entry per asset — 5 lines).
    - Auto-generated release notes from PR titles since the previous
      tag.
    - Pre-release flag if the tag contains `-`.
@@ -40,8 +43,12 @@ For tag `vX.Y.Z`:
      `next`.
 3. **Homebrew tap PR** (stable releases only):
    - A PR against `zthxxx/homebrew-tap` rewriting
-     `Formula/zsh-history-enquirer.rb` with the new version + four
-     per-platform sha256s.
+     `Formula/zsh-history-enquirer.rb` with the new version, four
+     per-platform sha256s, and the plugin-file sha256.
+   - Formula's `def install` stages the plugin into `pkgshare`
+     (`share/zsh-history-enquirer/plugin.zsh`) so users source it
+     via `$(brew --prefix)/share/...`. Without this stanza the
+     README path would be a 404.
    - Branch name `bump-zsh-history-enquirer-vX.Y.Z` so re-runs
      amend the same PR rather than duplicating.
 
