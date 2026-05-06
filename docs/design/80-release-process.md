@@ -70,16 +70,24 @@ not data), packages them into `release/`, copies the four binaries
 into `bin/zsh-history-enquirer-<os>-<arch>`, then runs
 `scripts/release/build-npm.sh "${VERSION}" --publish` which:
 
-1. For each platform:
+1. Decides the npm dist-tag from the version string:
+   - `*-*` (e.g. `1.0.0-rc.1`) → `next`
+   - otherwise → `latest`
+
+   The decision is made at the start of the publish loop and
+   passed to every `npm publish --tag` call so the platform
+   sub-packages and the umbrella all land under the same tag.
+2. For each platform:
    - Renders `npm/templates/platform/{package.json,README.md,LICENSE}.tmpl`
      into `npm/build/<os>-<arch>/` with substitutions for
      `{{NPM_PLATFORM}}`, `{{NODE_OS}}`, `{{NODE_CPU}}`,
      `{{VERSION}}`.
    - Copies the matching binary into `bin/zsh-history-enquirer`.
-   - `npm publish --access public`.
-2. Renders the umbrella package (`npm/build/zsh-history-enquirer/`)
+   - `npm publish --access public --tag $NPM_TAG`.
+3. Renders the umbrella package (`npm/build/zsh-history-enquirer/`)
    with the four `optionalDependencies` resolving to the just-
-   published versions, then `npm publish --access public`.
+   published versions, then
+   `npm publish --access public --tag $NPM_TAG`.
 
 The umbrella publishes **last** so a user installing during the
 release window either gets the previous version (consistent) or the
