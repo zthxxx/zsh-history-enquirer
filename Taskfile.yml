@@ -316,7 +316,16 @@ tasks:
   lint:sh:
     desc: Run shellcheck on every release / CI shell script
     cmds:
-      - 'command -v shellcheck >/dev/null && find scripts -name "*.sh" -print0 | xargs -0 shellcheck || (echo "shellcheck not installed; skipping" >&2)'
+      # Skip silently if shellcheck is missing; otherwise run it and
+      # propagate the exit code. The previous `&& ... || (echo ...)`
+      # chain masked real shellcheck failures by routing them to the
+      # 'not installed' message.
+      - |
+        if ! command -v shellcheck >/dev/null; then
+          echo "shellcheck not installed; skipping" >&2
+          exit 0
+        fi
+        find scripts -name "*.sh" -print0 | xargs -0 shellcheck
 
   lint:md:
     desc: Run markdownlint via bun (npm fallback if no bun)
