@@ -31,6 +31,25 @@ Each entry must include:
 
 ## Addressed
 
+* **2026-05-07** — Task's `vars: VERSION: { sh: git describe ... }`
+  unconditionally resolved via git describe, ignoring any env var.
+  Real CI ergonomics bug: `VERSION=2.0.0 task release:dry-run`
+  rendered npm packages with the commit hash, not 2.0.0. CI itself
+  happens to work because tag-push checkouts produce a clean tree
+  where `git describe` returns the tag — but locally, the documented
+  usage was broken. Fixed `sh:` block to honour `${VERSION}` env
+  first, fall back to git describe second. Resolved in this
+  iteration's commit.
+
+* **2026-05-07** — `plugin/zsh-history-enquirer.plugin.zsh` still
+  contained the OLD bindkey-swap fallback even though the followups
+  entry below claimed it was fixed. Real divergence between the doc
+  and the code, found by re-reading both. Fixed: fallback uses
+  `zle .history-incremental-search-backward` (no keymap mutation),
+  and ^R is bound explicitly in emacs/viins/vicmd via `bindkey -M`.
+  Added e2e scenario 15-vi-keymap.exp to lock the regression.
+  Resolved in this iteration's commit.
+
 * **2026-05-07** — Two anonymous `func() io.Writer` providers in fx
   failed dependency resolution silently. Introduced `Stdout` and
   `StderrWriter` named types in `internal/app/module.go`. Resolved in
