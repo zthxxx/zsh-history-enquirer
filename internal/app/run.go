@@ -95,6 +95,16 @@ func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, st
 	if err != nil {
 		return nil, fmt.Errorf("query size: %w", err)
 	}
+	// Some kernels (notably docker's pty emulation when SIGWINCH was
+	// never sent) report 0×0 — falling through with that breaks the
+	// dynamic-limit math (heightLimit becomes 1) and leaves the picker
+	// effectively single-line. Fall back to a conventional 24×80.
+	if rows <= 0 {
+		rows = 24
+	}
+	if cols <= 0 {
+		cols = 80
+	}
 
 	// Cursor probe is best-effort. Some terminals (and most test pty
 	// runners) do not reply to DSR within the timeout; fall back to
@@ -114,6 +124,7 @@ func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, st
 	if os.Getenv("ZHE_DEBUG") != "" {
 		if f, derr := os.OpenFile(os.Getenv("ZHE_DEBUG"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); derr == nil {
 			fmt.Fprintf(f, "[zhe] probe: row=%d col=%d err=%v leftover=%q\n", cur.row, cur.col, cur.err, probeLeftover)
+			fmt.Fprintf(f, "[zhe] geom: rows=%d cols=%d\n", rows, cols)
 			f.Close()
 		}
 	}

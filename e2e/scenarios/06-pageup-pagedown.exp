@@ -1,0 +1,47 @@
+#!/usr/bin/env expect
+# 06-pageup-pagedown.exp
+#
+# After opening the picker on the seeded history, press PageDown
+# twice and PageUp once and assert the picker keeps rendering. The
+# seeded history has ~30 unique entries so a couple of pages of
+# scroll exercises real motion.
+
+set timeout 15
+log_user 1
+
+spawn -noecho zsh -il
+expect_after timeout {
+  puts stderr "TIMEOUT in 06-pageup-pagedown"
+  exit 1
+}
+
+expect "% "
+sleep 0.5
+
+send -- "\x12"
+sleep 1.2
+
+expect "echo ok"
+sleep 0.3
+
+# PageDown × 2.
+send -- "\x1b\[6~"
+sleep 0.4
+send -- "\x1b\[6~"
+sleep 0.4
+
+# We should now be deep in the list — assert any "command-" entry is
+# rendered (the deepest seeded entries are command-N).
+expect "command-"
+sleep 0.3
+
+# PageUp × 1 — back toward the top.
+send -- "\x1b\[5~"
+sleep 0.4
+
+send -- "\x1b"
+sleep 0.6
+send -- "\x15"
+sleep 0.2
+send -- "exit\r"
+expect eof
