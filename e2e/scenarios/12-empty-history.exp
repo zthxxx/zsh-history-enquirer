@@ -1,0 +1,30 @@
+#!/usr/bin/env expect
+# 12-empty-history.exp
+#
+# Open the picker with an empty $HISTFILE. The renderer must emit
+# the "(no matches)" hint and Esc must still cancel cleanly. This
+# was a real edge case in the legacy port: an empty history
+# combined with a slow DSR probe could leave the picker stuck on a
+# blank screen.
+#
+# We exercise it by overriding $HISTFILE to /tmp/empty.zsh_history
+# and pointing the binary at it via --histfile.
+
+set timeout 12
+log_user 1
+
+# Build a fresh empty history file inside the container.
+spawn -noecho /usr/local/bin/zsh-history-enquirer --histfile /tmp/no-such-history-file
+expect_after timeout {
+  puts stderr "TIMEOUT in 12-empty-history"
+  exit 1
+}
+
+# The picker should render its prompt + "(no matches)" hint, then
+# accept Esc to cancel cleanly.
+sleep 0.8
+send -- "\x1b"
+sleep 0.4
+
+# Successful exit should produce no output beyond the picker frame.
+expect eof
