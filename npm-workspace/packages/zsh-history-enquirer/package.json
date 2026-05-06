@@ -1,0 +1,51 @@
+{
+  "name": "zsh-history-enquirer",
+  "version": "0.0.0-dev",
+  "description": "Replace zsh's Ctrl+R with an inline, multi-line, dedup'd, multi-word-fuzzy history picker. Static Go binary, esbuild-style cross-platform npm distribution.",
+  "license": "MIT",
+  "author": "zthxxx",
+  "homepage": "https://github.com/zthxxx/zsh-history-enquirer",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zthxxx/zsh-history-enquirer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zthxxx/zsh-history-enquirer/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "keywords": [
+    "zsh",
+    "zsh-history",
+    "history",
+    "search",
+    "history-search",
+    "history-enhance",
+    "plugin",
+    "zsh-plugin"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "main": "bin/cli.js",
+  "bin": {
+    "zsh-history-enquirer": "bin/cli.js"
+  },
+  "files": [
+    "bin/cli.js",
+    "plugin/zsh-history-enquirer.plugin.zsh",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "postinstall": "node bin/cli.js --print-install-hint || true"
+  },
+  "optionalDependencies": {
+    "@zsh-history-enquirer/darwin-arm64": "0.0.0-dev",
+    "@zsh-history-enquirer/darwin-amd64": "0.0.0-dev",
+    "@zsh-history-enquirer/linux-arm64":  "0.0.0-dev",
+    "@zsh-history-enquirer/linux-amd64":  "0.0.0-dev"
+  }
+}

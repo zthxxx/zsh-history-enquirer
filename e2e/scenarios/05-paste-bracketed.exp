@@ -1,0 +1,35 @@
+#!/usr/bin/env expect
+# 05-paste-bracketed.exp
+#
+# Send a bracketed-paste payload "git" (markers + body) into the
+# picker. The picker must treat the payload as text — not as a series
+# of key events — and filter to "git status".
+
+set timeout 12
+log_user 1
+
+spawn -noecho zsh -il
+expect_after timeout {
+  puts stderr "TIMEOUT in 05-paste-bracketed"
+  exit 1
+}
+
+expect "% "
+sleep 0.5
+
+send -- "\x12"
+sleep 1.2
+
+# Bracketed paste markers: \e[200~ ... \e[201~
+send -- "\x1b\[200~git\x1b\[201~"
+sleep 0.6
+
+expect "git status"
+sleep 0.3
+
+send -- "\x1b"
+sleep 0.5
+send -- "\x15"
+sleep 0.2
+send -- "exit\r"
+expect eof

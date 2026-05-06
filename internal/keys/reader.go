@@ -25,6 +25,17 @@ func NewReader(t *tty.TTY) *Reader {
 	return &Reader{tty: t, parser: NewParser()}
 }
 
+// Prefeed pushes a string of bytes through the parser before the
+// reader goroutine starts. Used to replay user-typed bytes that the
+// cursor probe consumed while waiting for a DSR response that never
+// arrived.
+func (r *Reader) Prefeed(s string) []Event {
+	if s == "" {
+		return nil
+	}
+	return r.parser.Feed([]byte(s))
+}
+
 // Events returns a channel that yields Event values. The channel is
 // closed when ctx is cancelled or the TTY signals EOF. The returned
 // goroutine cleans up its signal subscription on exit.

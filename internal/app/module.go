@@ -12,6 +12,14 @@ import (
 	"github.com/zthxxx/zsh-history-enquirer/internal/tty"
 )
 
+// Stdout / StderrWriter are named wrappers used to disambiguate the
+// two io.Writer providers in the fx graph. Without distinct types
+// fx would refuse to resolve which provider satisfies which parameter.
+type Stdout io.Writer
+
+// StderrWriter is the type used for the diagnostic-output writer.
+type StderrWriter io.Writer
+
 // Module is the canonical fx module used by cmd/zsh-history-enquirer.
 // Tests build a smaller graph that overrides individual providers.
 //
@@ -21,8 +29,8 @@ var Module = fx.Module("app",
 		func() (*Config, error) {
 			return NewConfig(os.Args[1:], os.Stderr)
 		},
-		func() io.Writer { return os.Stdout },
-		func() io.Writer { return os.Stderr },
+		func() Stdout { return os.Stdout },
+		func() StderrWriter { return os.Stderr },
 		tty.NewDevTTY,
 		func(cfg *Config) history.Loader {
 			return history.NewZshLoader(history.Options{
@@ -42,16 +50,16 @@ func invokeRun(
 	t *tty.TTY,
 	loader history.Loader,
 	shutdowner fx.Shutdowner,
-	stdout, stderr io.Writer,
+	stdout Stdout,
+	stderr StderrWriter,
 ) {
 	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
+		OnStart: func(_ context.Context) error {
 			// Run synchronously inside the start hook so that fx's
 			// shutdown sequence (TTY cleanup) does not race the
 			// terminal print. Returning a non-nil error from OnStart
 			// aborts startup and triggers stop hooks in reverse,
 			// which is exactly what we want on probe / load failure.
-			_ = ctx
 			result, err := Run(context.Background(), cfg, t, loader, stderr)
 
 			// Always print the result — even cancelled paths produce

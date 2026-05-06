@@ -85,9 +85,6 @@ func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, st
 	cur := <-cursorCh
 	hist := <-historyCh
 
-	if cur.err != nil {
-		return nil, fmt.Errorf("cursor probe: %w", cur.err)
-	}
 	if hist.err != nil {
 		// Even with no history we should be able to run; show empty.
 		_, _ = fmt.Fprintf(stderr, "warning: history load failed: %v\n", hist.err)
@@ -99,8 +96,46 @@ func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, st
 		return nil, fmt.Errorf("query size: %w", err)
 	}
 
+	// Cursor probe is best-effort. Some terminals (and most test pty
+	// runners) do not reply to DSR within the timeout; fall back to
+	// (row=1, col=len(input)+1) so the picker still draws — inline
+	// alignment with the host shell prompt is lost on the fallback
+	// path, but the picker remains fully usable.
+	var probeLeftover string
+	if cur.err != nil {
+		var te *tty.TimeoutError
+		if errors.As(cur.err, &te) {
+			probeLeftover = te.Leftover
+		}
+		_, _ = fmt.Fprintf(stderr, "warning: DSR cursor probe failed: %v (using col=1 fallback)\n", cur.err)
+		cur.row = 1
+		cur.col = len(cfg.Input) + 1
+	}
+	if os.Getenv("ZHE_DEBUG") != "" {
+		if f, derr := os.OpenFile(os.Getenv("ZHE_DEBUG"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); derr == nil {
+			fmt.Fprintf(f, "[zhe] probe: row=%d col=%d err=%v leftover=%q\n", cur.row, cur.col, cur.err, probeLeftover)
+			f.Close()
+		}
+	}
+
+	// Defence-in-depth: a poorly-behaved emulator may reply with row
+	// or col values outside the terminal — bytes that happened to
+	// match the DSR shape but were never a real response. Clamp to
+	// reasonable bounds before doing the initCol arithmetic so a
+	// stray "row=99999" reply does not push the rendered body off-
+	// screen and silently swallow it.
+	if cur.col < 1 || cur.col > cols {
+		cur.col = len(cfg.Input) + 1
+	}
+	if cur.row < 1 || cur.row > rows {
+		cur.row = 1
+	}
+
 	initCol := cur.col - len(cfg.Input)
 	if initCol < 1 {
+		initCol = 1
+	}
+	if initCol > cols {
 		initCol = 1
 	}
 
@@ -108,6 +143,11 @@ func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, st
 
 	// Step 2: drive event loop.
 	reader := keys.NewReader(t)
+	// Replay any bytes the cursor probe consumed while waiting for
+	// the DSR response. Without this, the first 1-N keystrokes typed
+	// by an impatient user (or by a test runner whose pty does not
+	// reply to DSR) would be silently dropped.
+	preEvents := reader.Prefeed(probeLeftover)
 	loopCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	events := reader.Events(loopCtx)
@@ -126,6 +166,45 @@ func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, st
 
 	render(true)
 
+	var debugW io.Writer
+	if path := os.Getenv("ZHE_DEBUG"); path != "" {
+		if f, ferr := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); ferr == nil {
+			debugW = f
+			defer f.Close()
+		}
+	}
+
+	// Process any events that came from the probe-leftover bytes.
+	for _, ev := range preEvents {
+		if debugW != nil {
+			fmt.Fprintf(debugW, "[zhe] preevent: %+v input=%q\n", ev, model.Input)
+		}
+		if model.Update(ev) {
+			render(true)
+			return &RunResult{Output: model.Result}, nil
+		}
+	}
+	if len(preEvents) > 0 {
+		render(false)
+	}
+
+	// trailingFlush fires shortly after the last event so that the
+	// final state of a burst (a paste, a fast-typed word) reaches
+	// the screen even when the leading-edge throttle blocked the
+	// per-event renders.
+	trailingFlush := time.NewTimer(time.Hour)
+	trailingFlush.Stop()
+	armTrailing := func() {
+		if !trailingFlush.Stop() {
+			select {
+			case <-trailingFlush.C:
+			default:
+			}
+		}
+		trailingFlush.Reset(RenderInterval)
+	}
+	defer trailingFlush.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -140,11 +219,20 @@ func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, st
 				render(true)
 				return &RunResult{Output: model.Result}, errors.New("input closed")
 			}
+			if debugW != nil {
+				fmt.Fprintf(debugW, "[zhe] event: %+v input=%q\n", ev, model.Input)
+			}
 			if model.Update(ev) {
 				render(true)
 				return &RunResult{Output: model.Result}, nil
 			}
 			render(false)
+			armTrailing()
+		case <-trailingFlush.C:
+			// Throttle window has elapsed since the last event; flush
+			// whatever the latest model state is so the user sees the
+			// final view of a burst.
+			render(true)
 		}
 	}
 }

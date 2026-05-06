@@ -2,12 +2,13 @@ package tty
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/zthxxx/zsh-history-enquirer/internal/ansi"
 )
@@ -31,24 +32,24 @@ func NewProbe(t *TTY) *Probe {
 // passed deadline; callers typically supply a 250 ms timeout.
 //
 // Returns an error if the terminal does not respond within the
-// deadline (some emulators silently ignore DSR).
+// deadline (some emulators silently ignore DSR). On timeout, any
+// non-DSR bytes that were read are returned via the Leftover field
+// of the error so the caller can replay them through the regular
+// keystream parser.
+//
+// Implementation: instead of relying on os.File.SetReadDeadline (which
+// is unreliable on /dev/tty in some kernels — notably docker's pty
+// emulation) we drive the read with unix.Poll directly. Poll honours
+// the absolute timeout we pass it byte-for-byte regardless of the
+// underlying file's blocking mode.
 func (p *Probe) Cursor(ctx context.Context, timeout time.Duration) (row, col int, err error) {
 	if _, err = io.WriteString(p.tty.Writer(), ansi.DSRCursor); err != nil {
 		return 0, 0, fmt.Errorf("write DSR: %w", err)
 	}
 
-	// Set a read deadline. file.SetReadDeadline works because we wrap
-	// the fd in *os.File at Open() time.
-	if err = p.tty.file.SetReadDeadline(time.Now().Add(timeout)); err != nil {
-		return 0, 0, fmt.Errorf("set read deadline: %w", err)
-	}
-	defer func() {
-		_ = p.tty.file.SetReadDeadline(time.Time{})
-	}()
+	deadline := time.Now().Add(timeout)
+	fd := int(p.tty.file.Fd())
 
-	// Read until we see 'R' or hit the deadline. The response we
-	// expect is "\e[<row>;<col>R". A poorly-behaved terminal might
-	// echo extra bytes — we consume them silently after the 'R'.
 	var buf [64]byte
 	var resp strings.Builder
 	for {
@@ -58,24 +59,73 @@ func (p *Probe) Cursor(ctx context.Context, timeout time.Duration) (row, col int
 		default:
 		}
 
-		n, rerr := p.tty.file.Read(buf[:])
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return 0, 0, &TimeoutError{
+				Cause:    fmt.Errorf("read /dev/tty: i/o timeout"),
+				Leftover: resp.String(),
+			}
+		}
+
+		// poll() with the remaining timeout. A return of 0 means the
+		// timeout expired with no readable data; >0 means the fd is
+		// readable now and a Read will not block.
+		pfd := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
+		nready, perr := unix.Poll(pfd, int(remaining/time.Millisecond))
+		if perr != nil {
+			// EINTR — interrupted by a signal — is a normal poll
+			// outcome; loop and recompute the remaining time.
+			if perr == unix.EINTR {
+				continue
+			}
+			return 0, 0, fmt.Errorf("poll /dev/tty: %w", perr)
+		}
+		if nready == 0 || pfd[0].Revents&unix.POLLIN == 0 {
+			return 0, 0, &TimeoutError{
+				Cause:    fmt.Errorf("read /dev/tty: i/o timeout"),
+				Leftover: resp.String(),
+			}
+		}
+
+		n, rerr := unix.Read(fd, buf[:])
 		if n > 0 {
 			resp.Write(buf[:n])
 			if strings.IndexByte(resp.String(), 'R') >= 0 {
 				break
 			}
+		} else if n == 0 {
+			// EOF or empty read — break to fallback.
+			return 0, 0, &TimeoutError{
+				Cause:    fmt.Errorf("read /dev/tty: empty read"),
+				Leftover: resp.String(),
+			}
 		}
 		if rerr != nil {
-			if errors.Is(rerr, io.EOF) {
-				break
-			}
-			return 0, 0, fmt.Errorf("read DSR: %w", rerr)
+			return 0, 0, &TimeoutError{Cause: rerr, Leftover: resp.String()}
 		}
 	}
 
 	row, col, err = parseDSRResponse(resp.String())
 	return row, col, err
 }
+
+// TimeoutError is returned when the DSR cursor probe does not see an
+// 'R' marker within the deadline. Leftover holds any non-DSR bytes
+// the probe consumed while waiting; callers should re-feed them into
+// the keystream so user input typed before the picker rendered is
+// not dropped.
+type TimeoutError struct {
+	Cause    error
+	Leftover string
+}
+
+// Error implements error.
+func (e *TimeoutError) Error() string {
+	return fmt.Sprintf("DSR cursor probe timed out: %v", e.Cause)
+}
+
+// Unwrap allows errors.Is / errors.As to reach the underlying cause.
+func (e *TimeoutError) Unwrap() error { return e.Cause }
 
 // parseDSRResponse extracts row/col from a CSI <row>;<col>R reply.
 // Bytes outside the bracketed payload are tolerated (terminals

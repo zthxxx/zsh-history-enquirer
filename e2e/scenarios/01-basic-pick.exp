@@ -1,0 +1,34 @@
+#!/usr/bin/env expect
+# 01-basic-pick.exp
+#
+# Empty input → ^R → expect "echo ok" rendered. Submit it, then
+# return to a fresh prompt and exit cleanly.
+
+set timeout 12
+log_user 1
+
+spawn -noecho zsh -il
+expect_after timeout {
+  puts stderr "TIMEOUT in 01-basic-pick"
+  exit 1
+}
+
+expect "% "
+sleep 0.5
+
+send -- "\x12"
+sleep 1.2
+
+expect "echo ok"
+sleep 0.4
+
+# Submit — load focused entry into BUFFER.
+send -- "\r"
+sleep 0.6
+
+# We're back at the prompt with BUFFER = "echo ok". Wipe and exit so
+# the test stays reproducible regardless of what the focused entry was.
+send -- "\x15"
+sleep 0.2
+send -- "exit\r"
+expect eof

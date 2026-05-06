@@ -1,0 +1,42 @@
+#!/usr/bin/env expect
+# 03-cancel-preserves-input.exp
+#
+# Open the picker pre-filtered with "qwerty-no-match", press Esc,
+# verify the binary exited cleanly and a fresh prompt is reachable.
+
+set timeout 12
+log_user 1
+
+spawn -noecho zsh -il
+expect_after timeout {
+  puts stderr "TIMEOUT in 03-cancel-preserves-input"
+  exit 1
+}
+
+expect "% "
+sleep 0.5
+
+send -- "qwerty-no-match"
+sleep 0.5
+
+send -- "\x12"
+sleep 1.2
+
+expect "(no matches)"
+sleep 0.3
+
+# Cancel.
+send -- "\x1b"
+sleep 0.6
+
+# After cancel, the picker exits and zsh has BUFFER set to the typed
+# input. Wipe with Ctrl-U then ZLE-accept-line ('\r') runs an empty
+# command; we just need the prompt cycle to succeed.
+send -- "\x15"
+sleep 0.3
+send -- "\r"
+sleep 0.4
+expect "% "
+
+send -- "exit\r"
+expect eof
