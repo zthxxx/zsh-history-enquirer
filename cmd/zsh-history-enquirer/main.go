@@ -21,6 +21,14 @@ import (
 	"github.com/zthxxx/zsh-history-enquirer/internal/app"
 )
 
+// versionFlagLong / versionFlagShort are the only two argv tokens
+// that cause main() to short-circuit before fx.New. Constants exist
+// to satisfy goconst — also used by the test for parity.
+const (
+	versionFlagLong  = "--version"
+	versionFlagShort = "-version"
+)
+
 // isVersionFlag reports whether os.Args is invoked as a pure
 // `--version` query: the binary plus exactly one of the version
 // flag tokens, with nothing else.
@@ -36,7 +44,7 @@ func isVersionFlag(args []string) bool {
 	if len(args) != 2 {
 		return false
 	}
-	return args[1] == "--version" || args[1] == "-version"
+	return args[1] == versionFlagLong || args[1] == versionFlagShort
 }
 
 func main() {
