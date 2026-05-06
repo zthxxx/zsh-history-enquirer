@@ -87,6 +87,9 @@ prompt buffer where you can still edit it before hitting
   (mid-install, broken `$PATH`, etc.), <kbd>Ctrl</kbd>+<kbd>R</kbd>
   degrades to native `history-incremental-search-backward` instead
   of breaking.
+- **Vi-mode aware.** `^R` is bound in the `emacs`, `viins`, and
+  `vicmd` keymaps explicitly, so vi-mode users keep the picker
+  whether they're in insert or normal mode.
 
 ## Install
 
