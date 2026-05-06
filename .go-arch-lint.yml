@@ -1,0 +1,66 @@
+# go-arch-lint config — keeps internal package layering honest.
+#
+# Layering, top to bottom (each may import what's strictly below):
+#
+#   cmd      (binary entrypoint)
+#     └─ app
+#          ├─ history, search, ui, tty, keys
+#          │     └─ search, ansi
+#          └─ ansi
+#
+# pkg/ exports primitives and may be imported from anywhere; nothing
+# may import cmd/ or internal/app from anywhere else.
+#
+# https://github.com/fe3dback/go-arch-lint
+---
+version: 3
+workdir: .
+allow:
+  depOnAnyVendor: true
+
+exclude:
+  - vendor
+
+components:
+  cmd:
+    in: cmd/**
+  app:
+    in: internal/app/**
+  history:
+    in: internal/history/**
+  search:
+    in: internal/search/**
+  ui:
+    in: internal/ui/**
+  tty:
+    in: internal/tty/**
+  keys:
+    in: internal/keys/**
+  ansi:
+    in: internal/ansi/**
+  version:
+    in: pkg/version/**
+
+deps:
+  cmd:
+    mayDependOn: [app, version]
+  app:
+    mayDependOn: [history, search, ui, tty, keys, ansi, version]
+  history:
+    anyVendorDeps: true
+  search:
+    anyVendorDeps: true
+  ui:
+    # ui depends on keys for the Event types it dispatches on; the
+    # logical layering is bytes → events → ui state, even though keys
+    # imports tty for its byte source — so the transitive
+    # ui→keys→tty edge is intended.
+    mayDependOn: [search, ansi, keys]
+  keys:
+    mayDependOn: [tty]
+  tty:
+    mayDependOn: [ansi]
+  ansi:
+    anyVendorDeps: true
+  version:
+    anyVendorDeps: true

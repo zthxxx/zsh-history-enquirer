@@ -56,8 +56,8 @@ Static Go binary (`CGO_ENABLED=0`) for the four platforms we support:
 | --- | --- |
 | `darwin/arm64` | Apple Silicon |
 | `darwin/amd64` | Intel Mac |
-| `linux/arm64`  | works on glibc, musl, OpenWrt |
-| `linux/amd64`  | works on glibc, musl, OpenWrt |
+| `linux/arm64` | works on glibc, musl, OpenWrt |
+| `linux/amd64` | works on glibc, musl, OpenWrt |
 
 Three distribution channels:
 

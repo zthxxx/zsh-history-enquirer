@@ -61,14 +61,29 @@ if (process.argv.includes('--print-install-hint')) {
 
 const bin = locateBinary();
 if (!bin) {
+  // Print the diagnostic to stderr so it appears at the user's
+  // terminal (the widget's BUFFER=$(...) only captures stdout).
   process.stderr.write(
     'zsh-history-enquirer: no platform binary installed for ' +
       `${process.platform}-${process.arch}.\n` +
-    'Install one of @zsh-history-enquirer/<os>-<arch> manually if your\n' +
-    'platform was excluded from optionalDependencies resolution.\n'
+    'Install one of @zsh-history-enquirer/<os>-<arch> manually if\n' +
+    'your platform was excluded from optionalDependencies resolution.\n'
   );
-  // exit 0 so the bin can still be sourced via the plugin file's
-  // graceful fallback path.
+
+  // CRITICAL: echo argv back to stdout so the widget's
+  // `BUFFER=$(...)` does not blank the user's typed line. The
+  // widget contract is "stdout must reproduce the input on any
+  // failure path"; without this echo, a missing platform binary
+  // silently eats the user's keystrokes.
+  if (process.argv.length > 2) {
+    process.stdout.write(process.argv.slice(2).join(' ') + '\n');
+  }
+
+  // Exit 0 so `BUFFER=$(...)` doesn't abort. The plugin file's
+  // graceful native-^R fallback only kicks in when the binary
+  // isn't on $PATH at all; once npm has placed cli.js there, it
+  // is on $PATH but unable to do its job, so this echo path is
+  // the next-best UX.
   process.exit(0);
 }
 

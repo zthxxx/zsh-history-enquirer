@@ -81,7 +81,5 @@ idempotent action.
 - [x] `task check` runs clean: lint, test, e2e on both libcs
 
 ## Discovered & deferred items
-- See [plan/20-followups.md](./20-followups.md).
 
-See [plan/20-followups.md](./20-followups.md) for items found during
-execution but deferred.
+- See [plan/20-followups.md](./20-followups.md).

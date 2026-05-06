@@ -1,0 +1,7 @@
+# Use catthehacker/ubuntu:act-latest as the default runner image —
+# the smaller node:slim image (act's default) lacks `node` after
+# actions/setup-go runs, which breaks go-task/setup-task@v2.
+#
+# See https://github.com/nektos/act#runners for image options.
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+--container-architecture linux/amd64

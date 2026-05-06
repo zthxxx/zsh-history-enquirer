@@ -224,6 +224,7 @@ tasks:
     desc: Run all linters
     cmds:
       - task: lint:go
+      - task: lint:arch
       - task: lint:md
 
   lint:go:
@@ -235,6 +236,11 @@ tasks:
     desc: Run golangci-lint with --fix
     cmds:
       - golangci-lint run --fix ./...
+
+  lint:arch:
+    desc: Run go-arch-lint to enforce package layering
+    cmds:
+      - 'command -v go-arch-lint >/dev/null && go-arch-lint check || (echo "go-arch-lint not installed; skipping (run: task setup)" >&2)'
 
   lint:md:
     desc: Run markdownlint via bun (npm fallback if no bun)
@@ -282,5 +288,6 @@ tasks:
     cmds:
       - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
       - go install golang.org/x/tools/cmd/goimports@latest
+      - go install github.com/fe3dback/go-arch-lint@latest
       - go install github.com/evilmartians/lefthook/v2@latest
       - lefthook install

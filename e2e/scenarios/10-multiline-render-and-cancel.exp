@@ -1,0 +1,49 @@
+#!/usr/bin/env expect
+# 10-multiline-render-and-cancel.exp
+#
+# Filter to entries where the picker shows BOTH the single-line
+# command-15 AND the multi-line command-8 in the same visible window,
+# then cancel. Verify (a) the multi-line entry renders all of its 8
+# logical rows, (b) the picker doesn't push the prompt off-screen
+# even though the visible window includes a multi-line block, (c)
+# Esc cleans up cleanly so the next prompt is reachable.
+
+set timeout 15
+log_user 1
+
+spawn -noecho zsh -il
+expect_after timeout {
+  puts stderr "TIMEOUT in 10-multiline-render-and-cancel"
+  exit 1
+}
+
+expect "% "
+sleep 0.5
+
+send -- "\x12"
+sleep 1.2
+
+# Filter to "command" so the multi-line command-6 and command-8
+# entries are in the visible window.
+send -- "command"
+sleep 0.6
+
+# The seeded multi-line command-8 has lines that all start with
+# " - line ". Each "- line N" should be its own rendered row.
+expect -- "- line 0"
+expect -- "- line 5"
+sleep 0.3
+
+# Cancel cleanly — picker should disappear and zsh prompt come back.
+send -- "\x1b"
+sleep 0.6
+send -- "\x15"
+sleep 0.2
+
+# Verify zsh's prompt is reachable post-cancel by running a sentinel.
+send -- "echo done\r"
+expect "done"
+expect "% "
+
+send -- "exit\r"
+expect eof

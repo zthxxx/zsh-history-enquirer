@@ -34,3 +34,18 @@ MD046:
 # MD048 - Code fence style
 MD048:
   style: backtick
+
+# MD040 - Fenced code blocks should have a language specified.
+# We routinely use unannotated fences for ASCII-art layouts and
+# escape-sequence diagrams in spec docs.
+MD040: false
+
+# MD038 - Spaces inside code span elements. README quotes commands
+# verbatim including the trailing space the user types (e.g. `git log `
+# before pressing ^R) — that trailing space is the point.
+MD038: false
+
+# MD004 - Unordered list bullet style. Both dashes and asterisks are
+# fine; mixing within a single doc is not, but enforcing one across
+# the whole repo is more friction than value.
+MD004: false

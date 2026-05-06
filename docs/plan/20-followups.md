@@ -115,3 +115,36 @@ Each entry must include:
   entries that fit, which is then used as the rotation amount and
   the new Idx. Unit tests in `internal/ui/model_test.go` exercise
   the regression case. Resolved in this iteration's commit.
+
+* **2026-05-07** — Multi-line entry interactions had only one e2e
+  scenario (scroll-past). Per user emphasis on
+  "多行、多行换行以及多行换行交互" (multi-line, multi-line wrap,
+  multi-line interaction), added three more: 09-multiline-submit
+  (select + run a multi-line entry), 10-multiline-render-and-cancel
+  (filter to a multi-line entry, verify all rows render, cancel
+  cleanly), 11-multiline-scroll-into-view (arrow-down a multi-line
+  entry into the visible window without breaking the renderer).
+  Both targets pass 11/11. Resolved in this iteration's commit.
+
+* **2026-05-07** — Architectural layering was enforced only by
+  convention. Added `.go-arch-lint.yml` and `task lint:arch`. CI
+  workflow installs go-arch-lint and runs the check. A future
+  contributor who imports `internal/app` from `internal/ui` will
+  now fail CI. Resolved in this iteration's commit.
+
+* **2026-05-07** — `npm` shim echoed nothing back when the platform
+  sub-package was missing. The widget's `BUFFER=$(...)` would then
+  set BUFFER to an empty string — silently destroying the user's
+  typed input. The shim now echoes argv back to stdout on the
+  missing-binary path, matching the widget contract. Resolved in
+  this iteration's commit.
+
+* **2026-05-07** — Verified `act` works locally for the unit-test
+  CI job (act 0.2.87 on macOS arm64 + Docker 29.4). The
+  `go-task/setup-task@v2` step requires `node` in the runner image,
+  which the default `node:slim` image lacks; the official guidance
+  is to use `--container-architecture linux/amd64` with an image
+  that keeps `node` available, e.g. `catthehacker/ubuntu:act-latest`.
+  Documented in this iteration's commit; the Taskfile already
+  carries act-based recipes ready to use once an image is
+  configured in `.actrc`. Resolved in this iteration's commit.

@@ -77,6 +77,9 @@ write_seed_history() {
 : 1568797118:0;git status
 : 1568797119:0;cat <<< 123
 : 1568797121:0;pwgen --help
+: 1568797113:0;echo "alpha\
+beta\
+gamma"
 : 1568797124:0;echo zsh-history-enquirer
 : 1568797125:0;echo ok
 HIST
