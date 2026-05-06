@@ -79,3 +79,41 @@ func TestRender_PostMovesCursorToInput(t *testing.T) {
 	// Post must position the cursor at initCol + len(input) = 5 + 2 = 7.
 	require.Contains(t, frame.Post, "\x1b[7G")
 }
+
+// TestRender_PreAtScrollBoundary exercises renderPre when prevSize is
+// larger than (terminal rows - cursor row) — the case where the
+// previous frame caused the terminal to scroll. The renderer cannot
+// see scrolling, so it must still emit a deterministic Pre sequence
+// (erase + cursor restore) that does not assume the input row stayed
+// in place. This locks down the contract that renderPre always emits
+// `prevSize` erase-line sequences regardless of geometry.
+func TestRender_PreAtScrollBoundary(t *testing.T) {
+	t.Parallel()
+
+	// 5-row terminal, input on row 1, prevSize=12 (way more than
+	// terminalRows-currentRow=4). The renderer should still emit
+	// 12 erase sequences and a cursor-prev-line for 12.
+	m := NewModel("", []string{"a"}, 5, 80, 1, 1, DefaultMaxLimit)
+	frame := m.Render(RenderOptions{PrevSize: 12})
+
+	require.Equal(t, 12, strings.Count(frame.Pre, "\x1b[2K"),
+		"Pre must erase exactly prevSize lines")
+	// CursorPrevLine(12) emits "\x1b[12F".
+	require.Contains(t, frame.Pre, "\x1b[12F",
+		"Pre must walk back prevSize rows even past the visible window")
+}
+
+// TestRender_PreFirstFrame confirms that PrevSize=0 (the very first
+// render in a session) produces a minimal Pre that only resets the
+// input column — no erase-line sequences below.
+func TestRender_PreFirstFrame(t *testing.T) {
+	t.Parallel()
+
+	m := NewModel("", []string{"a", "b", "c"}, 15, 80, 1, 4, DefaultMaxLimit)
+	frame := m.Render(RenderOptions{PrevSize: 0})
+
+	require.NotContains(t, frame.Pre, "\x1b[2K",
+		"first frame's Pre should not contain erase-line escapes")
+	require.Contains(t, frame.Pre, "\x1b[4G",
+		"first frame's Pre must place the cursor at initCol=4")
+}
