@@ -224,6 +224,18 @@ func TestParser_CSIUnknownIgnored(t *testing.T) {
 		"unknown CSI must be silently dropped, then 'x' must reach normal state")
 }
 
+// TestParser_DeleteKey — the Delete key sends `\e[3~`. The picker
+// itself doesn't handle Delete (no Update branch for KeyDelete),
+// but the parser must produce the correct Event so a future feature
+// adding edit-cursor-style deletion has it available.
+func TestParser_DeleteKey(t *testing.T) {
+	t.Parallel()
+
+	p := NewParser()
+	got := feedAll(p, "\x1b[3~")
+	require.Equal(t, []Event{KeyEvent{Key: KeyDelete}}, got)
+}
+
 // TestParser_NULDropped ensures NUL bytes (0x00) are silently
 // swallowed — they appear in some pastes and must not produce a
 // rune event or stall the FSM.
