@@ -25,6 +25,21 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — Third widget-contract gap surfaced under critical
+  scrutiny: `Run()` received `context.Background()`, which is never
+  canceled, even on SIGTERM / SIGHUP. If the user sent
+  `kill -TERM <pid>` while the picker was rendering — or closed the
+  containing terminal emulator — the Go runtime tore the process
+  down without running fx OnStop hooks. The `*os.File` for `/dev/tty`
+  was abandoned in raw mode (no echo, no canonical, no signals),
+  forcing the user to run `stty sane`. `invokeRun` now wraps
+  `context.Background()` with `signal.NotifyContext(SIGINT, SIGTERM,
+  SIGHUP)` so the runEventLoop's `<-ctx.Done()` case fires, the
+  cancel-preserves-input path runs, fx OnStop runs, and the
+  terminal is restored. SIGINT from Ctrl-C inside the picker
+  continues to arrive as byte 0x03 (ISIG is off in raw mode); this
+  fix is purely for *external* kills.
+
 * **2026-05-07** — Widget contract had a SECOND uncovered gap: even
   with `preserveOnError` patched in inside `app.Module.invokeRun`,
   the safety net does not fire if fx itself fails to start (e.g.

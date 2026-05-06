@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"go.uber.org/fx"
 
@@ -71,12 +73,28 @@ func invokeRun(
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(_ context.Context) error {
+			// Wire SIGINT / SIGTERM / SIGHUP into a context so the
+			// event loop can exit cleanly on external kill. Without
+			// this, an external `kill -TERM <pid>` while the picker
+			// is mid-render would tear the process down without
+			// running the TTY OnStop hook — leaving the user's
+			// terminal stuck in raw mode (no echo / no canonical /
+			// no signals) until they `stty sane`. Note: SIGINT from
+			// Ctrl-C inside the picker is consumed as the byte 0x03
+			// before reaching here (raw mode disables ISIG); this
+			// only matters for kill from another tty / shell exit.
+			runCtx, stopSig := signal.NotifyContext(
+				context.Background(),
+				syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP,
+			)
+			defer stopSig()
+
 			// Run synchronously inside the start hook so that fx's
 			// shutdown sequence (TTY cleanup) does not race the
 			// terminal print. Returning a non-nil error from OnStart
 			// aborts startup and triggers stop hooks in reverse,
 			// which is exactly what we want on probe / load failure.
-			result, err := Run(context.Background(), cfg, t, loader, stderr)
+			result, err := Run(runCtx, cfg, t, loader, stderr)
 
 			// Always print the result — even canceled paths produce
 			// the user's original input as Result. On hard early-error

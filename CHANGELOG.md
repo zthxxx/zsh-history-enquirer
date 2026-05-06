@@ -120,6 +120,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `cmd/zsh-history-enquirer/main.go` that reconstructs `cfg.Input`
   via `app.NewConfig` and echoes it back to stdout. Three table
   tests pin the (preserves-input, no-args, malformed-argv) cases.
+- **External kill mid-render left the terminal in raw mode.**
+  `Run()` was passed `context.Background()`, which never canceled
+  on SIGTERM / SIGHUP. If the user (or another process) sent
+  `kill -TERM <pid>` while the picker was open, the process was
+  torn down before fx ran the TTY OnStop hook — leaving the
+  terminal stuck without echo / canonical input until the user ran
+  `stty sane`. `invokeRun` now wires SIGINT / SIGTERM / SIGHUP
+  through `signal.NotifyContext` so the event loop's `<-ctx.Done()`
+  case fires, the cancel path runs, the TTY hook restores termios,
+  and the user's input is preserved. (SIGINT from Ctrl-C inside the
+  picker still arrives as the byte `0x03` because raw mode disables
+  ISIG; the new wiring only matters for external kills.)
 
 ### Distribution
 
