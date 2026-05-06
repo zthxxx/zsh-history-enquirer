@@ -301,6 +301,36 @@ func TestModel_DownBeforeFirstRender_AdvancesModulo(t *testing.T) {
 	require.Equal(t, 1, m.Idx, "Down before render must advance Idx by 1")
 }
 
+// TestModel_NewModel_ZeroMaxLimitDefaults pins the maxLimit<=0
+// guard in NewModel: passing 0 (or negative) must default to
+// DefaultMaxLimit. The fx graph routes cfg.MaxLimit through this,
+// and cfg.MaxLimit defaults to 0.
+func TestModel_NewModel_ZeroMaxLimitDefaults(t *testing.T) {
+	t.Parallel()
+	m := NewModel("", []string{"a"}, 24, 80, 1, 1, 0)
+	require.Equal(t, DefaultMaxLimit, m.MaxLimit)
+	m2 := NewModel("", []string{"a"}, 24, 80, 1, 1, -5)
+	require.Equal(t, DefaultMaxLimit, m2.MaxLimit,
+		"negative maxLimit must also default")
+}
+
+// TestModel_UpDecrementsFromMidWindow exercises the moveUp branch
+// where Idx > 0 — the simple decrement case. Previous tests
+// covered the at-top rotate path and the empty-filter early-return
+// path; the most-common case (mid-window) was not directly pinned.
+func TestModel_UpDecrementsFromMidWindow(t *testing.T) {
+	t.Parallel()
+	m := newTestModel("")
+	m.Render(RenderOptions{})
+	// Move down twice.
+	m.Update(keys.KeyEvent{Key: keys.KeyDown})
+	m.Update(keys.KeyEvent{Key: keys.KeyDown})
+	require.Equal(t, 2, m.Idx)
+	// Now Up should decrement to 1, no rotation.
+	m.Update(keys.KeyEvent{Key: keys.KeyUp})
+	require.Equal(t, 1, m.Idx)
+}
+
 // TestModel_CtrlCCancelsAndPreservesInput — pins the Ctrl-C cancel
 // path. Was missing from explicit tests; the only Esc/^C variant
 // asserted before was Esc.
