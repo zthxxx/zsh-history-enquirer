@@ -396,6 +396,47 @@ func TestSubmitResult_Branches(t *testing.T) {
 		"Enter on no-match must return typed input verbatim")
 }
 
+// TestModel_PageDown rotates the visible window down by one page.
+// The model has no direct getter for the rotation amount, so we
+// assert by checking that the focused entry CHANGED — which it
+// must after a downward rotation.
+func TestModel_PageDown(t *testing.T) {
+	t.Parallel()
+	m := newTestModel("")
+	m.Render(RenderOptions{})
+	first := m.Focused()
+
+	m.Update(keys.KeyEvent{Key: keys.KeyPageDown})
+	m.Render(RenderOptions{PrevSize: m.Limit})
+	require.NotEqual(t, first, m.Focused(),
+		"PageDown must rotate the visible window")
+}
+
+// TestModel_PageDownThenPageUpRoundTrip — on a single-line filter
+// (constant Limit across renders), PageDown followed by PageUp
+// must restore the original focus. Multi-line entries break the
+// round-trip because the dynamic limit recomputes between renders;
+// that's a known property, not a regression — hence the
+// single-line fixture.
+func TestModel_PageDownThenPageUpRoundTrip(t *testing.T) {
+	t.Parallel()
+	choices := make([]string, 30)
+	for i := range choices {
+		choices[i] = "single-line-entry-" + string(rune('a'+i%26))
+	}
+	m := NewModel("", choices, 15, 80, 1, 1, DefaultMaxLimit)
+	m.Render(RenderOptions{})
+	first := m.Focused()
+
+	m.Update(keys.KeyEvent{Key: keys.KeyPageDown})
+	m.Render(RenderOptions{PrevSize: m.Limit})
+	m.Update(keys.KeyEvent{Key: keys.KeyPageUp})
+	m.Render(RenderOptions{PrevSize: m.Limit})
+
+	require.Equal(t, first, m.Focused(),
+		"PageDown + PageUp on single-line filter must round-trip")
+}
+
 // TestModel_PageUpBeforeFirstRender exercises max1's n<1 branch:
 // before any Render(), m.Limit is 0; PageUp calls rotateUp(max1(0))
 // which must rotate by 1, not by 0 (which would be a no-op and
