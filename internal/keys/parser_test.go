@@ -319,3 +319,35 @@ func TestProperty_Parser_ChunkBoundaryInvariance(t *testing.T) {
 		require.Equal(rt, whole, pieces)
 	})
 }
+
+// FuzzParser_NoPanicOnArbitraryBytes is a Go-native fuzz test that
+// feeds the parser arbitrary byte streams. The contract it pins is
+// minimal but vital: Feed must NEVER panic regardless of input.
+//
+// Before this guard, a malformed CSI sequence with embedded NUL or
+// out-of-range bytes could potentially trip an out-of-range slice
+// in the buffer accumulator. Run with:
+//
+//	go test -fuzz=FuzzParser_NoPanicOnArbitraryBytes \
+//	  -fuzztime=10s ./internal/keys/...
+//
+// Standard `go test` runs each seed once as a regression check.
+func FuzzParser_NoPanicOnArbitraryBytes(f *testing.F) {
+	// Seed corpus: real-world tricky inputs we've debugged in the past.
+	f.Add([]byte("\x1b[200~\x03cd\x1b[201~"))      // paste with embedded ^C
+	f.Add([]byte("\x1b[12;34R"))                    // DSR response
+	f.Add([]byte("\x1b\x1b\x1b"))                   // triple ESC
+	f.Add([]byte{0x00, 0x01, 0x02, 0x03})           // raw control bytes
+	f.Add([]byte("\xc0\xc1\xc2"))                   // invalid UTF-8 leads
+	f.Add([]byte("\x1b["))                          // bare CSI prefix
+	f.Add([]byte("\x1b[200~"))                      // paste-start with no end
+	f.Add([]byte{0x80, 0x80, 0x80, 0x80, 0x80, 'a'}) // continuation bytes + ASCII
+
+	f.Fuzz(func(_ *testing.T, b []byte) {
+		p := NewParser()
+		// A panic here is a fail; the Go fuzzer's seed-and-mutate loop
+		// handles the rest.
+		_ = p.Feed(b)
+		_ = p.FlushEsc()
+	})
+}
