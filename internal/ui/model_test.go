@@ -301,6 +301,33 @@ func TestModel_DownBeforeFirstRender_AdvancesModulo(t *testing.T) {
 	require.Equal(t, 1, m.Idx, "Down before render must advance Idx by 1")
 }
 
+// TestModel_PageUpBeforeFirstRender exercises max1's n<1 branch:
+// before any Render(), m.Limit is 0; PageUp calls rotateUp(max1(0))
+// which must rotate by 1, not by 0 (which would be a no-op and
+// leave the user feeling that PageUp does nothing).
+func TestModel_PageUpBeforeFirstRender(t *testing.T) {
+	t.Parallel()
+	m := newTestModel("")
+	require.Equal(t, 0, m.Limit, "Limit must be 0 before Render")
+	first := m.Filter[0]
+
+	m.Update(keys.KeyEvent{Key: keys.KeyPageUp})
+	// Filter should have rotated by 1 — first item is now last.
+	require.NotEqual(t, first, m.Filter[0],
+		"PageUp before first Render must still rotate (max1 guard)")
+}
+
+// TestMax1 is a direct test of the unexported helper; included
+// because Limit==0 paths are exercised in two other places
+// indirectly and it's cheap to nail down here.
+func TestMax1(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, 1, max1(0))
+	require.Equal(t, 1, max1(-1))
+	require.Equal(t, 1, max1(1))
+	require.Equal(t, 5, max1(5))
+}
+
 // TestModel_RotateUp_NoOpEdges pins the early-return branches of
 // rotateUp: empty Filter and zero/negative n. Both must leave the
 // model unchanged.
