@@ -111,10 +111,13 @@ Run a single Go test: `go test ./internal/ui -run TestRender_PointerOnFocused`.
   `e2e/scenarios/03-cancel-preserves-input.exp`.
 - **Tests are layered.** `internal/**/*_test.go` use property-based
   generation where the behaviour is amenable (history transform,
-  search filter, wrap math) and fixture files for the rest. The
-  e2e layer lives only in docker — `e2e/zsh-widget.test.zsh` does
-  not exist and never should; the legacy port's host-machine expect
-  scripts mutated `~/.zsh_history` and broke developer terminals.
+  search filter, wrap math, parser FSM) plus a Go-native fuzz target
+  on `Parser.Feed`. The e2e layer lives only in docker
+  (`e2e/scenarios/*.exp`, run by `e2e/{debian,alpine}/Dockerfile`).
+  The legacy port shipped a `tests/zsh-widget.test.zsh` that ran
+  against the developer's host shell — that path mutated
+  `~/.zsh_history` and broke terminal state, and is **not** to be
+  recreated. New e2e scenarios go in `e2e/scenarios/`.
 - **All comments and docs in English.** The single exception is
   `README.zh-CN.md`.
 - **fx.NopLogger is mandatory in main.** The widget contract requires
@@ -135,7 +138,9 @@ Run a single Go test: `go test ./internal/ui -run TestRender_PointerOnFocused`.
 - **The throttle is leading-edge with a trailing flush.** A burst of
   events without the trailing flush would drop the last frame —
   the picker would show "you typed 6 chars" instead of "you typed
-  7 chars". `internal/app/run.go:trailingFlush` is what stops that.
+  7 chars". `internal/app/loop.go:trailingFlush` is what stops that
+  (lives in `loop.go`, not `run.go` — the Run() body was split during
+  the architect refactor; see [docs/plan/20-followups.md](./docs/plan/20-followups.md)).
 - **fx providers for `os.Stdout` and `os.Stderr` need distinct types.**
   Two anonymous `io.Writer` providers fail dependency resolution;
   `Stdout` and `StderrWriter` named types in `internal/app/module.go`
