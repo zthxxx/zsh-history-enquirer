@@ -41,18 +41,34 @@ packages are live, so a user who installs while the release is in flight
 either gets the previous version (consistent) or the new version with
 all deps resolvable.
 
-## install.js
+## install.js / postinstall
 
-The install hook in the top-level package only:
+The umbrella package's `package.json` declares:
 
-1. Detects platform/arch.
-2. Verifies that the matching `@zsh-history-enquirer/<os>-<cpu>` is
-   resolvable (i.e. `optionalDependencies` did its job).
-3. Prints a one-line "Installed. Add `source $(...)/plugin.zsh` to your
-   `~/.zshrc` to enable" tip.
+```json
+"scripts": {
+  "postinstall": "node bin/cli.js --print-install-hint || true"
+}
+```
 
-It **does not** edit `.zshrc`. The legacy port did and was a source of
-support pain; the Go port refuses to.
+After `npm install -g zsh-history-enquirer`, npm runs the postinstall
+script, which re-enters `bin/cli.js` with `--print-install-hint`. The
+shim then prints (to stderr):
+
+```
+  zsh-history-enquirer installed.
+
+  Add this line to your ~/.zshrc to enable the Ctrl+R picker:
+
+    source <package-root>/plugin/zsh-history-enquirer.plugin.zsh
+```
+
+The `|| true` guard ensures that any failure in the hint path
+(extremely rare) does not abort the install.
+
+It **does not** edit `.zshrc`. The legacy Node.js port did edit it
+unconditionally and was a source of support pain (re-install loops,
+lost user edits); the Go port refuses to.
 
 ## bin/cli.js
 
