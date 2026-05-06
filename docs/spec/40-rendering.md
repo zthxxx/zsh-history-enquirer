@@ -110,5 +110,7 @@ The render call shall be **throttled to ~72 ms** with a leading-edge
 fire (`render(); throttle = setTimeout(...)`). This is what keeps
 keystroke combos and pasted text from blocking, while still feeling
 instant. The legacy code uses lodash `throttle(..., 72, { leading: true })`;
-the Go port uses an equivalent custom throttler since
-bubbletea does not natively expose this knob.
+the Go port uses an equivalent custom throttler in
+`internal/ui/throttle.go`. A trailing-edge flush after the last
+event in a burst guarantees the final state is always rendered
+even if the burst started inside an existing throttle window.

@@ -79,40 +79,50 @@ The cost is the fx runtime overhead (~5-10 ms cold start). For an
 interactive widget that already pays a syscall for `fc -R` plus a DSR
 round-trip (~5 ms), this is invisible.
 
-## Why bubbletea + lipgloss + termenv?
+## Why a hand-rolled FSM (not bubbletea)?
 
 Considered alternatives:
 
-- **Hand-rolled** (closest to legacy): full control over every escape
-  byte, no abstractions. Won by the legacy port; led to gnarly clear/
-  restore logic in `historySearcher.ts`. Reject — the original
-  implementation's bugs were exactly here.
 - **gocui / tcell**: full-screen TUI focus. Reject — they assume the
   alternate screen and would break inline rendering.
-- **bubbletea**: Elm-style update loop; supports inline rendering via
-  `tea.WithOutput(os.Stderr)` + custom render mode. Trade-off is that
-  inline mode is less battle-tested than full-screen mode, so the
-  rendering layer needs a thin custom escape emitter on top.
+- **bubbletea**: Elm-style update loop. Tried first; surfaced two
+  concrete frictions:
+  1. Bubbletea's built-in key parser splits bracketed-paste payloads
+     across keystrokes; we need the payload as one event.
+  2. The picker throttles renders, not events. Bubbletea's render
+     lifecycle is keyed to the message dispatch, which doesn't match
+     the throttle-the-output, keep-mutating-the-state pattern we want
+     for paste storms.
+- **Hand-rolled FSM**: ~250 lines across `internal/ui/{model,update,
+  render}.go`. Pure functions, no goroutines, no I/O. Each event type
+  is a switch case in `Update`; `Render` returns a `Frame` struct
+  without writing anywhere.
 
-**Decision**: bubbletea **for the event/update plumbing**, with a custom
-inline renderer (`internal/ui/render.go`) that emits the escapes
-directly. We get the testability of bubbletea's `tea.Program.Send`
-event injection without inheriting full-screen assumptions.
+**Decision**: hand-rolled FSM. The hand-rolled code is the same shape
+as a bubbletea Model (Update + View) without the framework, so the
+testability is identical (or better — every render produces a Frame
+that can be inspected without intercepting bytes from a pseudo-tty).
+The escape emission lives in `internal/ansi/` so future contributors
+can swap the renderer without touching the FSM.
 
 ## External dependencies (kept minimal)
 
+Five direct Go-module dependencies — verified by `go mod graph`:
+
 - `go.uber.org/fx` — DI
-- `github.com/charmbracelet/bubbletea` — event loop
-- `github.com/charmbracelet/lipgloss` — style helpers (only used for
-  the highlight pass; no heavyweight layout)
 - `golang.org/x/sys/unix` — termios + ioctls (pure Go syscall layer,
   no CGO)
-- `github.com/creack/pty` — pty pair for tty unit tests (test-only
-  dependency — also pure Go on linux/darwin)
+- `github.com/creack/pty` — pty pair for tty unit tests (test-only)
 - `pgregory.net/rapid` — property-based tests
 - `github.com/stretchr/testify` — assert/require
 
-(Standard library is preferred everywhere it's enough. Every
+There is **no** bubbletea, lipgloss, or termenv. The earlier draft of
+this doc claimed bubbletea was used; it never was. SGR escapes are
+emitted directly from `internal/ui/render.go`, the wire bytes for
+the four colours we use (bold cyan for highlight, plain reset) are
+constants in the same file.
+
+Standard library is preferred everywhere it's enough. Every
 dependency above must compile with `CGO_ENABLED=0` so the resulting
 binary is statically linked and runs on glibc, musl, and OpenWrt
-without recompiling.)
+without recompiling.
