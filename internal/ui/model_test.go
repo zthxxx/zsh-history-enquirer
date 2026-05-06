@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -298,6 +299,58 @@ func TestModel_DownBeforeFirstRender_AdvancesModulo(t *testing.T) {
 
 	m.Update(keys.KeyEvent{Key: keys.KeyDown})
 	require.Equal(t, 1, m.Idx, "Down before render must advance Idx by 1")
+}
+
+// TestModel_RotateUp_NoOpEdges pins the early-return branches of
+// rotateUp: empty Filter and zero/negative n. Both must leave the
+// model unchanged.
+func TestModel_RotateUp_NoOpEdges(t *testing.T) {
+	t.Parallel()
+	m := NewModel("zzz", []string{"git", "echo"}, 15, 80, 1, 1, DefaultMaxLimit)
+	require.Empty(t, m.Filter)
+	m.rotateUp(1) // empty Filter — must not panic
+
+	m2 := newTestModel("")
+	before := slices.Clone(m2.Filter)
+	m2.rotateUp(0)
+	require.Equal(t, before, m2.Filter, "rotateUp(0) must be a no-op")
+	m2.rotateUp(-3)
+	require.Equal(t, before, m2.Filter, "rotateUp(-n) must be a no-op")
+}
+
+// TestModel_RotateUp_ModuloWrap pins the n %= len branch. n equal
+// to filter length should be a no-op (full rotation).
+func TestModel_RotateUp_ModuloWrap(t *testing.T) {
+	t.Parallel()
+	m := newTestModel("")
+	before := slices.Clone(m.Filter)
+	m.rotateUp(len(m.Filter))
+	require.Equal(t, before, m.Filter,
+		"rotateUp(len(Filter)) must be a full revolution = identity")
+}
+
+// TestModel_RotateDown_ModuloWrap pins the same branch on rotateDown.
+func TestModel_RotateDown_ModuloWrap(t *testing.T) {
+	t.Parallel()
+	m := newTestModel("")
+	before := slices.Clone(m.Filter)
+	m.rotateDown(len(m.Filter))
+	require.Equal(t, before, m.Filter,
+		"rotateDown(len(Filter)) must be a full revolution = identity")
+}
+
+// TestModel_RotateUpDown_RoundTrip — rotateDown(n) then rotateUp(n)
+// must restore the original Filter for any 0 < n < len(Filter).
+func TestModel_RotateUpDown_RoundTrip(t *testing.T) {
+	t.Parallel()
+	m := newTestModel("")
+	before := slices.Clone(m.Filter)
+	for n := 1; n < len(m.Filter); n++ {
+		m.rotateDown(n)
+		m.rotateUp(n)
+		require.Equalf(t, before, m.Filter,
+			"rotate down/up by %d should round-trip", n)
+	}
 }
 
 // TestModel_DownWrapsWhenFilterFitsInLimit — when len(Filter) <=
