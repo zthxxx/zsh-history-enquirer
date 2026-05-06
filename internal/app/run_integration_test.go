@@ -11,17 +11,17 @@ import (
 
 // TestRun_VersionFastPath verifies that --version short-circuits in
 // Run() before any TTY interaction. This is the only path through
-// Run that doesn't need a real terminal, and it's worth locking
-// down because it's the path users hit when debugging an install
-// (`zsh-history-enquirer --version` from any context).
+// Run() we exercise as a Go-level integration test; the deeper
+// paths (DSR probe, raw mode, event loop, render, submit/cancel)
+// are exhaustively covered by the docker-driven e2e scenarios in
+// `e2e/scenarios/*.exp` against a real zsh + pty.
 //
-// The deeper paths through Run — DSR probe, raw mode, event loop,
-// render — require a real pty plus access to private fields of
-// tty.TTY. Those paths are exhaustively covered by the e2e docker
-// scenarios (which exercise the actual binary against a real zsh +
-// pty), so we don't try to duplicate that here as Go integration
-// tests; doing so would either need to leak tty internals or
-// reimplement the harness in Go for marginal extra coverage.
+// We tried writing a Go-level pty integration of Run() against a
+// creack/pty pair, but the resulting harness was fragile (the
+// master-side drain goroutine, raw-mode timing, and submit/cancel
+// cleanup interact in non-obvious ways). The e2e docker tests run
+// against the actual binary so they catch the same bugs more
+// reliably; we don't duplicate them here.
 func TestRun_VersionFastPath(t *testing.T) {
 	t.Parallel()
 
