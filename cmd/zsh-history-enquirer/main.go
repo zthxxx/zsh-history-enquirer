@@ -12,7 +12,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"slices"
 	"time"
 
 	"go.uber.org/fx"
@@ -21,6 +23,15 @@ import (
 )
 
 func main() {
+	// Fast path: `--version` doesn't need a TTY at all. Detect it
+	// before fx.New so we don't open /dev/tty in environments where
+	// it isn't usable (CI runners, scripts piped from a non-tty
+	// shell, etc.).
+	if slices.Contains(os.Args[1:], "--version") || slices.Contains(os.Args[1:], "-version") {
+		fmt.Fprintln(os.Stderr, app.VersionLine())
+		return
+	}
+
 	a := fx.New(
 		app.Module,
 		fx.NopLogger, // silence fx; the widget contract requires
