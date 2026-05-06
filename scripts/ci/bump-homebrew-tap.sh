@@ -107,6 +107,16 @@ git checkout -B "${BRANCH}" origin/main
 
 FORMULA="Formula/zsh-history-enquirer.rb"
 
+# Migration: if an existing formula doesn't have the `resource "plugin"`
+# block (legacy v1.x layout), regenerate it from scratch on this bump.
+# Otherwise the python regex updater would only refresh the version /
+# sha256s and leave a structurally-old formula that still doesn't
+# install the plugin file.
+if [ -f "${FORMULA}" ] && ! grep -q 'resource "plugin"' "${FORMULA}"; then
+  echo "==> existing formula has no plugin resource; regenerating from template"
+  rm -f "${FORMULA}"
+fi
+
 if [ ! -f "${FORMULA}" ]; then
   cat > "${FORMULA}" <<EOF
 class ZshHistoryEnquirer < Formula
