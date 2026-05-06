@@ -58,7 +58,10 @@ func (m *Model) applyKey(k keys.Key) (terminate bool) {
 		return true
 	case keys.KeyEsc, keys.KeyCtrlC:
 		m.Canceled = true
-		m.Result = m.Input
+		// Route through SubmitResult so the cancel path is exercised
+		// by the same function as submit. Avoids a silent dual-source
+		// of the "what is m.Result on cancel" semantics.
+		m.Result = m.SubmitResult()
 		return true
 	case keys.KeyUp:
 		m.moveUp()
