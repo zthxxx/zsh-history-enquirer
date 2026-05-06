@@ -105,6 +105,56 @@ func TestIsVersionFlag(t *testing.T) {
 	}
 }
 
+// runHelpSmoke runs `bin <flag>` and asserts the output looks like
+// the auto-generated Usage with no startup-failed noise on stderr.
+// Used by TestSmoke_HelpFlagLong / TestSmoke_HelpFlagShort.
+func runHelpSmoke(t *testing.T, flag string) {
+	t.Helper()
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skipf("smoke test only runs on linux/darwin; got %s", runtime.GOOS)
+	}
+
+	tmp := t.TempDir()
+	bin := filepath.Join(tmp, "zsh-history-enquirer")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	t.Cleanup(cancel)
+
+	build := exec.CommandContext(ctx, "go", "build", "-o", bin, ".")
+	build.Dir = "."
+	out, err := build.CombinedOutput()
+	require.NoErrorf(t, err, "go build failed: %s", out)
+
+	cmd := exec.CommandContext(ctx, bin, flag)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	require.NoError(t, cmd.Run(),
+		"binary %s failed: stderr=%q", flag, stderr.String())
+
+	require.Contains(t, stdout.String(), "Usage:",
+		"%s output must include Usage line", flag)
+	require.Contains(t, stdout.String(), "histfile",
+		"%s output must list flag names", flag)
+	require.Empty(t, stderr.String(),
+		"%s must not write to stderr (no startup-failed nonsense)", flag)
+}
+
+// TestSmoke_HelpFlagLong verifies `bin --help` prints usage to
+// stdout and exits 0 cleanly. Catches a regression where help
+// output gets stacked under a "startup failed:" message because
+// flag.ErrHelp propagated through the fx graph.
+func TestSmoke_HelpFlagLong(t *testing.T) {
+	t.Parallel()
+	runHelpSmoke(t, "--help")
+}
+
+// TestSmoke_HelpFlagShort mirrors the long-form test for `-h`.
+func TestSmoke_HelpFlagShort(t *testing.T) {
+	t.Parallel()
+	runHelpSmoke(t, "-h")
+}
+
 // TestIsHelpFlag mirrors TestIsVersionFlag — the help fast-path uses
 // the same len==2 narrow-check pattern, so the same widget-mode
 // protection holds: a user typing `--help` or `-h` at the prompt
