@@ -1,0 +1,47 @@
+#!/usr/bin/env expect
+# 13-unicode-entries.exp
+#
+# History entries with CJK / accented / emoji characters must
+# render and filter correctly. The renderer's wrap math uses byte
+# length not rune count (matching the legacy implementation), so
+# wide CJK glyphs technically under-count cells — we accept that
+# as a known limitation, but the picker must NOT fail outright on
+# unicode entries.
+#
+# Seeded by run.sh? No — the seed is ASCII. We invoke the binary
+# directly with --histfile pointing at a fresh file containing
+# unicode entries.
+
+set timeout 12
+log_user 1
+
+# Build a history file with unicode entries inside the container.
+exec sh -c {cat > /tmp/uni-history <<'EOF'
+: 1568797100:0;echo 你好世界
+: 1568797101:0;echo café résumé
+: 1568797102:0;echo 🚀 emoji command
+: 1568797103:0;git status
+EOF
+}
+
+spawn -noecho /usr/local/bin/zsh-history-enquirer --histfile /tmp/uni-history
+expect_after timeout {
+  puts stderr "TIMEOUT in 13-unicode-entries"
+  exit 1
+}
+
+# The picker should render all 4 entries. Match on the rocket emoji
+# specifically (most distinctive).
+expect "🚀"
+sleep 0.3
+
+# Filter to "café" — the second entry should remain (with accent).
+send -- "café"
+sleep 0.5
+
+expect "résumé"
+sleep 0.3
+
+send -- "\x1b"
+sleep 0.4
+expect eof
