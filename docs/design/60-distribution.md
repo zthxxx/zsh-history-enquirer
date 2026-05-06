@@ -5,8 +5,8 @@
 ## npm shape (esbuild-style)
 
 ```
-npm-workspace/                                 (git-tracked)
-├─ pnpm-workspace.yaml
+npm/                                 (git-tracked)
+├─ pnpm.yaml
 ├─ packages/
 │   └─ zsh-history-enquirer/
 │       ├─ package.json                        (top-level wrapper)
@@ -32,7 +32,7 @@ each:
 2. Renders the README.
 3. Copies `bin/zsh-history-enquirer-<os>-<cpu>` into `bin/zsh-history-enquirer`
    inside the rendered package.
-4. `cd npm-workspace/build/<os>-<cpu> && npm publish --access public`.
+4. `cd npm/build/<os>-<cpu> && npm publish --access public`.
 
 The top-level `zsh-history-enquirer` package's `package.json` has its
 `optionalDependencies` map built up the same way — each platform pkg

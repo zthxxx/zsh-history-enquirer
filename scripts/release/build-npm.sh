@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # scripts/release/build-npm.sh — render the per-platform npm
-# packages from templates/platform/ into npm-workspace/build/, copy
+# packages from templates/platform/ into npm/build/, copy
 # the matching Go binary into each, and (optionally) publish.
 #
 # Usage:
@@ -13,13 +13,13 @@
 #   bin/zsh-history-enquirer-<os>-<arch>  produced by `task build:all`
 #
 # Output:
-#   npm-workspace/build/<os>-<arch>/    rendered platform package
-#   npm-workspace/build/zsh-history-enquirer/  rendered umbrella with
+#   npm/build/<os>-<arch>/    rendered platform package
+#   npm/build/zsh-history-enquirer/  rendered umbrella with
 #                                              correct optionalDependencies
 #
 # Design notes:
-#   - We render into npm-workspace/build/ rather than into
-#     npm-workspace/packages/ so the rendered output is gitignored
+#   - We render into npm/build/ rather than into
+#     npm/packages/ so the rendered output is gitignored
 #     and re-creating from scratch never tracks junk.
 #   - Each platform package's package.json declares `os` and `cpu`
 #     in node's vocabulary (`x64`, `darwin`, ...) so npm's
@@ -49,7 +49,7 @@ if [ -z "${VERSION}" ]; then
   exit 2
 fi
 
-WORKSPACE="npm-workspace"
+WORKSPACE="npm"
 TEMPLATE="${WORKSPACE}/templates/platform"
 BUILD="${WORKSPACE}/build"
 UMBRELLA_SRC="${WORKSPACE}/packages/zsh-history-enquirer"

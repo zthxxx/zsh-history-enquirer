@@ -35,14 +35,14 @@ This is the same shape `esbuild` uses; it works because npm's
 the user with exactly one platform binary and ~50 KB of overhead.
 
 The platform packages are **not** committed to git. They are generated
-at release time from a template in `npm-workspace/templates/platform/`.
+at release time from a template in `npm/templates/platform/`.
 The release CI step:
 
 1. `task build:all` cross-compiles every target.
 2. For each target, render the template into
-   `npm-workspace/packages/<os>-<arch>/`, copy the binary in, set the
+   `npm/packages/<os>-<arch>/`, copy the binary in, set the
    correct `os`/`cpu` fields, bump the version, and `npm publish`.
-3. Render and publish the top-level `npm-workspace/packages/zsh-history-enquirer/`
+3. Render and publish the top-level `npm/packages/zsh-history-enquirer/`
    with a matching version and the correct `optionalDependencies` map.
 
 The top-level package and the template directory **are** committed to

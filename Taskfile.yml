@@ -281,7 +281,7 @@ tasks:
     cmds:
       - rm -rf {{.BUILD_DIR}} dist release
       - rm -f coverage.out coverage.html
-      - rm -rf npm-workspace/build npm-workspace/packages/@zsh-history-enquirer
+      - rm -rf npm/build npm/packages/@zsh-history-enquirer
 
   setup:
     desc: Install developer tooling

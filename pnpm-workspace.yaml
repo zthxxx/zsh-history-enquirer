@@ -1,2 +1,2 @@
 packages:
-  - "npm-workspace/packages/*"
+  - "npm/packages/*"

@@ -16,7 +16,7 @@ that doesn't make `^R` better is out of scope.
 | `plugin/zsh-history-enquirer.plugin.zsh` | The widget file users source from `~/.zshrc`. |
 | `e2e/{debian,alpine}/` | Per-libc Docker images. |
 | `e2e/scenarios/*.exp` | Expect-driven scenarios. |
-| `npm-workspace/` | NPM umbrella package + per-platform sub-package templates. |
+| `npm/` | NPM umbrella package + per-platform sub-package templates. |
 | `docs/spec/` | User-visible behaviour. |
 | `docs/design/` | Spec → Go implementation map. |
 | `docs/plan/` | Roadmap + atomic checklist + post-mortems. |
@@ -110,7 +110,7 @@ rest:
 1. Cross-compiles for darwin/linux × arm64/amd64.
 2. Creates a GitHub Release with `checksums.txt`.
 3. Renders the npm umbrella + four `@zsh-history-enquirer/<os>-<arch>`
-   sub-packages from `npm-workspace/templates/platform/` and
+   sub-packages from `npm/templates/platform/` and
    publishes them via `NPM_TOKEN`.
 4. Opens a PR against `zthxxx/homebrew-tap` rewriting the formula
    with the new version + per-platform sha256s, via

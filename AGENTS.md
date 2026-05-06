@@ -71,7 +71,7 @@ Three distribution channels:
 3. **GitHub Releases** — raw binaries + `checksums.txt`.
 
 Per-platform npm packages and the homebrew formula are **rendered at
-release time** from templates in `npm-workspace/templates/platform/`
+release time** from templates in `npm/templates/platform/`
 and `scripts/ci/bump-homebrew-tap.sh`, respectively. They are not
 hand-edited.
 
@@ -150,4 +150,4 @@ Run a single Go test: `go test ./internal/ui -run TestRender_PointerOnFocused`.
 Don't auto-run `/ship` on conversational replies; the user invokes it
 explicitly. `/ship-multi` is allowed when a change touches three or
 more of: `internal/{ui,history,search,tty,keys,app}`, `e2e/`,
-`npm-workspace/`, `.github/workflows/`.
+`npm/`, `.github/workflows/`.

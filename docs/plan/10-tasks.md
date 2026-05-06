@@ -52,8 +52,8 @@ idempotent action.
 
 ## P5. Distribution
 
-- [x] `npm-workspace/`: pnpm-workspace.yaml, umbrella package, install shim
-- [x] `npm-workspace/templates/platform/`: render template
+- [x] `npm/`: pnpm.yaml, umbrella package, install shim
+- [x] `npm/templates/platform/`: render template
 - [x] `scripts/release/build-npm.sh`: render + publish flow (dry-run mode tested)
 
 ## P6. CI

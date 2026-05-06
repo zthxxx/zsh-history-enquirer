@@ -12,7 +12,7 @@ P1. Foundation    docs (spec/design/plan), config files, Taskfile
 P2. Core          history, search, ansi, tty packages with unit tests
 P3. UI            keys parser, ui model + render, golden frames
 P4. App           cmd entrypoint, fx wiring, plugin file
-P5. Distribution  npm-workspace skeleton + templates, install shim
+P5. Distribution  npm skeleton + templates, install shim
 P6. CI            push CI (lint/test/build), release CI (npm + homebrew)
 P7. E2E           docker image, scenarios, act parity
 P8. Polish        README/AGENTS rewrite, version stamping, hardening

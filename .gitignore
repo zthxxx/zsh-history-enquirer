@@ -53,7 +53,7 @@ __debug_bin*
 # act runtime artifacts
 /.act/
 
-# npm-workspace generated packages (esbuild-style platform pkgs are
+# npm generated packages (esbuild-style platform pkgs are
 # rendered from templates at release time and never tracked).
-/npm-workspace/build/
-/npm-workspace/packages/@zsh-history-enquirer/
+/npm/build/
+/npm/packages/@zsh-history-enquirer/
