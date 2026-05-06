@@ -4,14 +4,21 @@ The widget side of the project is a single file
 (`plugin/zsh-history-enquirer.plugin.zsh`) that:
 
 1. Defines a zle widget named `history_enquire`.
-2. Binds it to <kbd>Ctrl</kbd>+<kbd>R</kbd> (`bindkey '^R' history_enquire`).
+2. Binds it to <kbd>Ctrl</kbd>+<kbd>R</kbd> in **every** keymap a
+   typical zsh user lands in: `emacs`, `viins`, `vicmd`. Vi-mode
+   users would otherwise lose the picker the moment they hit Esc
+   to enter `vicmd`.
 3. On invocation:
    1. If the binary `zsh-history-enquirer` is on `$PATH`, runs
-      `BUFFER=$(zsh-history-enquirer "$LBUFFER")` and snaps `CURSOR` to
-      the new buffer length.
-   2. If the binary is missing (mid-install, broken `$PATH`, …), falls
-      back to `zsh`'s native `history-incremental-search-backward` for
-      that one keystroke, so the user is never left with a dead key.
+      `BUFFER=$(zsh-history-enquirer "$LBUFFER")` and snaps `CURSOR`
+      to the new buffer length.
+   2. If the binary is missing (mid-install, broken `$PATH`, …),
+      falls back to `zsh`'s native widget via
+      `zle .history-incremental-search-backward` (the leading `.`
+      invokes the builtin without touching the current keymap), so
+      the user is never left with a dead key. The previous
+      bindkey-swap fallback was discarded — see
+      [docs/plan/20-followups.md](../plan/20-followups.md).
 4. Calls `zle -R -c` to repaint the prompt after `BUFFER` is set.
 
 ## Binary contract (mandatory)
