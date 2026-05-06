@@ -188,8 +188,19 @@ echo "==> rendered ${umbrella}"
 
 # ---- Publish (optional) -------------------------------------------
 if [ "${PUBLISH}" -eq 1 ]; then
+  # Decide the npm dist-tag from the version string. Pre-release
+  # versions (containing "-", e.g. 1.0.0-rc.1) publish under
+  # `next` so `npm install zsh-history-enquirer@latest` keeps
+  # serving the previous stable. Stable versions take `latest`.
+  # Matches the description in release.yml's publish-npm job.
+  if [[ "${VERSION}" == *-* ]]; then
+    NPM_TAG="next"
+  else
+    NPM_TAG="latest"
+  fi
+
   echo ""
-  echo "==> Publishing platform packages first, umbrella last"
+  echo "==> Publishing platform packages first, umbrella last (dist-tag: ${NPM_TAG})"
   for platform in "${PLATFORMS[@]}"; do
     # shellcheck disable=SC2206
     parts=( $platform )
@@ -198,13 +209,13 @@ if [ "${PUBLISH}" -eq 1 ]; then
     NPM_PLATFORM="${GO_OS}-${GO_ARCH}"
     pkg_dir="${BUILD}/${NPM_PLATFORM}"
     echo ""
-    echo "---- @zsh-history-enquirer/${NPM_PLATFORM}@${VERSION}"
-    (cd "${pkg_dir}" && npm publish --access public)
+    echo "---- @zsh-history-enquirer/${NPM_PLATFORM}@${VERSION} (tag: ${NPM_TAG})"
+    (cd "${pkg_dir}" && npm publish --access public --tag "${NPM_TAG}")
   done
 
   echo ""
-  echo "---- zsh-history-enquirer@${VERSION}"
-  (cd "${umbrella}" && npm publish --access public)
+  echo "---- zsh-history-enquirer@${VERSION} (tag: ${NPM_TAG})"
+  (cd "${umbrella}" && npm publish --access public --tag "${NPM_TAG}")
 fi
 
 echo ""
