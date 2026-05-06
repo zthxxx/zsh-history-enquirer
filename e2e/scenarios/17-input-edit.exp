@@ -1,0 +1,56 @@
+#!/usr/bin/env expect
+# 17-input-edit.exp
+#
+# In-picker input editing: Backspace shrinks input, Ctrl-U clears it.
+# Both must re-filter the matches list. Locks the contract from
+# spec/50-keybindings.md:
+#
+#     | Backspace | delete left, re-filter |
+#     | Ctrl+U    | clear input, re-filter |
+
+set timeout 12
+log_user 1
+
+spawn -noecho zsh -il
+expect_after timeout {
+  puts stderr "TIMEOUT in 17-input-edit"
+  exit 1
+}
+
+expect "% "
+sleep 0.4
+
+# Open the picker.
+send -- "\x12"
+sleep 1.0
+
+# Type "xyz" — a string that matches NOTHING in the seed history.
+send -- "xyz"
+sleep 0.5
+# The picker should show "(no matches)" since nothing in the seed
+# contains "xyz".
+expect "no matches"
+sleep 0.3
+
+# Backspace twice → input becomes "x". The picker should re-filter
+# but still show no matches because no seed entry contains "x".
+send -- "\x7f"
+sleep 0.3
+send -- "\x7f"
+sleep 0.5
+# The "(no matches)" message should re-render.
+expect "no matches"
+sleep 0.3
+
+# Ctrl-U → clear input. With empty input the full history is
+# visible again — assert "echo ok" appears.
+send -- "\x15"
+sleep 0.5
+expect "echo ok"
+sleep 0.3
+
+# Cancel cleanly.
+send -- "\x1b"
+sleep 0.3
+send -- "exit\r"
+expect eof
