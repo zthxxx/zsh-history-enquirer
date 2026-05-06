@@ -82,6 +82,16 @@ jobs:
 
       - run: task ci:unit
 
+      - name: Coverage gate (≥ 55% overall)
+        # Pull-up gate: if a refactor drops coverage below 55%, CI
+        # fails. Excludes cmd/ (no tests) and pkg/version (which is
+        # 100% on its own — its inclusion would skew the average).
+        run: |
+          PCT=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')
+          echo "Total coverage: ${PCT}%"
+          awk -v p="$PCT" 'BEGIN { exit (p+0 < 55) ? 1 : 0 }' \
+            || { echo "::error::Coverage ${PCT}% is below the 55% gate" >&2; exit 1; }
+
       - name: Upload coverage
         if: ${{ !env.ACT }}
         uses: actions/upload-artifact@v4
