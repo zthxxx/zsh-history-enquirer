@@ -12,7 +12,6 @@ import (
 
 	"github.com/creack/pty"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/sys/unix"
 )
 
 // withPty opens a pty pair, replaces the test's /dev/tty look-alike
@@ -34,17 +33,16 @@ func withPty(t *testing.T) (master *os.File, slave *os.File) {
 	return master, slave
 }
 
-// fromFile fabricates a TTY from an already-open *os.File and puts
-// it into raw mode. Used in unit tests where the fd points at a pty
-// slave rather than /dev/tty. Without raw mode, the kernel's line
-// discipline buffers writes by line and echoes them back, both of
-// which break the DSR round-trip we are testing.
-func fromFile(f *os.File) (*TTY, error) {
-	saved, err := unix.IoctlGetTermios(int(f.Fd()), getTermiosReq)
+// rawFromFile is the test-only convenience: build a TTY off an
+// already-open file and put it in raw mode. Production code uses
+// NewFromFile() (no raw) or NewDevTTY() (no raw); the picker calls
+// EnterRaw separately. Tests that drive the DSR probe need raw to
+// short-circuit the kernel line discipline, hence this helper.
+func rawFromFile(f *os.File) (*TTY, error) {
+	t, err := NewFromFile(f)
 	if err != nil {
 		return nil, err
 	}
-	t := &TTY{file: f, savedTerm: saved}
 	if err := t.EnterRaw(); err != nil {
 		return nil, err
 	}
@@ -55,7 +53,7 @@ func TestProbeCursor_RoundTrip(t *testing.T) {
 	t.Parallel()
 
 	master, slave := withPty(t)
-	tt, err := fromFile(slave)
+	tt, err := rawFromFile(slave)
 	require.NoError(t, err)
 
 	// Goroutine simulating a terminal: read the DSR query and reply
