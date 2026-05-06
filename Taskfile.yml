@@ -338,9 +338,18 @@ tasks:
         find scripts -name "*.sh" -print0 | xargs -0 shellcheck
 
   lint:md:
-    desc: Run markdownlint via bun (npm fallback if no bun)
+    desc: Run markdownlint via bun (npx fallback if no bun)
     cmds:
-      - 'command -v bun >/dev/null && bun markdownlint-cli2 "**/*.md" || npx --yes markdownlint-cli2 "**/*.md"'
+      # Pick one runner up front rather than `&& bun ... || npx ...`,
+      # which previously ran npx as a fallback even when bun simply
+      # found violations — leading to doubled output and wasted time
+      # on real-failure cases.
+      - |
+        if command -v bun >/dev/null; then
+          bun markdownlint-cli2 "**/*.md"
+        else
+          npx --yes markdownlint-cli2 "**/*.md"
+        fi
 
   fmt:
     desc: Format Go source files
