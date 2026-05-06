@@ -266,3 +266,58 @@ func TestModel_EndOnEmptyFilter(t *testing.T) {
 	require.Empty(t, m.Filter)
 	require.Equal(t, 0, m.Idx)
 }
+
+// TestModel_DownOnEmptyFilter — pressing Down when nothing matches
+// must not panic and must leave Idx at 0.
+func TestModel_DownOnEmptyFilter(t *testing.T) {
+	t.Parallel()
+	m := NewModel("zzz-no-such", []string{"git", "echo"}, 15, 80, 1, 1, DefaultMaxLimit)
+	m.Update(keys.KeyEvent{Key: keys.KeyDown})
+	require.Empty(t, m.Filter)
+	require.Equal(t, 0, m.Idx)
+}
+
+// TestModel_UpOnEmptyFilter — pressing Up when nothing matches
+// must not panic.
+func TestModel_UpOnEmptyFilter(t *testing.T) {
+	t.Parallel()
+	m := NewModel("zzz-no-such", []string{"git", "echo"}, 15, 80, 1, 1, DefaultMaxLimit)
+	m.Update(keys.KeyEvent{Key: keys.KeyUp})
+	require.Empty(t, m.Filter)
+	require.Equal(t, 0, m.Idx)
+}
+
+// TestModel_DownBeforeFirstRender_AdvancesModulo — exercises the
+// Limit==0 branch in moveDown(): before the first Render(), Limit
+// has not been computed. moveDown advances Idx modulo filter size,
+// preventing a panic if Down is dispatched at the very first frame.
+func TestModel_DownBeforeFirstRender_AdvancesModulo(t *testing.T) {
+	t.Parallel()
+	m := newTestModel("")
+	require.Equal(t, 0, m.Limit, "Limit must be 0 before first Render")
+
+	m.Update(keys.KeyEvent{Key: keys.KeyDown})
+	require.Equal(t, 1, m.Idx, "Down before render must advance Idx by 1")
+}
+
+// TestModel_DownWrapsWhenFilterFitsInLimit — when len(Filter) <=
+// Limit, the entire filter is visible at once, and Down at the
+// bottom wraps to top via the rotateDown path.
+func TestModel_DownWrapsWhenFilterFitsInLimit(t *testing.T) {
+	t.Parallel()
+	choices := []string{"a-1", "a-2", "a-3"}
+	m := NewModel("a", choices, 15, 80, 1, 1, DefaultMaxLimit)
+	m.Render(RenderOptions{})
+	require.Equal(t, 3, m.Limit, "all 3 entries must fit in the limit")
+
+	// Walk to the last visible entry.
+	m.Update(keys.KeyEvent{Key: keys.KeyDown})
+	m.Update(keys.KeyEvent{Key: keys.KeyDown})
+	require.Equal(t, "a-3", m.Focused())
+
+	// One more Down at the last visible entry — wrap to top.
+	m.Update(keys.KeyEvent{Key: keys.KeyDown})
+	m.Render(RenderOptions{PrevSize: m.Limit})
+	require.Equal(t, 0, m.Idx,
+		"Down past the last visible entry must wrap to top (Idx=0)")
+}
