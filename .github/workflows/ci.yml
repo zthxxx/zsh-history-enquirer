@@ -48,6 +48,10 @@ jobs:
       - run: task ci:lint:go
       - run: task lint:arch
 
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: task lint:sh
+
   lint-markdown:
     name: Markdown Lint
     runs-on: ubuntu-latest

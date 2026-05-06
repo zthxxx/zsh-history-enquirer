@@ -275,6 +275,7 @@ tasks:
       - task: lint:go
       - task: lint:arch
       - task: lint:md
+      - task: lint:sh
 
   lint:go:
     desc: Run golangci-lint
@@ -290,6 +291,11 @@ tasks:
     desc: Run go-arch-lint to enforce package layering
     cmds:
       - 'command -v go-arch-lint >/dev/null && go-arch-lint check || (echo "go-arch-lint not installed; skipping (run: task setup)" >&2)'
+
+  lint:sh:
+    desc: Run shellcheck on every release / CI shell script
+    cmds:
+      - 'command -v shellcheck >/dev/null && find scripts -name "*.sh" -print0 | xargs -0 shellcheck || (echo "shellcheck not installed; skipping" >&2)'
 
   lint:md:
     desc: Run markdownlint via bun (npm fallback if no bun)

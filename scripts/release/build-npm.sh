@@ -64,7 +64,10 @@ PLATFORMS=(
 )
 
 mkdir -p "${BUILD}"
-rm -rf "${BUILD}"/*
+# Defensive: refuse to expand to '/' if ${BUILD} is somehow empty.
+# `rm -rf /*` would be catastrophic; the :? guard makes the shell
+# error out instead.
+rm -rf "${BUILD:?}"/*
 
 render() {
   # render <src> <dst> <pairs...>
