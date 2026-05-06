@@ -14,8 +14,13 @@ vars:
   BUILD_DIR: bin
   PKG_PATH: github.com/zthxxx/zsh-history-enquirer
   CMD_PATH: ./cmd/zsh-history-enquirer
+  # VERSION honours the env override (`VERSION=v2.0.0 task release:dry-run`)
+  # before falling back to git describe. Without the env check Task would
+  # always resolve VERSION to the current commit hash, even when CI passes
+  # an explicit tag — release:dry-run and the publish flow would silently
+  # ship the wrong number.
   VERSION:
-    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+    sh: '[ -n "${VERSION:-}" ] && printf "%s" "${VERSION}" || (git describe --tags --always --dirty 2>/dev/null || echo "dev")'
   COMMIT:
     sh: git rev-parse --short HEAD 2>/dev/null || echo "unknown"
   DATE:
