@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: darwin
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - uses: go-task/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: task ci:build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zsh-history-enquirer-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: bin/zsh-history-enquirer-${{ matrix.goos }}-${{ matrix.goarch }}
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: go-task/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Package release files
+        run: task ci:release:package
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          # Mark any tag containing "-" (semver pre-release marker —
+          # e.g. v1.0.0-alpha.1) as a GitHub pre-release. Stable
+          # consumers (npm `latest`, brew users) stay pinned to the
+          # last stable; early adopters opt in via explicit version.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+
+  publish-npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: [release]
+    # Pre-release tags (containing "-") still go to npm, just not as
+    # the `latest` dist-tag. Stable tags get `latest`.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: go-task/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Stage binaries
+        run: task ci:release:package
+
+      - name: Move release binaries to bin/
+        run: |
+          mkdir -p bin
+          for f in release/zsh-history-enquirer-*; do
+            [ -f "$f" ] || continue
+            cp "$f" bin/
+          done
+
+      - name: Render and publish npm packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ github.ref_name }}
+        run: task ci:release:publish-npm
+
+  bump-homebrew-tap:
+    name: Bump Homebrew Tap
+    runs-on: ubuntu-latest
+    needs: [release]
+    # Only stable semver flows to Homebrew users. Any tag containing
+    # "-" (alpha/beta/rc/etc.) is a pre-release and is skipped.
+    if: "!contains(github.ref_name, '-')"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: go-task/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump Formula in zthxxx/homebrew-tap
+        env:
+          # PAT with `repo` scope on zthxxx/homebrew-tap. The default
+          # GITHUB_TOKEN cannot reach another repository, so a
+          # dedicated secret is required. See
+          # scripts/ci/bump-homebrew-tap.sh for the full contract.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ github.ref_name }}
+        run: task ci:release:bump-homebrew-tap
