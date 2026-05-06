@@ -76,3 +76,57 @@ func TestZshLoader_AgainstTempHistfile(t *testing.T) {
 
 	require.Equal(t, []string{"cmd-a", "cmd-b"}, out)
 }
+
+// TestNewZshLoader_DefaultsHistSize covers the zero-value defaulting
+// branch: passing HistSize=0 must yield a loader that uses
+// DefaultHistSize (100000), not 0 — otherwise zsh's `fc -ln 1` would
+// return nothing.
+func TestNewZshLoader_DefaultsHistSize(t *testing.T) {
+	t.Parallel()
+
+	loader := NewZshLoader(Options{})
+	zl, ok := loader.(*zshLoader)
+	require.True(t, ok, "NewZshLoader must return a *zshLoader")
+	require.Equal(t, DefaultHistSize, zl.opts.HistSize,
+		"zero HistSize must default to %d, got %d",
+		DefaultHistSize, zl.opts.HistSize)
+}
+
+// TestZshLoader_BadZshBinaryReturnsError covers the error path when
+// the configured zsh binary doesn't exist. The error message should
+// mention "exec failed" so callers can pattern-match on it.
+func TestZshLoader_BadZshBinaryReturnsError(t *testing.T) {
+	t.Parallel()
+
+	loader := NewZshLoader(Options{
+		ZshBinary: "/nonexistent/path/to/zsh-not-here",
+		HistFile:  "/tmp/nonexistent",
+	})
+	_, err := loader.Load(context.Background())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "exec failed",
+		"loader error must mention exec failure for upstream pattern matching")
+}
+
+// TestStripExtendedHistoryPrefix_EdgeCases pins the three branches
+// of the helper: prefixed-with-semicolon (normal), prefixed-without-
+// semicolon (malformed but harmless), and unprefixed.
+func TestStripExtendedHistoryPrefix_EdgeCases(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{": 12345:0;echo ok", "echo ok"},
+		{"echo ok", "echo ok"},                     // no prefix
+		{": 12345:0 echo ok", ": 12345:0 echo ok"}, // prefix-but-no-semi
+		{": ", ": "}, // bare prefix
+		{"", ""},
+	}
+	for _, tc := range cases {
+		got := stripExtendedHistoryPrefix(tc.in)
+		require.Equalf(t, tc.want, got,
+			"stripExtendedHistoryPrefix(%q) = %q, want %q", tc.in, got, tc.want)
+	}
+}
