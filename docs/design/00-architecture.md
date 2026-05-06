@@ -7,44 +7,51 @@
 
 ```
 cmd/zsh-history-enquirer/                 # main package, fx app
-└─ main.go
+└─ main.go                                # version fast-path + fx.New
 
 internal/
-├─ app/         # fx module wiring everything together
-│   └─ module.go
+├─ app/         # composes everything else into a runnable graph
+│   ├─ module.go         # fx.Module + invokeRun + named writer types
+│   ├─ config.go         # NewConfig (flag parsing) + VersionLine
+│   ├─ run.go            # Run() entrypoint + PrintResult/HandleError
+│   ├─ init.go           # geometry probe, cursor fallback, computeInitCol
+│   ├─ loop.go           # event loop + throttle + trailing flush
+│   └─ debug.go          # ZHE_DEBUG diagnostic logger
 ├─ history/     # spec/20 — load, reverse, dedupe, unescape
-│   ├─ loader.go        # Loader interface + zshLoader (fc -R; fc -ln 1)
-│   ├─ fixture.go       # FixtureLoader for unit tests
-│   ├─ transform.go     # ReverseDedupeUnescape (pure)
-│   └─ *_test.go        # property-based via pgregory.net/rapid
+│   ├─ loader.go         # Loader interface, zshLoader, FixtureLoader
+│   └─ transform.go      # ReverseDedupeUnescape (pure)
 ├─ search/      # spec/30
-│   ├─ tokens.go        # Tokenize
-│   ├─ filter.go        # AndFilter
-│   └─ *_test.go        # property-based + table
+│   ├─ tokens.go         # Tokenize
+│   └─ filter.go         # AndFilter (case-insensitive AND substring)
 ├─ tty/         # spec/10 §interactive_output, spec/40 §inline placement
-│   ├─ tty.go           # /dev/tty open helpers
-│   ├─ cursor.go        # DSR query + parse
-│   ├─ raw.go           # raw mode RAII guard
-│   └─ *_test.go        # use creack/pty for unit tests
-├─ ansi/        # cursor/erase escape primitives, kept tiny
+│   ├─ tty.go            # TTY struct, Open/NewFromFile/NewDevTTY
+│   ├─ cursor.go         # DSR probe via unix.Poll
+│   ├─ raw.go            # EnterRaw/LeaveRaw termios mutation
+│   └─ termios_{linux,darwin}.go  # GET/SET termios req constants
+├─ ansi/        # CSI primitives, kept tiny
 │   └─ ansi.go
 ├─ keys/        # spec/50, spec/60
-│   ├─ reader.go        # raw-byte → Event stream
-│   ├─ events.go        # Event types (Rune, Key, Paste, Resize)
-│   └─ *_test.go
-├─ ui/          # spec/40 + spec/50 driver
-│   ├─ model.go         # state struct (input, visible, idx, limit, …)
-│   ├─ update.go        # state transitions for events
-│   ├─ render.go        # produces a frame string + cursor target
-│   ├─ wrap.go          # wrapped_row_count helper
-│   ├─ throttle.go      # leading-edge throttle
-│   └─ *_test.go        # golden-frame tests
-└─ widget/      # plugin file constants (path resolution etc.)
-    └─ widget.go
+│   ├─ reader.go         # poll-based byte → Event stream
+│   ├─ parser.go         # FSM (Normal/Esc/CSI/Paste states)
+│   └─ events.go         # Event types (Rune, Key, Paste, Resize)
+└─ ui/          # spec/40 + spec/50 — pure FSM + renderer
+    ├─ model.go          # state struct + rotateUp/rotateDown
+    ├─ update.go         # event dispatch + scroll/page/end logic
+    ├─ render.go         # Frame builder + token highlight
+    ├─ wrap.go           # WrappedRowCount (rune-count estimate)
+    └─ throttle.go       # leading-edge throttle (72 ms)
 
 pkg/                                       # public-ish reusable bits
 └─ version/version.go                      # injected at build via -ldflags
 ```
+
+Every package above has a `*_test.go` peer; `internal/keys`, `internal/ui`,
+`internal/history`, and `internal/search` additionally have property-
+based tests under `pgregory.net/rapid`. `internal/keys` also has a
+Go-native fuzz test against `Parser.Feed`.
+
+There is no `internal/widget/` package; the plugin file ships as a
+standalone `.zsh` source under `plugin/` and is not compiled in.
 
 ## Layered dependency rules
 
