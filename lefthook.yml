@@ -20,4 +20,6 @@ pre-commit:
 commit-msg:
   commands:
     commitlint:
-      run: bunx --bun @commitlint/cli --edit {1}
+      # Same bun → npx fallback as lint-md. Contributors without bun
+      # installed must still get conventional-commit enforcement.
+      run: command -v bun >/dev/null && bunx --bun @commitlint/cli --edit {1} || npx --yes @commitlint/cli --edit {1}
