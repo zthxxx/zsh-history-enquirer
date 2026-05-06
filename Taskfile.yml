@@ -341,7 +341,10 @@ tasks:
   setup:
     desc: Install developer tooling
     cmds:
-      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
+      # v2.12.2 matches the version pinned in CI (.github/workflows/ci.yml).
+      # v2.1.6 was built against Go 1.24 and refuses to load against
+      # go.mod's go 1.25.0 directive (forced by go.uber.org/fx@v1.24).
+      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
       - go install golang.org/x/tools/cmd/goimports@latest
       - go install github.com/fe3dback/go-arch-lint@latest
       - go install github.com/evilmartians/lefthook/v2@latest
