@@ -32,14 +32,15 @@ jobs:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install golangci-lint
-        run: |
-          # v2.12+ is built with Go 1.25; older 2.x versions refuse
-          # to load against a go.mod targeting 1.25 ("Go language
-          # version used to build golangci-lint is lower than the
-          # targeted Go version").
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
-            | sh -s -- -b "$(go env GOPATH)/bin" v2.12.2
+      - name: Install golangci-lint via go install
+        # The official install.sh's pinned tarball checksum for
+        # v2.12.2 doesn't match what GitHub serves (sha256
+        # 8df580d2... expected vs fd3a137c... actual). `go install`
+        # compiles from source against the host's Go toolchain
+        # (1.25 in CI) — both bypasses the broken checksum and
+        # guarantees the linter binary is built with a Go version
+        # that supports our go.mod target.
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 
       - name: Install go-arch-lint
         run: go install github.com/fe3dback/go-arch-lint@latest
