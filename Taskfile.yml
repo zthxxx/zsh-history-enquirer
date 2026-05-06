@@ -107,7 +107,7 @@ tasks:
   test:bench:
     desc: Run Go benchmarks for performance characterization
     cmds:
-      - go test -bench=. -benchmem -run="^$" ./internal/search/ ./internal/history/
+      - go test -bench=. -benchmem -run="^$" ./internal/search/ ./internal/history/ ./internal/ui/
 
   test:cover:
     desc: Show test coverage in browser
