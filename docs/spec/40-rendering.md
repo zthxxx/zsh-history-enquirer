@@ -61,12 +61,27 @@ for choice in visible {
 
 ```
 sum over each "\n"-split line L of:
-    ceil(len(L) / width)        # 0-length line counts as 1
+    ceil(rune_count(L) / width)  # 0-length line counts as 1
 ```
 
-This is deliberately a byte-length estimate (treat one rune = one cell);
-for non-CJK text it is correct, for CJK it slightly under-counts, which
-is acceptable — the user just sees one fewer match.
+The first logical line additionally counts the 2-cell selection
+pointer prefix (`›` + space).
+
+This is a *rune-count* estimate (one rune ≈ one cell):
+
+- For ASCII text it is exact.
+- For CJK glyphs it slightly under-counts (a CJK glyph takes 2 cells
+  but is 1 rune); the user sees one fewer match on a heavily-CJK
+  line that would just barely overflow.
+- For mixed text the estimate is between cell-true and rune-true.
+
+We chose rune count over either byte count or full cell-aware
+arithmetic: byte count over-counts CJK by 3×, full cell counting
+needs a lookup table for East-Asian Width and zero-width joiners
+that adds dependency surface for marginal benefit. The legacy
+Node.js port counted UTF-16 code units (JS `String.length`), which
+approximates rune count for the BMP — both ports show the same
+behaviour on realistic shell history.
 
 `options.limit` defaults to **15**. It can be lowered in tests or by an
 env var, but the user-facing default is fixed.
