@@ -223,7 +223,7 @@ tasks:
       VERSION: "{{.VERSION | default \"0.0.0-dryrun\"}}"
 
   release:smoke:
-    desc: "Smoke-test the rendered npm shim — verifies cli.js locates the platform binary, the --print-install-hint path, and the missing-binary fallback."
+    desc: "Smoke-test the rendered npm shim — verifies cli.js locates the platform binary, the --print-install-hint path, the missing-binary fallback, and rendered package.json validity."
     deps: [release:dry-run]
     cmds:
       - |
@@ -261,7 +261,16 @@ tasks:
         [ "$FALLBACK_OUT" = "git log --pretty=fuller" ] \
           || (echo "::error::missing-binary fallback did not echo argv (got: $FALLBACK_OUT)" && exit 1)
 
-        echo "==> all 3 smokes pass"
+        echo "==> Smoke 4/4: rendered package.json files are valid JSON"
+        # Catches typos in the heredoc-rendered umbrella package.json
+        # and in the template-substituted platform packages.
+        # node -e exits non-zero on parse error.
+        for f in npm/build/*/package.json; do
+          node -e "JSON.parse(require('fs').readFileSync('$f', 'utf8'))" \
+            || { echo "::error::invalid JSON: $f"; exit 1; }
+        done
+
+        echo "==> all 4 smokes pass"
 
   ci:e2e:run:
     desc: "CI e2e — build target image and run scenarios (usage: TARGET=debian task ci:e2e:run)"
