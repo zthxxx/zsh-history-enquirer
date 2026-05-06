@@ -83,10 +83,12 @@ task build:linux      # build linux/amd64 for e2e
 task build:all        # cross-compile every release target
 task test:unit        # unit tests (no docker)
 task test:e2e         # docker-driven e2e for both libcs
-task lint             # golangci-lint + markdownlint
+task lint             # golangci-lint + go-arch-lint + markdownlint + shellcheck
 task check            # fmt + lint + all tests (incl. e2e)
 task check:fast       # fmt + lint + unit only
 task ci               # run the full CI workflow locally via `act`
+task release:dry-run  # render npm packages without publishing
+task release:smoke    # exec the rendered shim — validates the publish path
 ```
 
 Run a single Go test: `go test ./internal/ui -run TestRender_PointerOnFocused`.
