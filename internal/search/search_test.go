@@ -59,6 +59,79 @@ func TestAndFilter_PreservesOrder(t *testing.T) {
 	require.Equal(t, choices, got)
 }
 
+// TestAndFilter_SpecMandatoryCases pins the exact match table from
+// spec/30-search-and-filter.md so a refactor that changes filter
+// semantics is caught against the documented contract — not just the
+// implementation's preferences.
+func TestAndFilter_SpecMandatoryCases(t *testing.T) {
+	t.Parallel()
+
+	// One choices list shared across cases — represents the kind of
+	// real-world history a user has.
+	choices := []string{
+		"git status",
+		"cd git-repo",
+		"Git Push",
+		"where php",
+		"git stash",
+		"git log",
+		"git log --pretty=fuller --date=iso -n 1",
+	}
+
+	cases := []struct {
+		name         string
+		input        string
+		mustMatch    []string
+		mustNotMatch []string
+	}{
+		{
+			name:         "single token (case-insensitive)",
+			input:        "git",
+			mustMatch:    []string{"git status", "cd git-repo", "Git Push", "git stash", "git log", "git log --pretty=fuller --date=iso -n 1"},
+			mustNotMatch: []string{"where php"},
+		},
+		{
+			name:         "two tokens (AND)",
+			input:        "git st",
+			mustMatch:    []string{"git status", "git stash"},
+			mustNotMatch: []string{"git log", "git log --pretty=fuller --date=iso -n 1"},
+		},
+		{
+			name:         "two tokens, the long entry only",
+			input:        "log iso",
+			mustMatch:    []string{"git log --pretty=fuller --date=iso -n 1"},
+			mustNotMatch: []string{"git log"},
+		},
+		{
+			name:         "case-insensitive uppercase",
+			input:        "LOG ISO",
+			mustMatch:    []string{"git log --pretty=fuller --date=iso -n 1"},
+			mustNotMatch: []string{"git log"},
+		},
+		{
+			name:         "empty input is identity",
+			input:        "",
+			mustMatch:    choices, // every entry passes
+			mustNotMatch: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := AndFilter(choices, Tokenize(tc.input))
+			for _, want := range tc.mustMatch {
+				require.Containsf(t, got, want,
+					"input %q must match %q", tc.input, want)
+			}
+			for _, notWant := range tc.mustNotMatch {
+				require.NotContainsf(t, got, notWant,
+					"input %q must NOT match %q", tc.input, notWant)
+			}
+		})
+	}
+}
+
 func TestProperty_AndFilter_MonotonicInTokens(t *testing.T) {
 	t.Parallel()
 
