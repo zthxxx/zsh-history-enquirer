@@ -19,6 +19,11 @@ pre-commit:
       # shellcheck installed (see Taskfile.yml lint:sh recipe).
       glob: "*.sh"
       run: task lint:sh
+    lint-zsh:
+      # Only fires when the plugin .zsh is staged. Catches a syntax
+      # error in the file every user sources from ~/.zshrc.
+      glob: "*.zsh"
+      run: task lint:zsh
     lint-md:
       glob: "*.md"
       # Fall back to npx if bun isn't on the host. CI uses npx; the

@@ -52,6 +52,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y shellcheck
       - run: task lint:sh
 
+      - name: Install zsh
+        # ubuntu-latest doesn't carry zsh by default; we need it for
+        # the plugin syntax check. The e2e job uses a docker image
+        # that already has zsh, so this only matters for the lint job.
+        run: sudo apt-get install -y zsh
+      - run: task lint:zsh
+
   lint-markdown:
     name: Markdown Lint
     runs-on: ubuntu-latest

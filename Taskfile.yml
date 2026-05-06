@@ -297,6 +297,7 @@ tasks:
       - task: lint:arch
       - task: lint:md
       - task: lint:sh
+      - task: lint:zsh
 
   lint:go:
     desc: Run golangci-lint
@@ -322,6 +323,19 @@ tasks:
           exit 0
         fi
         go-arch-lint check
+
+  lint:zsh:
+    desc: Run zsh -n syntax check on the plugin file
+    cmds:
+      # The plugin file ships to every user — a zsh syntax error
+      # would break Ctrl+R for everyone the moment they update.
+      # `zsh -n` is the parse-only mode (no execution).
+      - |
+        if ! command -v zsh >/dev/null; then
+          echo "zsh not installed; skipping plugin syntax check" >&2
+          exit 0
+        fi
+        zsh -n plugin/zsh-history-enquirer.plugin.zsh
 
   lint:sh:
     desc: Run shellcheck on every release / CI / e2e shell script
