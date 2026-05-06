@@ -170,6 +170,9 @@ cat > "${umbrella}/package.json" <<EOF
   "engines": { "node": ">=18.0.0" },
   "main": "bin/cli.js",
   "bin": { "zsh-history-enquirer": "bin/cli.js" },
+  "scripts": {
+    "postinstall": "node bin/cli.js --print-install-hint || true"
+  },
   "files": [
     "bin/cli.js",
     "plugin/zsh-history-enquirer.plugin.zsh",
