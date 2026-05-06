@@ -311,7 +311,17 @@ tasks:
   lint:arch:
     desc: Run go-arch-lint to enforce package layering
     cmds:
-      - 'command -v go-arch-lint >/dev/null && go-arch-lint check || (echo "go-arch-lint not installed; skipping (run: task setup)" >&2)'
+      # Skip silently if go-arch-lint is missing; otherwise run it
+      # and propagate the exit code. Same fix as lint:sh — the
+      # single-line `&& ... || (echo ...)` chain previously masked
+      # real arch-lint violations by routing them to the 'not
+      # installed' message.
+      - |
+        if ! command -v go-arch-lint >/dev/null; then
+          echo "go-arch-lint not installed; skipping (run: task setup)" >&2
+          exit 0
+        fi
+        go-arch-lint check
 
   lint:sh:
     desc: Run shellcheck on every release / CI shell script
