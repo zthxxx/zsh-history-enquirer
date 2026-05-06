@@ -223,7 +223,7 @@ tasks:
       VERSION: "{{.VERSION | default \"0.0.0-dryrun\"}}"
 
   release:smoke:
-    desc: "Smoke-test the rendered npm shim — verifies cli.js locates the platform binary and execs it."
+    desc: "Smoke-test the rendered npm shim — verifies cli.js locates the platform binary, the --print-install-hint path, and the missing-binary fallback."
     deps: [release:dry-run]
     cmds:
       - |
@@ -236,11 +236,32 @@ tasks:
         cp -R "npm/build/${HOST_PLATFORM}" "$SANDBOX/${HOST_PLATFORM}"
         mkdir -p "$SANDBOX/umbrella/node_modules/@zsh-history-enquirer"
         ln -s "$SANDBOX/${HOST_PLATFORM}" "$SANDBOX/umbrella/node_modules/@zsh-history-enquirer/${HOST_PLATFORM}"
-        echo "==> Smoke-running shim"
+
+        echo "==> Smoke 1/3: shim --version locates platform binary"
         OUT=$(node "$SANDBOX/umbrella/bin/cli.js" --version)
         echo "  shim --version output: $OUT"
         echo "$OUT" | grep -q "zsh-history-enquirer" || (echo "::error::shim did not emit a version line" && exit 1)
-        echo "==> shim works end-to-end"
+
+        echo "==> Smoke 2/3: --print-install-hint prints the source line"
+        HINT_OUT=$(node "$SANDBOX/umbrella/bin/cli.js" --print-install-hint 2>&1)
+        echo "$HINT_OUT" | grep -q "Add this line to your ~/.zshrc" \
+          || (echo "::error::--print-install-hint did not emit the expected hint" && exit 1)
+        echo "$HINT_OUT" | grep -q "plugin/zsh-history-enquirer.plugin.zsh" \
+          || (echo "::error::--print-install-hint did not include the plugin path" && exit 1)
+
+        echo "==> Smoke 3/3: missing-binary fallback echoes argv back"
+        # Move the platform package out of the way to simulate a
+        # broken optionalDependencies resolution (e.g. user on
+        # freebsd, or arm32, etc.). The shim must echo argv back so
+        # the widget's BUFFER=$(...) does not blank user input.
+        rm -rf "$SANDBOX/umbrella/node_modules/@zsh-history-enquirer"
+        FALLBACK_OUT=$(node "$SANDBOX/umbrella/bin/cli.js" "git log --pretty=fuller")
+        # Stdout must contain the user's typed input verbatim — this
+        # is the widget contract enshrined in spec/10.
+        [ "$FALLBACK_OUT" = "git log --pretty=fuller" ] \
+          || (echo "::error::missing-binary fallback did not echo argv (got: $FALLBACK_OUT)" && exit 1)
+
+        echo "==> all 3 smokes pass"
 
   ci:e2e:run:
     desc: "CI e2e — build target image and run scenarios (usage: TARGET=debian task ci:e2e:run)"
