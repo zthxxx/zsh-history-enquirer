@@ -55,6 +55,24 @@ func Open() (*TTY, error) {
 	return &TTY{file: f, savedTerm: saved}, nil
 }
 
+// NewFromFile wraps an already-open *os.File into a TTY. Used by
+// tests that want to drive the picker against a pty pair without
+// going through /dev/tty. Returns nil + error if the fd does not
+// support termios queries.
+//
+// Caller retains ownership of `f` — Close() on the returned TTY
+// will not close `f`.
+func NewFromFile(f *os.File) (*TTY, error) {
+	if f == nil {
+		return nil, fmt.Errorf("nil file")
+	}
+	saved, err := unix.IoctlGetTermios(int(f.Fd()), getTermiosReq)
+	if err != nil {
+		return nil, fmt.Errorf("ioctl GET termios: %w", err)
+	}
+	return &TTY{file: f, savedTerm: saved}, nil
+}
+
 // NewDevTTY is the fx-injected constructor. It registers an OnStop
 // hook that:
 //   - leaves bracketed paste mode (if entered)

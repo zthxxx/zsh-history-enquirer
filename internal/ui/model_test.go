@@ -189,7 +189,8 @@ func TestModel_UpAtTopRotates(t *testing.T) {
 		"Up at top of visible window should rotate the list")
 }
 
-// TestModel_BackspaceShortensInput
+// TestModel_BackspaceOnEmptyInputIsNoOp asserts Backspace with
+// empty Input does not panic or otherwise mutate state.
 func TestModel_BackspaceOnEmptyInputIsNoOp(t *testing.T) {
 	t.Parallel()
 	m := newTestModel("")
