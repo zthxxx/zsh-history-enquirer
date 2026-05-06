@@ -9,17 +9,34 @@ package keys
 
 type Event interface{ event() }
 
-type RuneEvent struct{ R rune }                 // a printable character
-type KeyEvent  struct{ Key Key; Mod Mod }       // arrow, enter, esc, ctrl-x, etc.
-type PasteEvent struct{ Payload string }        // bracketed paste payload, decoded
-type ResizeEvent struct{ Rows, Cols int }       // SIGWINCH
+type RuneEvent   struct{ R rune }              // a printable character
+type KeyEvent    struct{ Key Key }             // arrow, enter, esc, ctrl-x, etc.
+type PasteEvent  struct{ Payload string }      // bracketed paste payload, decoded
+type ResizeEvent struct{ Rows, Cols int }      // SIGWINCH
 
-type Reader interface {
-    // Events returns a channel that produces events until ctx is done
-    // or the underlying reader yields io.EOF.
-    Events(ctx context.Context) <-chan Event
-}
+type Reader struct{ … }
+func NewReader(t *tty.TTY) *Reader
+
+// Events returns a channel that produces events until ctx is done
+// or the underlying reader yields EOF / unrecoverable poll error.
+func (r *Reader) Events(ctx context.Context) <-chan Event
+
+// Prefeed pushes already-consumed bytes through the parser before
+// the reader goroutine starts. Used to replay bytes the cursor
+// probe consumed during a timeout window.
+func (r *Reader) Prefeed(s string) []Event
 ```
+
+`KeyEvent` has only the `Key` field — no `Mod` modifier. zsh's
+`^R` widget contract gives us bare key names (Up, Down, Enter,
+Esc, Ctrl-* combos as named Keys), and modifiers like Shift+Tab
+do not need to be distinguished by the picker. If a future
+feature wants modifiers, it should be added behind a feature flag
+so the simple `Key` shape stays the default.
+
+`Reader` is a struct, not an interface — there's exactly one
+production implementation. Tests use the same type, driving it
+against a `creack/pty` slave (see `reader_test.go`).
 
 ## Why a custom parser, not bubbletea's
 
