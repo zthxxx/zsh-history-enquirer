@@ -120,6 +120,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `cmd/zsh-history-enquirer/main.go` that reconstructs `cfg.Input`
   via `app.NewConfig` and echoes it back to stdout. Three table
   tests pin the (preserves-input, no-args, malformed-argv) cases.
+- **Highlighter produced invalid UTF-8 on Unicode case-fold mismatches.**
+  `highlight()` did `lc := strings.ToLower(s)` and then sliced `s`
+  with byte indices computed against `lc`. For most input this is
+  fine — ASCII A-Z folds 1:1. But for runes whose case-fold changes
+  byte length (Turkish capital `İ` → `i` shrinks 2→1; some
+  expansions grow), `lc[idx:]` and `s[idx:]` no longer point to the
+  same character boundary, and slicing `s` with `lc`'s byte indices
+  emits broken `\xb0...` mojibake to the terminal. Added a length
+  check: when `len(lc) != len(s)` the highlighter falls back to
+  returning the original string unhighlighted (search-match behavior
+  is unaffected because `search.AndFilter` only checks
+  `Contains(lc, t)`). Two regression tests pin the Turkish-İ case.
 - **External kill mid-render left the terminal in raw mode.**
   `Run()` was passed `context.Background()`, which never canceled
   on SIGTERM / SIGHUP. If the user (or another process) sent

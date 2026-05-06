@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 	"pgregory.net/rapid"
@@ -49,6 +50,46 @@ func TestHighlight_NonAdjacentMatchesSeparate(t *testing.T) {
 func TestHighlight_NoMatch(t *testing.T) {
 	t.Parallel()
 	require.Equal(t, "git status", highlight("git status", []string{"xyz"}))
+}
+
+// TestHighlight_UnicodeFoldChangesByteLength pins the regression
+// guard: when strings.ToLower(s) shrinks (or grows) byte length —
+// classic example: Turkish capital İ (U+0130, 2 bytes) folds to
+// "i" (U+0069, 1 byte) — slicing `s` with byte indices computed
+// against the case-folded string produces invalid UTF-8. The
+// highlighter must detect the length divergence and fall back to
+// returning the original string unhighlighted, rather than emitting
+// `\xb0...` mojibake to the terminal.
+func TestHighlight_UnicodeFoldChangesByteLength(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		s    string
+		toks []string
+	}{
+		{"turkish-I-fold", "İSTANBUL", []string{"stan"}},
+		{"turkish-I-prefixed", "AİSTANBUL", []string{"stan"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := highlight(tc.s, tc.toks)
+			// Sanity: must equal the original (no SGR codes added)
+			// because byte-offset slicing is unsafe here.
+			require.Equal(t, tc.s, got, "fallback should return %q unmodified", tc.s)
+			// Sanity: must be valid UTF-8 (no byte-mangling).
+			require.True(t, utf8.ValidString(got), "highlight produced invalid UTF-8: %q", got)
+		})
+	}
+}
+
+// TestHighlight_AsciiPathStillHighlights — make sure the Unicode
+// fallback didn't accidentally break the common-case ASCII path.
+func TestHighlight_AsciiPathStillHighlights(t *testing.T) {
+	t.Parallel()
+	got := highlight("Git Log", []string{"git"})
+	require.Equal(t, "\x1b[1;36mGit\x1b[0m Log", got,
+		"ASCII still hits the SGR-wrap path despite the Unicode guard")
 }
 
 // TestProperty_Highlight_Idempotent: running highlight twice with the

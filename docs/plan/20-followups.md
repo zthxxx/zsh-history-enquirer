@@ -25,6 +25,25 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — Highlighter emitted invalid UTF-8 on Unicode
+  case-fold mismatches. The match-detection layer (`search.AndFilter`)
+  is correct because it only checks `strings.Contains(lc, t)`. But
+  `highlight()` was using `strings.Index(lc, t)` to locate spans and
+  then slicing `s` with those byte indices to wrap them in SGR codes.
+  For runes whose ToLower changes byte length (Turkish `İ` (2B) →
+  `i` (1B); some expansions grow), `lc`'s byte indices no longer
+  point to character boundaries in `s` — slicing `s` produces broken
+  `\xb0...` partial-rune mojibake that gets written verbatim to the
+  terminal. Added a `len(lc) != len(s)` guard in
+  `internal/ui/render.go:highlight` that falls back to returning the
+  original string unhighlighted (cosmetic-only fallback; the user
+  still sees their match, just without bold-cyan markup). Two
+  regression tests pin Turkish-İ; the existing `[a-z]` rapid property
+  unaffected. The "real" fix (parallel byte-offset map between lc
+  and s) is more code than this is worth — the failure mode is
+  intermittent, only the rendering is broken, and a fallback to "no
+  highlight" is genuinely fine.
+
 * **2026-05-07** — Third widget-contract gap surfaced under critical
   scrutiny: `Run()` received `context.Background()`, which is never
   canceled, even on SIGTERM / SIGHUP. If the user sent

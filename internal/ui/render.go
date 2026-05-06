@@ -151,6 +151,18 @@ func highlight(s string, tokens []string) string {
 	}
 
 	lc := strings.ToLower(s)
+	// strings.ToLower can change byte length for some Unicode runes
+	// (Turkish 'İ' → 'i' loses one byte; the ToLower implementation
+	// also has expanding cases). When that happens, byte indices into
+	// `lc` no longer point to character boundaries in `s`, and slicing
+	// `s` with them would emit invalid UTF-8 to the terminal. The
+	// highlight is purely cosmetic, so when the case-fold reshapes
+	// byte offsets we fall back to returning the original string
+	// unhighlighted — match-detection in `search.AndFilter` already
+	// handled the lookup correctly; we just don't draw the SGR codes.
+	if len(lc) != len(s) {
+		return s
+	}
 	type span struct{ start, end int }
 	var spans []span
 	for _, t := range tokens {
