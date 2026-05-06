@@ -34,10 +34,18 @@ jobs:
 
       - name: Install golangci-lint
         run: |
+          # v2.12+ is built with Go 1.25; older 2.x versions refuse
+          # to load against a go.mod targeting 1.25 ("Go language
+          # version used to build golangci-lint is lower than the
+          # targeted Go version").
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
-            | sh -s -- -b "$(go env GOPATH)/bin" v2.1.6
+            | sh -s -- -b "$(go env GOPATH)/bin" v2.12.2
+
+      - name: Install go-arch-lint
+        run: go install github.com/fe3dback/go-arch-lint@latest
 
       - run: task ci:lint:go
+      - run: task lint:arch
 
   lint-markdown:
     name: Markdown Lint

@@ -157,7 +157,7 @@ linters:
       # is fine for them and keeping them open-by-tail-friendly is
       # the whole point. The path comes from the user's own env var,
       # so G304 / G703 path-traversal warnings are noise.
-      - path: 'internal/app/run.go'
+      - path: 'internal/app/(run|debug)\.go'
         text: 'G302:|G304:|G703:|G104:'
         linters:
           - gosec
