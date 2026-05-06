@@ -28,9 +28,10 @@ The Go binary shall:
 | concern | contract |
 | --- | --- |
 | **input** | `argv[1..]` joined with `' '` is the initial search input (i.e. the contents of `$LBUFFER` at invocation). |
-| **stdout** | exactly one line: the chosen history entry, or — on cancel — the original input. No trailing newline beyond what `BUFFER=$(...)` will strip. |
+| **stdout** | exactly one line: the chosen history entry, or — on cancel — the original input, or — on hard error — the original input. No trailing newline beyond what `BUFFER=$(...)` will strip. |
 | **stderr** | reserved for diagnostics; never appears in `$BUFFER`. |
-| **exit code** | `0` on submit *and* on cancel. A non-zero exit code aborts `BUFFER=$(...)` and loses the user's typed input — see [legacy gotcha §2](../design/30-tty.md). |
+| **exit code** | `0` on submit, on cancel, on probe / load failure, and on every other code path. A non-zero exit code aborts `BUFFER=$(...)` and loses the user's typed input — see [legacy gotcha §2](../design/30-tty.md). |
+| **kill signals** | SIGINT / SIGTERM / SIGHUP delivered externally must restore the terminal (leave raw mode, leave bracketed paste, show cursor) before the process exits, even if mid-render. The internal Ctrl-C arrives as the byte `0x03` because raw mode disables ISIG and is parsed as `KeyCtrlC` by `internal/keys`. |
 | **interactive output** | written to `/dev/tty` directly, never to stdout, since stdout is a pipe under `$(…)` command substitution. |
 | **interactive input** | read from `/dev/tty` directly when stdin is not a TTY. |
 
@@ -44,3 +45,17 @@ The Go binary shall:
 - A user who pastes into the picker, then hits <kbd>Esc</kbd>, gets back
   *exactly* what was on `LBUFFER` before they pressed <kbd>Ctrl</kbd>+<kbd>R</kbd>.
   This invariant is the cornerstone of the cancel-preserves-input UX.
+- The "input is preserved" guarantee extends across **every** failure
+  surface, including ones that have nothing to do with the picker UI:
+  - missing platform binary (npm shim — see `npm/packages/zsh-history-enquirer/bin/cli.js`)
+  - hard error inside `Run()` — raw-mode entry / geometry read
+    (handled by `preserveOnError` in `internal/app/module.go`)
+  - fx-provider startup failure — `/dev/tty` unopenable in a headless
+    container (handled by `recoverStartFailure` in
+    `cmd/zsh-history-enquirer/main.go`)
+  - external `kill -TERM <pid>` mid-render (handled by the
+    `signal.NotifyContext`-wrapped `runCtx` in `invokeRun`)
+  
+  All four paths funnel through the same conceptual rule: if the user
+  typed something into `$LBUFFER`, that string is what `BUFFER=$(...)`
+  must capture, no matter what went wrong inside the binary.
