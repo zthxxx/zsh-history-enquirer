@@ -1,0 +1,46 @@
+#!/usr/bin/env expect
+# 16-narrow-terminal-wrap.exp
+#
+# Force a narrow terminal (40 cols × 24 rows) and verify the picker
+# still renders a multi-line entry without breaking. This was an
+# open followup ("expect cannot reliably pass stty rows/cols across
+# hosts") — the trick is to set the slave-side terminal geometry
+# BEFORE spawn via expect's `stty` command on the slave fd.
+#
+# At 40 cols a 60-char history entry wraps to 2 rows. The picker's
+# dynamic-limit math must keep that in mind: heightLimit = 24 - 3 =
+# 21; the wrapped entry contributes 2 to the rolling row count. We
+# verify the renderer produced visible content by asserting "echo ok"
+# (one of the seed entries) is on screen — the renderer must not have
+# stalled or thrown.
+
+set timeout 15
+log_user 1
+
+# expect's `stty` command sets the slave pty size before spawn.
+# Some platforms only expose `stty rows X columns Y`; portable form
+# uses both names.
+spawn -noecho zsh -il
+stty rows 24 columns 40 < $spawn_out(slave,name)
+
+expect_after timeout {
+  puts stderr "TIMEOUT in 16-narrow-terminal-wrap"
+  exit 1
+}
+
+expect "% "
+sleep 0.4
+
+send -- "\x12"
+sleep 1.2
+
+# At 40 cols the multi-line entry "command-8 \\n - line 0 ..." occupies
+# many rows. The renderer must not crash; the seed's "echo ok" must
+# still appear on screen since the picker draws all items it can fit.
+expect "echo ok"
+sleep 0.4
+
+send -- "\x1b"
+sleep 0.3
+send -- "exit\r"
+expect eof

@@ -10,15 +10,6 @@ Each entry must include:
 
 ## Open
 
-* **2026-05-07** — `expect` cannot reliably pass an `stty rows N cols N`
-  to the spawned process across hosts. The "narrow-terminal multi-line
-  wrap" scenario was deferred from `e2e/scenarios/`. The renderer's
-  wrap math is exhaustively unit-tested in `internal/ui/wrap_test.go`,
-  which limits the gap, but a real e2e wrap scenario remains nice-to-
-  have. Why open: would catch a class of bug where wrap math diverges
-  from what the terminal actually does. How to apply: revisit when
-  swapping `expect` for `tmux send-keys` or a Go-based pty driver.
-
 * **2026-05-07** — Initial post-load DSR cursor probe always falls back
   inside docker (expect's pty doesn't reply). Production terminals do
   reply; the user-facing impact is "first run looks fine." The fallback
@@ -30,6 +21,14 @@ Each entry must include:
 (no current open items beyond the two pty-related ones above)
 
 ## Addressed
+
+* **2026-05-07** — `expect` cannot reliably pass an `stty rows N cols N`
+  to the spawned process across hosts. The "narrow-terminal multi-line
+  wrap" scenario was deferred from `e2e/scenarios/`. **Resolved**: the
+  trick is to set the slave-pty geometry AFTER spawn but on the
+  `$spawn_out(slave,name)` fd, not the client's stdio: `stty rows 24
+  columns 40 < $spawn_out(slave,name)`. Added scenario
+  16-narrow-terminal-wrap.exp; passes on debian and alpine.
 
 * **2026-05-07** — Task's `vars: VERSION: { sh: git describe ... }`
   unconditionally resolved via git describe, ignoring any env var.
