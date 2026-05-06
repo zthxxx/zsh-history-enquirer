@@ -334,13 +334,13 @@ func TestProperty_Parser_ChunkBoundaryInvariance(t *testing.T) {
 // Standard `go test` runs each seed once as a regression check.
 func FuzzParser_NoPanicOnArbitraryBytes(f *testing.F) {
 	// Seed corpus: real-world tricky inputs we've debugged in the past.
-	f.Add([]byte("\x1b[200~\x03cd\x1b[201~"))      // paste with embedded ^C
-	f.Add([]byte("\x1b[12;34R"))                    // DSR response
-	f.Add([]byte("\x1b\x1b\x1b"))                   // triple ESC
-	f.Add([]byte{0x00, 0x01, 0x02, 0x03})           // raw control bytes
-	f.Add([]byte("\xc0\xc1\xc2"))                   // invalid UTF-8 leads
-	f.Add([]byte("\x1b["))                          // bare CSI prefix
-	f.Add([]byte("\x1b[200~"))                      // paste-start with no end
+	f.Add([]byte("\x1b[200~\x03cd\x1b[201~"))        // paste with embedded ^C
+	f.Add([]byte("\x1b[12;34R"))                     // DSR response
+	f.Add([]byte("\x1b\x1b\x1b"))                    // triple ESC
+	f.Add([]byte{0x00, 0x01, 0x02, 0x03})            // raw control bytes
+	f.Add([]byte("\xc0\xc1\xc2"))                    // invalid UTF-8 leads
+	f.Add([]byte("\x1b["))                           // bare CSI prefix
+	f.Add([]byte("\x1b[200~"))                       // paste-start with no end
 	f.Add([]byte{0x80, 0x80, 0x80, 0x80, 0x80, 'a'}) // continuation bytes + ASCII
 
 	f.Fuzz(func(_ *testing.T, b []byte) {
