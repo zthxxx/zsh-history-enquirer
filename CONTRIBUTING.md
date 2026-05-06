@@ -23,13 +23,16 @@ that doesn't make `^R` better is out of scope.
 
 ## Prerequisites
 
-- Go ≥ 1.24 (toolchain handles 1.26.2).
+- Go ≥ 1.25 (the `go.uber.org/fx@v1.24` dependency forces this; the
+  same version is pinned in `.github/workflows/ci.yml`).
 - Docker (for e2e; tests under `internal/**` do NOT require Docker).
 - [`task`](https://taskfile.dev) — run `brew install go-task` or
   `go install github.com/go-task/task/v3/cmd/task@latest`.
 - Optional: [`act`](https://github.com/nektos/act) for local CI parity.
 
-Run `task setup` to install the rest (`golangci-lint`, `goimports`,
+Run `task setup` to install the rest (`golangci-lint@v2.12.2` —
+matches CI; older versions are built against Go 1.24 and refuse to
+load against the project's `go 1.25.0` go.mod, plus `goimports`,
 `go-arch-lint`, `lefthook`).
 
 ## Workflow
@@ -51,9 +54,12 @@ CI runs.
   (`feat/foo`, `fix/bar/baz`); the CI's `on: push: branches: '**'`
   matches them.
 - [Conventional Commits](https://www.conventionalcommits.org/).
-  `commitlint` runs in `pre-commit` via `lefthook`, so a typo in the
-  message will fail before push. The valid types are
+  `commitlint` runs in the `commit-msg` hook via `lefthook`, so a
+  typo in the message fails the commit before it's recorded (no
+  push needed). The valid types are
   `feat / fix / chore / docs / refactor / test / ci / build / perf`.
+  The pre-commit hook (separate) runs `task fmt`, `task lint:go`,
+  `markdownlint-cli2`, and `task test:unit`.
 
 ## Spec → Design → Plan
 
