@@ -37,10 +37,14 @@ const PointerWidth = 2
 //     than under-estimating: we draw one fewer match instead of
 //     overflowing).
 //
-// `len()` is taken in bytes; for ASCII text that equals cells. The
-// approximation is wrong for wide CJK glyphs (which take 2 cells but
-// only 1 rune-byte) but the legacy implementation uses the same
-// approximation and we want behavioural parity.
+// We count *runes* (utf8.RuneCountInString) rather than bytes. For
+// ASCII this equals cells exactly. For CJK it slightly under-counts
+// (a CJK glyph takes 2 cells but is 1 rune); for mixed text the
+// estimate is between cell-true and rune-true. This matches the
+// legacy Node.js implementation's behaviour (JS `String.length`
+// counts UTF-16 code units, which approximates runes for the BMP)
+// — both ports occasionally show one extra match on lines that
+// would just barely overflow if cells were counted exactly.
 func WrappedRowCount(text string, cols int) int {
 	if cols <= 0 {
 		return 1
