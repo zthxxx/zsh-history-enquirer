@@ -38,15 +38,21 @@ load against the project's `go 1.25.0` go.mod, plus `goimports`,
 ## Workflow
 
 ```bash
-task check:fast       # fmt + lint (go + arch + md) + unit tests
+task check:fast       # fmt + lint (go + arch + md + sh) + unit tests
 task check            # the above + e2e in Docker
 task test:e2e         # e2e on debian + alpine
 task test:e2e:one TARGET=debian   # one target only
 task lint:go:fix      # auto-fix the auto-fixable
+task release:dry-run  # render npm packages locally without publishing
+task release:smoke    # exec the rendered shim to validate the publish flow
 ```
 
 `task check:fast` is the standard pre-PR loop. `task check` is what
-CI runs.
+CI runs. Touch the release pipeline (`scripts/release/*` or
+`scripts/ci/bump-homebrew-tap.sh`)? Run `task release:smoke` —
+the 3-stage validation catches regressions in the umbrella
+shim's --version, --print-install-hint, and missing-binary
+fallback paths.
 
 ## Branching + commits
 
