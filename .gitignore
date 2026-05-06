@@ -5,6 +5,11 @@
 /coverage.out
 /coverage.html
 
+# Stray top-level binary from a `go build ./cmd/...` invocation.
+# Canonical builds go to /bin/ via Taskfile; this catches the
+# default-output case so the file never gets accidentally tracked.
+/zsh-history-enquirer
+
 # Go binaries on host
 *.exe
 *.exe~

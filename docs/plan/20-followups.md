@@ -25,6 +25,19 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — Widget contract had a SECOND uncovered gap: even
+  with `preserveOnError` patched in inside `app.Module.invokeRun`,
+  the safety net does not fire if fx itself fails to start (e.g.
+  `tty.NewDevTTY` returns an error because `/dev/tty` is unopenable).
+  In that case `invokeRun` is never called and the binary exits
+  without writing to stdout — `BUFFER=$(...)` blanks `$LBUFFER`
+  identically to the previously-fixed early-Run-error case. Added
+  `recoverStartFailure` in `cmd/zsh-history-enquirer/main.go` that
+  reconstructs `cfg.Input` via `app.NewConfig` and writes it back to
+  stdout when `a.Start()` returns an error. Three table tests
+  (PreservesInputOnArgs, NoArgsLeavesStdoutEmpty, TolerantOfBadArgs)
+  pin the contract.
+
 * **2026-05-07** — Widget contract had a latent gap on hard
   early-error paths in the binary. The npm shim correctly echoed
   argv back when the platform sub-package was missing, but if the

@@ -112,6 +112,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   empty string and ate the user's typed `$LBUFFER`. Added
   `preserveOnError` which synthesizes a result from `cfg.Input` so
   the widget contract holds even on early-error paths.
+- **`BUFFER=$(...)` also blanked input on fx-provider failures.**
+  When `/dev/tty` was unopenable in a headless container, the fx
+  provider for `tty.NewDevTTY` returned an error during `app.Start`
+  — `invokeRun` never ran, so `preserveOnError` never had a chance
+  to fire. Added a top-level safety net `recoverStartFailure` in
+  `cmd/zsh-history-enquirer/main.go` that reconstructs `cfg.Input`
+  via `app.NewConfig` and echoes it back to stdout. Three table
+  tests pin the (preserves-input, no-args, malformed-argv) cases.
 
 ### Distribution
 
