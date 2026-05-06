@@ -9,84 +9,105 @@ The widget invokes the binary inside `BUFFER=$(zsh-history-enquirer "$LBUFFER")`
 which makes:
 
 - stdout: pipe back to zsh — **not a TTY**.
-- stderr: still a TTY, but using it for UX is bad form (script wrappers
-  often redirect it).
+- stderr: still a TTY, but using it for UX is bad form (script
+  wrappers often redirect it).
 
-We need a **bidirectional handle on the controlling terminal**, so we
-open `/dev/tty` ourselves with `O_RDWR | O_CLOEXEC`. Both reads (key
-input) and writes (escapes, frames) go through this fd.
+We need a **bidirectional handle on the controlling terminal**, so
+we open `/dev/tty` ourselves. Both reads (key input) and writes
+(escapes, frames) go through this fd.
 
 ```go
 package tty
 
 type TTY struct {
-    fd     int
-    file   *os.File   // wraps fd for io.Reader/Writer
-    saved  *unix.Termios
-    closed bool
+    file       *os.File       // wraps the /dev/tty fd
+    savedTerm  *unix.Termios  // termios snapshot for restore
+    rawEntered bool           // true while raw mode is active
 }
 
+func Open() (*TTY, error)
+func NewFromFile(f *os.File) (*TTY, error)
 func NewDevTTY(lc fx.Lifecycle) (*TTY, error)
 ```
 
-The constructor:
+`Open` is the bare opener used outside fx. `NewDevTTY` is the
+fx-injected constructor that registers an OnStop. `NewFromFile`
+wraps an already-open `*os.File` into a TTY — used by tests
+driving a `creack/pty` slave.
 
-1. `unix.Open("/dev/tty", O_RDWR|O_CLOEXEC, 0)` — gets the fd.
-2. `unix.IoctlGetTermios(fd, TCGETS)` — saves the original termios.
-3. Registers an `lc.OnStop` hook that restores termios + close fd.
+The fx-bound constructor's hook:
+
+1. If raw mode was entered, calls `LeaveRaw()` to restore the
+   original termios (also disables bracketed paste).
+2. Closes the `/dev/tty` fd.
+
+`Close()` is idempotent: a second call is a no-op so error paths
+that already cleaned up don't double-restore.
 
 ## Raw mode
 
-Raw mode is entered explicitly by `(*TTY).EnterRaw()`:
+`(*TTY).EnterRaw()` mutates the termios:
 
 - `cflag |= CS8`
-- `lflag &^= ICANON | ECHO | ISIG | IEXTEN` (no canonical, no local
-  echo, no signal generation, no extended)
+- `lflag &^= ICANON | ECHO | ISIG | IEXTEN` — no canonical mode,
+  no local echo, no signal generation, no extended.
 - `iflag &^= IXON | ICRNL | IGNCR | INLCR | ISTRIP | INPCK | BRKINT`
-- `oflag &^= OPOST` (no postprocessing → newline becomes `\n`, not `\r\n`)
+- `oflag &^= OPOST` — no post-processing; newline stays `\n`.
 - `cc[VMIN] = 1; cc[VTIME] = 0`
 
-Crucially we keep `ISIG` *off* in raw mode, because we want to handle
-<kbd>Ctrl</kbd>+<kbd>C</kbd> ourselves — its byte (0x03) becomes a
-key event we translate into "cancel" rather than a signal that kills
-the process.
+Crucially we keep `ISIG` **off** in raw mode, because we want to
+handle <kbd>Ctrl</kbd>+<kbd>C</kbd> ourselves — its byte (`0x03`)
+becomes a key event the picker translates into "cancel" rather
+than a signal that kills the process before we can write the
+input back to stdout.
 
 ## DSR cursor query
 
 ```go
 package tty
 
-// Probe queries the terminal for its current cursor position.
 type Probe struct{ tty *TTY }
 
+func NewProbe(t *TTY) *Probe
 func (p *Probe) Cursor(ctx context.Context, timeout time.Duration) (row, col int, err error)
 ```
 
 Implementation:
 
-1. Write `[6n`.
-2. Read until `R` is encountered, with the deadline set on the fd via
-   `SetReadDeadline` (works because we wrap the fd in `os.File`).
-3. Parse `[<row>;<col>R`. 1-indexed → subtract 1 internally.
-4. Return.
+1. Write `\e[6n` to the TTY.
+2. Drive a read loop with `unix.Poll` honouring an absolute
+   timeout. The poll-with-timeout path is required because
+   `os.File.SetReadDeadline` is **unreliable on /dev/tty in
+   docker's pty emulation** — some kernels block past the
+   deadline. `unix.Poll` honours its timeout byte-for-byte
+   regardless of the file's blocking mode.
+3. Parse `\e[<row>;<col>R`. 1-indexed in the protocol.
+4. Return any bytes consumed past the response as `Leftover` on
+   a `*tty.TimeoutError` so the caller can replay them through
+   the keystream parser (see `keys.Reader.Prefeed`).
 
-The probe **must** run after raw mode is entered, otherwise the
-terminal's line discipline echoes the response and corrupts the next
-line.
+The probe **must** run after raw mode is entered; otherwise the
+terminal's line discipline echoes the response and corrupts the
+next read.
 
 ## Bracketed paste
 
-Enabled at startup by writing `\e[?2004h`, disabled at shutdown via
-the lifecycle hook (`\e[?2004l`). The byte stream parser then sees
-`\e[200~` and `\e[201~` markers around pastes — see `internal/keys`.
+Enabled at startup by writing `\e[?2004h`, disabled by `LeaveRaw`
+(`\e[?2004l`). The byte stream parser then sees `\e[200~` and
+`\e[201~` markers around pastes — see [design/40-keys](./40-keys.md).
 
 ## Tests
 
-- A `tty.MemoryTTY` is provided for unit tests of UI logic. It
-  implements the same `Reader/Writer/Probe` surface but stores
-  written bytes in a `bytes.Buffer` and serves reads from a scripted
-  channel.
-- A `creack/pty`-based test spawns a master/slave pair, sets the slave
-  as the test's `/dev/tty`, and exercises real DSR + bracketed paste.
+- `internal/tty/tty_test.go`: unit-tests TTY against a `creack/pty`
+  slave via `NewFromFile`. Catches Close-twice safety, raw-mode
+  enter/leave, geometry queries.
+- `internal/tty/raw_test.go` and `cursor_test.go`: drive the DSR
+  probe end-to-end through a pty pair — write the query on the
+  slave side, write a canned `\e[<row>;<col>R` from the master
+  goroutine, assert the parsed result.
 
-The unit tests must not touch a real terminal — CI runs without one.
+There is no in-memory `MemoryTTY` mock; tests use real pty pairs
+because the value-add of the mock would mostly be in fields the
+production code does not actually depend on. Tests run without a
+controlling terminal because the pty slave is what we read from,
+not /dev/tty.
