@@ -198,6 +198,36 @@ tasks:
     requires:
       vars: [VERSION]
 
+  release:dry-run:
+    desc: "Dry-run the release pipeline locally (build all platforms, render npm packages, do NOT publish)."
+    deps: [build:all]
+    cmds:
+      - bash scripts/release/build-npm.sh "{{.VERSION}}"
+      - echo "==> Inspect npm/build/ for the rendered packages"
+      - ls -la npm/build/
+    vars:
+      VERSION: "{{.VERSION | default \"0.0.0-dryrun\"}}"
+
+  release:smoke:
+    desc: "Smoke-test the rendered npm shim — verifies cli.js locates the platform binary and execs it."
+    deps: [release:dry-run]
+    cmds:
+      - |
+        set -e
+        SANDBOX=$(mktemp -d)
+        trap "rm -rf '$SANDBOX'" EXIT
+        cp -R npm/build/zsh-history-enquirer "$SANDBOX/umbrella"
+        # Use the host platform's package.
+        HOST_PLATFORM=$(node -p "({darwin: 'darwin', linux: 'linux'}[process.platform] || 'linux') + '-' + ({arm64: 'arm64', x64: 'amd64'}[process.arch] || 'amd64')")
+        cp -R "npm/build/${HOST_PLATFORM}" "$SANDBOX/${HOST_PLATFORM}"
+        mkdir -p "$SANDBOX/umbrella/node_modules/@zsh-history-enquirer"
+        ln -s "$SANDBOX/${HOST_PLATFORM}" "$SANDBOX/umbrella/node_modules/@zsh-history-enquirer/${HOST_PLATFORM}"
+        echo "==> Smoke-running shim"
+        OUT=$(node "$SANDBOX/umbrella/bin/cli.js" --version)
+        echo "  shim --version output: $OUT"
+        echo "$OUT" | grep -q "zsh-history-enquirer" || (echo "::error::shim did not emit a version line" && exit 1)
+        echo "==> shim works end-to-end"
+
   ci:e2e:run:
     desc: "CI e2e — build target image and run scenarios (usage: TARGET=debian task ci:e2e:run)"
     cmds:
