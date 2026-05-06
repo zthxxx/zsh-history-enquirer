@@ -68,6 +68,32 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - Reader goroutine no longer leaks past `ctx.Done()`; the
   byte-reader and event-dispatcher are now a single goroutine
   driven by `unix.Poll` with a 100 ms tick.
+- **Vi-mode `^R` regression** — the legacy plugin only bound `^R`
+  in the default keymap, so vi-mode users lost the picker after
+  pressing Esc to enter `vicmd`. Now bound in emacs/viins/vicmd
+  explicitly.
+- **Plugin fallback no longer mutates keymaps** — uses
+  `zle .history-incremental-search-backward` to invoke the builtin
+  widget directly rather than swapping `bindkey '^R'` around the
+  call (which left transient inconsistent state across keymaps).
+- **`npm install` shipped a stale plugin file** — the npm umbrella
+  source had its own copy of `plugin/zsh-history-enquirer.plugin.zsh`
+  that wasn't kept in sync with the project root. Removed; the
+  build script now copies from the project root each release.
+- **Homebrew install was missing the plugin file** — the formula's
+  `def install` only installed the binary, but the README's
+  `source $(brew --prefix)/share/zsh-history-enquirer/plugin.zsh`
+  pointed at a path that didn't exist. The formula now declares
+  a `resource "plugin"` and stages it into pkgshare.
+- **NPM LICENSE was a 2-line stub** — both umbrella and per-platform
+  LICENSE files now ship the canonical MIT text, satisfying license-
+  compliance scanners (Snyk / FOSSA / BlackDuck).
+- **`BUFFER=$(...)` blanked user input on missing platform binary**
+  — the npm shim now echoes argv back to stdout when no platform
+  sub-package resolves, preserving the widget contract.
+- **`VERSION=v2.0.0 task release:dry-run` ignored the env override**
+  — Task's `vars: VERSION: { sh: ... }` always resolved via git
+  describe. The local override now works.
 
 ### Distribution
 
