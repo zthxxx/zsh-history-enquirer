@@ -298,6 +298,7 @@ tasks:
       - task: lint:md
       - task: lint:sh
       - task: lint:zsh
+      - task: lint:js
 
   lint:go:
     desc: Run golangci-lint
@@ -336,6 +337,19 @@ tasks:
           exit 0
         fi
         zsh -n plugin/zsh-history-enquirer.plugin.zsh
+
+  lint:js:
+    desc: Run node --check syntax check on the npm shim
+    cmds:
+      # cli.js ships to every npm-installed user. A syntax error
+      # here breaks `npm install -g zsh-history-enquirer` and the
+      # widget's BUFFER=$(...) call. `node --check` is parse-only.
+      - |
+        if ! command -v node >/dev/null; then
+          echo "node not installed; skipping cli.js syntax check" >&2
+          exit 0
+        fi
+        node --check npm/packages/zsh-history-enquirer/bin/cli.js
 
   lint:sh:
     desc: Run shellcheck on every release / CI / e2e shell script

@@ -24,6 +24,11 @@ pre-commit:
       # error in the file every user sources from ~/.zshrc.
       glob: "*.zsh"
       run: task lint:zsh
+    lint-js:
+      # Only fires when cli.js is staged. Catches a syntax error
+      # in the npm shim that ships to every user.
+      glob: "**/cli.js"
+      run: task lint:js
     lint-md:
       glob: "*.md"
       # Fall back to npx if bun isn't on the host. CI uses npx; the

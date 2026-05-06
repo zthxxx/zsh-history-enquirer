@@ -59,6 +59,11 @@ jobs:
         run: sudo apt-get install -y zsh
       - run: task lint:zsh
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: task lint:js
+
   lint-markdown:
     name: Markdown Lint
     runs-on: ubuntu-latest
