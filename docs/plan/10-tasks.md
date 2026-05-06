@@ -65,11 +65,12 @@ idempotent action.
 ## P7. E2E
 
 - [x] `e2e/{debian,alpine}/Dockerfile`: zsh + expect
-- [x] `e2e/scenarios/*.exp`: 5 scenarios — basic-pick, multi-line-scroll,
-      cancel-preserves-input, multi-word-search, paste-bracketed
+- [x] `e2e/scenarios/*.exp`: 8 scenarios — basic-pick, multi-line-scroll,
+      cancel-preserves-input, multi-word-search, paste-bracketed,
+      pageup-pagedown, home-end, prefilter-from-lbuffer
 - [x] `e2e/run.sh`: scenario runner with fresh per-test state
 - [x] `task ci:e2e:run`: one-liner shared with CI
-- [x] Both targets pass: `summary: 5 passed, 0 failed`
+- [x] Both targets pass: `summary: 8 passed, 0 failed`
 
 ## P8. Polish
 

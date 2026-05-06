@@ -27,6 +27,21 @@ Each entry must include:
   only matters for tests. How to apply: don't try to fix it for
   expect — the renderer's correctness is verified at the model layer.
 
+* **2026-05-07** — `End` semantics interact subtly with the dynamic-
+  limit math when multi-line entries are involved. The current model
+  (matching the legacy Node.js port) rotates by the *previous*
+  render's limit and sets `Idx = limit - 1`. If the post-rotation
+  visible window contains a multi-line entry, the renderer's
+  recomputed limit can shrink, which clamps `Idx` to `newLimit - 1`
+  and the focus may not land on the actual last match. Why open: the
+  legacy port shipped with this same behavior and users have lived
+  with it for years; fixing it is a UX refinement, not a regression.
+  How to apply: rewrite `scrollToEnd` to do an iterative rotation
+  search that produces a layout where the last filtered entry sits
+  at the bottom of the eventual visible window. E2E scenario 07 has
+  been narrowed to assert `Home` only; an `End` follow-up scenario
+  should be added once the model is fixed.
+
 ## Addressed
 
 * **2026-05-07** — Two anonymous `func() io.Writer` providers in fx
@@ -42,3 +57,17 @@ Each entry must include:
   state of fast bursts (paste, fast-typed multi-char input). Added a
   `trailingFlush` timer in `internal/app/run.go`. Resolved in the
   e2e-harness commit.
+
+* **2026-05-07** — `t.Size()` (TIOCGWINSZ) returned `(0, 0)` inside
+  docker's pty when expect created the slave without SIGWINCH ever
+  firing. `heightLimit` then clamped to 1 and PageDown was
+  effectively a single arrow-down. Run() now falls back to 24x80 if
+  `t.Size()` reports zero. Resolved in the
+  test(e2e):+pageup/pagedown commit.
+
+* **2026-05-07** — `--version` printed nothing in environments where
+  `/dev/tty` is unusable (Claude Code's bash tool, CI without `-t`),
+  because the eager `tty.NewDevTTY` provider failed and fx silently
+  swallowed the start error. Detect `--version`/`-version` directly
+  in `main.go` before `fx.New` runs. Resolved in the
+  fix:short-circuit-version commit.
