@@ -22,6 +22,54 @@ Each entry must include:
 
 ## Addressed
 
+* **2026-05-07** — Homebrew formula installed only the binary, not
+  the plugin file. The README and the formula's caveats both
+  pointed at `$(brew --prefix)/share/zsh-history-enquirer/plugin.zsh`,
+  but `def install` did `bin.install Dir["zsh-history-enquirer-*"].first`
+  and nothing else. Fixed in three coordinated places:
+  (1) `task ci:release:package` now copies plugin/zsh-history-enquirer.plugin.zsh
+      into release/ alongside the binaries (and lists it in checksums.txt);
+  (2) the formula now declares a `resource "plugin"` block pointing
+      at the same GitHub Release;
+  (3) `def install` stages the resource into pkgshare as plugin.zsh.
+  Plus a migration guard: if an existing tap formula has no
+  `resource "plugin"`, regenerate the file from the template instead
+  of just bumping versions. Resolved in this iteration's commits.
+
+* **2026-05-07** — npm umbrella + per-platform packages shipped a
+  one-line stub LICENSE pointing back at GitHub. Downstream
+  license-compliance scanners (Snyk, FOSSA, BlackDuck, ...) read
+  the LICENSE file directly and would mark the package as
+  license-unclear. Replaced both LICENSE files with the full MIT
+  text from the project root. The build script now sources the
+  umbrella's LICENSE from project root for the same single-source-
+  of-truth reason as plugin.zsh. Resolved in this iteration's
+  commits.
+
+* **2026-05-07** — `npm/packages/zsh-history-enquirer/plugin/zsh-history-enquirer.plugin.zsh`
+  was a stale duplicate of the project-root `plugin/zsh-history-enquirer.plugin.zsh`.
+  When the project-root file was fixed in the keymap commit, the npm
+  copy was NOT updated, so `npm install -g zsh-history-enquirer`
+  users would have received the broken plugin. Removed the duplicate;
+  build-npm.sh now copies from the project root. Resolved in this
+  iteration's commits.
+
+* **2026-05-07** — `task setup` pinned golangci-lint@v2.1.6 — built
+  against Go 1.24, refused to load against go.mod's `go 1.25.0`.
+  CI was already on v2.12.2; `task setup` got missed during that
+  bump. A fresh contributor running `task setup` would hit
+  `ERRO Running error: go-version: invalid Go version` and get
+  stuck. Bumped `task setup` to v2.12.2 with an inline comment
+  explaining why the version matters. Resolved in this iteration's
+  commit.
+
+* **2026-05-07** — `scripts/release/build-npm.sh` had `rm -rf "${BUILD}"/*`.
+  shellcheck flagged this (SC2115): if `${BUILD}` is ever empty,
+  the shell expands to `rm -rf /*` — catastrophic. Added the `:?`
+  guard. Plus wired shellcheck into `task lint:sh` and the CI lint
+  job so future regressions are caught. Resolved in this iteration's
+  commits.
+
 * **2026-05-07** — `expect` cannot reliably pass an `stty rows N cols N`
   to the spawned process across hosts. The "narrow-terminal multi-line
   wrap" scenario was deferred from `e2e/scenarios/`. **Resolved**: the
