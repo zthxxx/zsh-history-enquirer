@@ -120,6 +120,23 @@ freshly-rendered packages.
 
 ## Coverage gate
 
-CI fails if total coverage drops below 55%. The pull-up gate
-applies to `coverage.out` produced by `task ci:unit` (which is
+CI fails if total coverage drops below **70%**. Actual coverage
+hovers around 77–78%, so the gate has ~7 points of headroom for
+legitimate untestable additions while still flagging
+regressions. The pull-up gate applies to `coverage.out` produced
+by `task ci:unit` (which is
 `go test -race -count=1 -coverprofile=coverage.out ./...`).
+
+Per-package targets:
+
+| Package | Coverage | Notes |
+| --- | --- | --- |
+| `internal/ansi` | 100% | wire-byte primitives — pinned by tests. |
+| `internal/search` | 100% | tokenize + AND-filter, pure functions. |
+| `pkg/version` | 100% | -ldflags-injected fields. |
+| `internal/ui` | ~98% | renderer + FSM; only debug-format strings uncovered. |
+| `internal/history` | ~94% | ZshLoader's exec wrapper requires zsh. |
+| `internal/keys` | ~93% | parser + reader; SIGWINCH path is pty-dependent. |
+| `internal/tty` | ~65% | termios + cursor probe; needs a real /dev/tty for full. |
+| `internal/app` | ~34% | Run() body needs a TTY; covered by e2e instead. |
+| `cmd/zsh-history-enquirer` | ~18% | main() needs a TTY; smoke tested via the binary. |
