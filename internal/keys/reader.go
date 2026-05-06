@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"os/signal"
-	"sync"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -34,19 +33,25 @@ func (r *Reader) Prefeed(s string) []Event {
 	return r.parser.Feed([]byte(s))
 }
 
+// pollInterval is the maximum time we ever block in unix.Poll inside
+// the reader loop. Each iteration, we either wake on data or on the
+// poll timeout; the timeout is what lets us see ctx cancellation
+// without a separate goroutine that would leak on cancel.
+const pollInterval = 100 * time.Millisecond
+
 // Events returns a channel that yields Event values. The channel is
-// closed when ctx is canceled or the TTY signals EOF. The returned
-// goroutine cleans up its signal subscription on exit.
+// closed when ctx is canceled or the TTY signals EOF.
 //
-// Implementation notes:
-//   - Bytes are read in chunks of up to 64; that is more than enough
-//     for any single key + bracketed-paste burst per syscall.
-//   - The "ESC alone" timeout is 50 ms — long enough to coalesce a
+// Implementation:
+//   - One goroutine, one fd. We unix.Poll with a short interval so
+//     ctx.Done() is checked at least every pollInterval; this avoids
+//     the goroutine-leak bug where a separate read goroutine would
+//     stay blocked in a syscall after the parent select returned.
+//   - SIGWINCH is captured on the same goroutine so events stay
+//     linearly ordered with keypresses.
+//   - The "ESC alone" timeout is 50ms — long enough to coalesce a
 //     real CSI sequence, short enough that pressing Esc still feels
 //     instant.
-//   - SIGWINCH is captured here, not in the UI layer, so the resize
-//     event arrives on the same channel as keypresses and update
-//     ordering stays linear.
 func (r *Reader) Events(ctx context.Context) <-chan Event {
 	out := make(chan Event, 32)
 
@@ -57,37 +62,11 @@ func (r *Reader) Events(ctx context.Context) <-chan Event {
 		defer close(out)
 		defer signal.Stop(winch)
 
-		var mu sync.Mutex // protects the parser when used from two goroutines (read + winch)
+		fd := int(r.tty.File().Fd())
 
-		// Spawn a reader that pulls bytes and decodes them. We use a
-		// goroutine so the SIGWINCH handler can interleave events.
-		bytesCh := make(chan []byte, 16)
-		readerErr := make(chan error, 1)
-		go func() {
-			buf := make([]byte, 64)
-			for {
-				n, err := r.tty.Reader().Read(buf)
-				if n > 0 {
-					b := make([]byte, n)
-					copy(b, buf[:n])
-					select {
-					case bytesCh <- b:
-					case <-ctx.Done():
-						return
-					}
-				}
-				if err != nil {
-					readerErr <- err
-					return
-				}
-			}
-		}()
-
-		// "ESC alone" flush timer.
 		flushTimer := time.NewTimer(time.Hour)
 		flushTimer.Stop()
 		defer flushTimer.Stop()
-
 		armFlush := func() {
 			if !flushTimer.Stop() {
 				select {
@@ -109,42 +88,64 @@ func (r *Reader) Events(ctx context.Context) <-chan Event {
 			return true
 		}
 
+		buf := make([]byte, 64)
 		for {
+			// 1. Check ctx cancellation.
 			select {
 			case <-ctx.Done():
 				return
+			default:
+			}
 
-			case b := <-bytesCh:
-				mu.Lock()
-				events := r.parser.Feed(b)
+			// 2. Drain SIGWINCH non-blockingly.
+			select {
+			case <-winch:
+				rows, cols, werr := r.tty.Size()
+				if werr == nil {
+					if !emit([]Event{ResizeEvent{Rows: rows, Cols: cols}}) {
+						return
+					}
+				}
+			default:
+			}
+
+			// 3. Drain the ESC-alone flush timer.
+			select {
+			case <-flushTimer.C:
+				if !emit(r.parser.FlushEsc()) {
+					return
+				}
+			default:
+			}
+
+			// 4. Poll the fd. The pollInterval keeps each iteration
+			//    bounded so ctx.Done() / SIGWINCH / flushTimer all
+			//    get checked at least every pollInterval ms.
+			pfd := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
+			nready, perr := unix.Poll(pfd, int(pollInterval/time.Millisecond))
+			if perr != nil {
+				if perr == unix.EINTR {
+					continue
+				}
+				return
+			}
+			if nready == 0 || pfd[0].Revents&unix.POLLIN == 0 {
+				continue
+			}
+
+			n, rerr := unix.Read(fd, buf)
+			if n > 0 {
+				events := r.parser.Feed(buf[:n])
 				if r.parser.state == stateEsc {
 					armFlush()
 				}
-				mu.Unlock()
 				if !emit(events) {
 					return
 				}
-
-			case <-flushTimer.C:
-				mu.Lock()
-				events := r.parser.FlushEsc()
-				mu.Unlock()
-				if !emit(events) {
-					return
-				}
-
-			case <-winch:
-				rows, cols, err := r.tty.Size()
-				if err != nil {
-					continue
-				}
-				if !emit([]Event{ResizeEvent{Rows: rows, Cols: cols}}) {
-					return
-				}
-
-			case <-readerErr:
-				// EOF or other read error; exit cleanly so the caller
-				// observes the channel close.
+			}
+			if rerr != nil || n == 0 {
+				// EOF / fd closed / unrecoverable error; exit so the
+				// caller observes the channel close.
 				return
 			}
 		}

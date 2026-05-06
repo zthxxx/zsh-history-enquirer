@@ -1,9 +1,19 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/zthxxx/zsh-history-enquirer/internal/ansi"
+	"github.com/zthxxx/zsh-history-enquirer/internal/search"
+)
+
+// Highlight ANSI codes used to mark matched tokens inside a rendered
+// choice. Bold cyan is distinguishable on every common terminal theme
+// while staying neutral against typical accent colors.
+const (
+	highlightOn  = "\x1b[1;36m"
+	highlightOff = "\x1b[0m"
 )
 
 // Frame is the byte payload to write to the TTY for one render pass.
@@ -53,6 +63,8 @@ func (m *Model) Render(opts RenderOptions) Frame {
 }
 
 func (m *Model) renderBody() (string, int, int) { //nolint:gocritic // unnamed result is clearer here
+	tokens := search.Tokenize(m.Input)
+
 	// Step 1: write the input row at the captured prompt column.
 	var body strings.Builder
 	body.WriteString(ansi.CursorToCol(m.InitCol))
@@ -108,7 +120,12 @@ func (m *Model) renderBody() (string, int, int) { //nolint:gocritic // unnamed r
 		// above already accounted for newlines and width.
 		// We translate "\n" to "\r\n" so terminals in raw mode advance
 		// to column 0 on each new logical line.
-		body.WriteString(strings.ReplaceAll(choiceLine(m.Filter[i]), "\n", "\r\n"))
+		highlighted := highlight(m.Filter[i], tokens)
+		body.WriteString(strings.ReplaceAll(highlighted, "\n", "\r\n"))
+		// Belt-and-braces SGR reset after every entry — guards against
+		// a history line containing an unterminated escape sequence
+		// that would otherwise bleed colour into the next row.
+		body.WriteString(highlightOff)
 	}
 
 	if limit == 0 {
@@ -120,8 +137,67 @@ func (m *Model) renderBody() (string, int, int) { //nolint:gocritic // unnamed r
 	return body.String(), rows, limit
 }
 
-func choiceLine(s string) string {
-	return s
+// highlight wraps every occurrence of any token in `s` with the
+// highlight ANSI sequence. Matching is case-insensitive but the
+// original-case bytes are preserved in the output. Overlapping or
+// adjacent matches are merged so the user never sees two open-codes
+// in a row.
+//
+// Empty tokens are skipped — Tokenize already removes them, but be
+// defensive against direct callers.
+func highlight(s string, tokens []string) string {
+	if len(tokens) == 0 || s == "" {
+		return s
+	}
+
+	lc := strings.ToLower(s)
+	type span struct{ start, end int }
+	var spans []span
+	for _, t := range tokens {
+		if t == "" {
+			continue
+		}
+		offset := 0
+		for offset < len(lc) {
+			idx := strings.Index(lc[offset:], t)
+			if idx < 0 {
+				break
+			}
+			begin := offset + idx
+			end := begin + len(t)
+			spans = append(spans, span{begin, end})
+			offset = end
+		}
+	}
+	if len(spans) == 0 {
+		return s
+	}
+
+	slices.SortFunc(spans, func(a, b span) int { return a.start - b.start })
+	merged := spans[:1]
+	for _, sp := range spans[1:] {
+		last := &merged[len(merged)-1]
+		switch {
+		case sp.start <= last.end && sp.end > last.end:
+			last.end = sp.end
+		case sp.start <= last.end:
+			// Fully contained; ignore.
+		default:
+			merged = append(merged, sp)
+		}
+	}
+
+	var b strings.Builder
+	cursor := 0
+	for _, sp := range merged {
+		b.WriteString(s[cursor:sp.start])
+		b.WriteString(highlightOn)
+		b.WriteString(s[sp.start:sp.end])
+		b.WriteString(highlightOff)
+		cursor = sp.end
+	}
+	b.WriteString(s[cursor:])
+	return b.String()
 }
 
 // renderPre erases the previous frame's body so the next draw lands

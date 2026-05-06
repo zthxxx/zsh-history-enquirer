@@ -44,9 +44,11 @@ type RunResult struct {
 // is the last visible side effect either way.
 func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, stderr io.Writer) (*RunResult, error) {
 	if cfg.PrintVersion {
-		// Printing version does not need the TTY at all.
-		_, _ = io.WriteString(stderr, VersionLine()+"\n")
-		return &RunResult{Output: ""}, nil
+		// Defensive — main.go already short-circuits --version
+		// before fx wires the TTY. If we still got here, route the
+		// version line back through the RunResult so the umbrella
+		// invokeRun prints it via PrintResult (i.e. to stdout).
+		return &RunResult{Output: VersionLine()}, nil
 	}
 
 	// Step 1: cursor probe + history load in parallel.
@@ -106,6 +108,17 @@ func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, st
 		cols = 80
 	}
 
+	// Open the optional debug log file once, up-front, with a single
+	// defer for cleanup. Avoids the previous pattern of opening twice
+	// (which leaked an FD on early-return code paths).
+	var debugW io.Writer
+	if path := os.Getenv("ZHE_DEBUG"); path != "" {
+		if f, ferr := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); ferr == nil {
+			debugW = f
+			defer func() { _ = f.Close() }()
+		}
+	}
+
 	// Cursor probe is best-effort. Some terminals (and most test pty
 	// runners) do not reply to DSR within the timeout; fall back to
 	// (row=1, col=len(input)+1) so the picker still draws — inline
@@ -121,12 +134,9 @@ func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, st
 		cur.row = 1
 		cur.col = len(cfg.Input) + 1
 	}
-	if os.Getenv("ZHE_DEBUG") != "" {
-		if f, derr := os.OpenFile(os.Getenv("ZHE_DEBUG"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); derr == nil {
-			fmt.Fprintf(f, "[zhe] probe: row=%d col=%d err=%v leftover=%q\n", cur.row, cur.col, cur.err, probeLeftover)
-			fmt.Fprintf(f, "[zhe] geom: rows=%d cols=%d\n", rows, cols)
-			f.Close()
-		}
+	if debugW != nil {
+		fmt.Fprintf(debugW, "[zhe] probe: row=%d col=%d err=%v leftover=%q\n", cur.row, cur.col, cur.err, probeLeftover)
+		fmt.Fprintf(debugW, "[zhe] geom: rows=%d cols=%d\n", rows, cols)
 	}
 
 	// Defense-in-depth: a poorly-behaved emulator may reply with row
@@ -176,14 +186,6 @@ func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, st
 	}
 
 	render(true)
-
-	var debugW io.Writer
-	if path := os.Getenv("ZHE_DEBUG"); path != "" {
-		if f, ferr := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); ferr == nil {
-			debugW = f
-			defer f.Close()
-		}
-	}
 
 	// Process any events that came from the probe-leftover bytes.
 	for _, ev := range preEvents {

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"pgregory.net/rapid"
 )
 
 func feedAll(p *Parser, b string) []Event {
@@ -172,4 +173,68 @@ func TestParser_UTF8SplitAcrossReads(t *testing.T) {
 	require.Empty(t, p.Feed(all[1:2]))
 	got := p.Feed(all[2:])
 	require.Equal(t, RuneEvent{R: '世'}, got[0])
+}
+
+// TestProperty_Parser_ChunkBoundaryInvariance asserts that splitting
+// the same input at any byte boundary yields the same Event sequence
+// as feeding it whole. The parser is a finite-state machine and
+// this property guards the FSM against subtle state-leak bugs at
+// chunk boundaries — the kind of bug that ate "log " in scenario 4
+// during early development before the probe-leftover replay was
+// added.
+func TestProperty_Parser_ChunkBoundaryInvariance(t *testing.T) {
+	t.Parallel()
+
+	rapid.Check(t, func(rt *rapid.T) {
+		// Restrict to single-byte-rune ASCII so we don't have to
+		// worry about UTF-8 boundary handling — that's a separate
+		// concern with its own test above.
+		input := rapid.SliceOfN(rapid.Byte(), 0, 32).Draw(rt, "input")
+		// Filter out bytes that the FSM would route into the
+		// CSI / ESC paths in ways the chunker can't replicate
+		// (their behavior depends on receiving the full sequence
+		// in one Feed). We restrict to printable ASCII for the
+		// property check; CSI / paste sequences are exercised by
+		// the targeted tests above.
+		filtered := make([]byte, 0, len(input))
+		for _, b := range input {
+			if b >= 0x20 && b < 0x7f {
+				filtered = append(filtered, b)
+			}
+		}
+
+		// Random split points.
+		splits := rapid.SliceOfN(rapid.IntRange(0, len(filtered)), 0, 8).Draw(rt, "splits")
+		// Sort and dedupe.
+		dedupedSplits := make([]int, 0, len(splits))
+		seenSplit := make(map[int]bool)
+		for _, s := range splits {
+			if !seenSplit[s] {
+				seenSplit[s] = true
+				dedupedSplits = append(dedupedSplits, s)
+			}
+		}
+		// Sort.
+		for i := 1; i < len(dedupedSplits); i++ {
+			for j := i; j > 0 && dedupedSplits[j-1] > dedupedSplits[j]; j-- {
+				dedupedSplits[j-1], dedupedSplits[j] = dedupedSplits[j], dedupedSplits[j-1]
+			}
+		}
+
+		whole := NewParser().Feed(filtered)
+
+		chunked := NewParser()
+		// Match Parser.Feed's empty-slice convention. Preallocation
+		// hint isn't useful here — the test is for correctness, not
+		// allocation behavior.
+		pieces := make([]Event, 0, len(filtered))
+		prev := 0
+		for _, s := range dedupedSplits {
+			pieces = append(pieces, chunked.Feed(filtered[prev:s])...)
+			prev = s
+		}
+		pieces = append(pieces, chunked.Feed(filtered[prev:])...)
+
+		require.Equal(rt, whole, pieces)
+	})
 }

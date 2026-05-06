@@ -39,7 +39,13 @@ sleep 0.4
 send -- "\x1b\[H"
 sleep 0.6
 
-expect "command-15"
+# After typing "command", matched tokens get wrapped in SGR escapes
+# in the rendered output, so "command-15" is no longer a contiguous
+# substring. The unhighlighted tail "-15" is unique to command-15
+# in the seeded history (command-14, command-13, … all have other
+# tails) — assert on that. The leading `--` separates the pattern
+# from expect's option flags so a leading dash isn't misread.
+expect -- "-15"
 sleep 0.3
 
 send -- "\x1b"

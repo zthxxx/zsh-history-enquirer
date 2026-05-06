@@ -151,12 +151,45 @@ echo 'source '"$PWD"'/plugin/zsh-history-enquirer.plugin.zsh' >> ~/.zshrc
 
 | Key | Action |
 | --- | --- |
-| any text | Multi-word fuzzy filter — every space-separated token must appear in the line (case-insensitive) |
+| any text | Multi-word fuzzy filter — every space-separated token must appear in the line (case-insensitive); matches are highlighted in the rendered list |
 | <kbd>↑</kbd> / <kbd>↓</kbd> | Move selection one line |
 | <kbd>PageUp</kbd> / <kbd>PageDown</kbd> | Jump a page |
 | <kbd>Home</kbd> / <kbd>End</kbd> | Jump to first / last match |
 | <kbd>Enter</kbd> | Put the selected line into the prompt buffer (still editable — press <kbd>Enter</kbd> again to run it) |
 | <kbd>Esc</kbd> / <kbd>Ctrl+C</kbd> | Cancel; your typed input is preserved |
+
+## CLI flags
+
+You can run the binary directly to inspect or pin behaviour:
+
+```text
+zsh-history-enquirer [flags] [initial input...]
+  --version          print the version and exit
+  --histfile PATH    override $HISTFILE (default $HISTFILE or ~/.zsh_history)
+  --histsize N       override HISTSIZE (default 100000)
+  --max-limit N      cap the number of choices rendered (default 15)
+```
+
+`--version` prints to stdout, so `zsh-history-enquirer --version | grep` works.
+The other flags are most useful for debugging and for the e2e harness.
+
+## Power-user notes
+
+- **`npm install -g`** writes to `$(npm root -g)`. On many Linux
+  distros that path is owned by root; use `sudo npm i -g` or set up
+  a user-local global prefix (`npm config set prefix ~/.npm-global`).
+  Without write access the install silently lands the binary
+  somewhere `$PATH` will not see, and the plugin's graceful fallback
+  kicks in — pressing <kbd>Ctrl</kbd>+<kbd>R</kbd> will give you
+  zsh's native search instead of the picker.
+- **`$HISTFILE` on macOS** defaults to `~/.zsh_sess_history` for
+  non-interactive zsh and `~/.zsh_history` for interactive shells.
+  If your prompt uses a custom `$HISTFILE`, export it *before*
+  sourcing this plugin so the picker reads the same history file
+  zsh writes to.
+- **oh-my-zsh users** must source the plugin file from
+  `$(npm root -g)/zsh-history-enquirer/plugin/...`; oh-my-zsh's
+  `plugins=(...)` array does not auto-discover npm-installed plugins.
 
 ## Implementation
 

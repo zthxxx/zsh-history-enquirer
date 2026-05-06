@@ -126,16 +126,51 @@ func (m *Model) moveDown() {
 	m.rotateDown(1)
 }
 
+// scrollToEnd places the *last* filtered entry at the bottom of the
+// visible window with focus on it.
+//
+// The legacy Node.js port (and earlier versions of this package)
+// rotated by m.Limit and set Idx = m.Limit-1. That works when every
+// entry is single-line, but breaks when multi-line entries reshuffle
+// into the visible window after rotation: the renderer's recomputed
+// dynamic limit shrinks and m.Idx gets clamped off the last match.
+//
+// We instead walk Filter from the back, accumulating wrapped row
+// counts until heightLimit (or MaxLimit) is hit. That gives us the
+// precise number of "tail" entries that fit in the visible window
+// post-rotation. We then rotate by that count, putting the last
+// match at position visibleCount-1, where the renderer's forward walk
+// will land on it identically.
 func (m *Model) scrollToEnd() {
 	if len(m.Filter) == 0 {
 		return
 	}
-	limit := m.Limit
-	if limit <= 0 || limit > len(m.Filter) {
-		limit = len(m.Filter)
+
+	heightLimit := m.Height - 3
+	if heightLimit < 1 {
+		heightLimit = 1
 	}
-	// Rotate so the last filtered entry is at position limit-1 in the
-	// visible window.
-	m.rotateUp(limit)
-	m.Idx = limit - 1
+
+	visibleCount := 0
+	rows := 0
+	for i := len(m.Filter) - 1; i >= 0; i-- {
+		choiceRows := WrappedRowCount(m.Filter[i], m.Width)
+		if rows+choiceRows > heightLimit {
+			break
+		}
+		rows += choiceRows
+		visibleCount++
+		if visibleCount >= m.MaxLimit {
+			break
+		}
+	}
+	if visibleCount == 0 {
+		// Even an entry that overflows the terminal alone deserves
+		// to be selected; the renderer will at least show the focus
+		// on row 0.
+		visibleCount = 1
+	}
+
+	m.rotateUp(visibleCount)
+	m.Idx = visibleCount - 1
 }

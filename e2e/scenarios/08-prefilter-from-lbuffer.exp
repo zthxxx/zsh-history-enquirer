@@ -26,8 +26,11 @@ send -- "\x12"
 sleep 1.2
 
 # Picker should open with input='git' and show a git-prefixed entry
-# at the top.
-expect "git status"
+# at the top. Matched tokens are highlighted with SGR escapes so
+# the literal "git status" is no longer contiguous; assert on the
+# unhighlighted tail " status" which is unique to git status in the
+# seeded history (where git, git log have other tails).
+expect " status"
 sleep 0.3
 
 send -- "\x1b"

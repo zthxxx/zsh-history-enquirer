@@ -27,20 +27,7 @@ Each entry must include:
   only matters for tests. How to apply: don't try to fix it for
   expect — the renderer's correctness is verified at the model layer.
 
-* **2026-05-07** — `End` semantics interact subtly with the dynamic-
-  limit math when multi-line entries are involved. The current model
-  (matching the legacy Node.js port) rotates by the *previous*
-  render's limit and sets `Idx = limit - 1`. If the post-rotation
-  visible window contains a multi-line entry, the renderer's
-  recomputed limit can shrink, which clamps `Idx` to `newLimit - 1`
-  and the focus may not land on the actual last match. Why open: the
-  legacy port shipped with this same behavior and users have lived
-  with it for years; fixing it is a UX refinement, not a regression.
-  How to apply: rewrite `scrollToEnd` to do an iterative rotation
-  search that produces a layout where the last filtered entry sits
-  at the bottom of the eventual visible window. E2E scenario 07 has
-  been narrowed to assert `Home` only; an `End` follow-up scenario
-  should be added once the model is fixed.
+(no current open items beyond the two pty-related ones above)
 
 ## Addressed
 
@@ -71,3 +58,60 @@ Each entry must include:
   swallowed the start error. Detect `--version`/`-version` directly
   in `main.go` before `fx.New` runs. Resolved in the
   fix:short-circuit-version commit.
+
+* **2026-05-07** — `--version` was writing to stderr. Per CLI
+  convention (and so `zsh-history-enquirer --version | grep` works)
+  it should go to stdout. The picker output and the version output
+  are mutually exclusive, so reusing stdout for both is safe.
+  Resolved in this iteration's commit.
+
+* **2026-05-07** — Reader sub-goroutine could leak across the
+  ctx-cancel boundary: a separate byte-reader goroutine blocked in
+  `r.tty.Reader().Read(buf)` would not see ctx cancellation until
+  the next byte arrived (typically when fx OnStop closed the fd).
+  Replaced with a single goroutine that uses `unix.Poll` with a
+  100ms timeout, so each iteration checks ctx, drains SIGWINCH and
+  flushTimer, then polls for input. Resolved in this iteration's
+  commit.
+
+* **2026-05-07** — `internal/app/run.go` opened the `ZHE_DEBUG` log
+  file twice: once for probe diagnostics with a synchronous Close
+  and once for events with a deferred Close. On early-return code
+  paths (probe error, invariant fail) the second deferred Close
+  never fired. Consolidated to a single open + single defer at the
+  top of Run(). Resolved in this iteration's commit.
+
+* **2026-05-07** — Renderer did NOT reset SGR state between rows:
+  a history entry containing an unterminated `\e[31m` would bleed
+  red into every subsequent rendered row until the next frame.
+  Added a belt-and-braces `\e[0m` after every entry. Resolved in
+  this iteration's commit.
+
+* **2026-05-07** — Picker had no token-match highlighting, even
+  though the README's "multi-word fuzzy match" promise implied
+  visible feedback. The legacy Node.js code computed match spans in
+  `historySearcher.ts:choiceMessage` but returned the un-highlighted
+  string by accident — so the legacy port shipped with this latent
+  bug for years. Added `highlight()` in `internal/ui/render.go`
+  that wraps every matched token in bold-cyan SGR. Property tests
+  guarantee the un-highlighted payload is preserved exactly when
+  the SGR escapes are stripped. Resolved in this iteration's
+  commit.
+
+* **2026-05-07** — `plugin/zsh-history-enquirer.plugin.zsh` fallback
+  swapped the global `bindkey '^R'` mapping during the fallback
+  call, which left inconsistent state in vicmd/viins keymaps. Use
+  `zle .history-incremental-search-backward` to invoke the builtin
+  widget directly without touching keymaps. Also bind to emacs,
+  viins, and vicmd keymaps explicitly so the picker is reachable
+  from every common zsh keymap. Resolved in this iteration's
+  commit.
+
+* **2026-05-07** — `End` semantics interacted subtly with the
+  dynamic-limit math when multi-line entries reshuffled into the
+  visible window after rotation. Rewrote `scrollToEnd` to walk
+  Filter from the back, accumulating wrapped row counts until the
+  height limit is hit; that gives the precise count of "tail"
+  entries that fit, which is then used as the rotation amount and
+  the new Idx. Unit tests in `internal/ui/model_test.go` exercise
+  the regression case. Resolved in this iteration's commit.

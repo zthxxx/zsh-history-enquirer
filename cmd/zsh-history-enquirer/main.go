@@ -26,9 +26,12 @@ func main() {
 	// Fast path: `--version` doesn't need a TTY at all. Detect it
 	// before fx.New so we don't open /dev/tty in environments where
 	// it isn't usable (CI runners, scripts piped from a non-tty
-	// shell, etc.).
+	// shell, etc.). Print to stdout — that is the CLI convention
+	// (so `zsh-history-enquirer --version | grep` works) and only
+	// the *interactive* picker path uses stdout for the chosen
+	// line. Version output and picker output are mutually exclusive.
 	if slices.Contains(os.Args[1:], "--version") || slices.Contains(os.Args[1:], "-version") {
-		fmt.Fprintln(os.Stderr, app.VersionLine())
+		fmt.Fprintln(os.Stdout, app.VersionLine())
 		return
 	}
 

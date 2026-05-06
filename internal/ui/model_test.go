@@ -146,3 +146,53 @@ func TestModel_ResizeUpdatesGeometry(t *testing.T) {
 	require.Equal(t, 30, m.Height)
 	require.Equal(t, 100, m.Width)
 }
+
+// TestModel_EndLandsOnLastMatch_NoMultiline asserts that End on a
+// purely single-line filter focuses the oldest match — the
+// well-trodden case.
+func TestModel_EndLandsOnLastMatch_NoMultiline(t *testing.T) {
+	t.Parallel()
+	choices := []string{"a-1", "a-2", "a-3", "a-4", "a-5", "a-6", "a-7", "a-8"}
+	m := NewModel("a", choices, 15, 80, 1, 1, DefaultMaxLimit)
+	m.Render(RenderOptions{})
+
+	m.Update(keys.KeyEvent{Key: keys.KeyEnd})
+	m.Render(RenderOptions{PrevSize: m.Limit})
+
+	require.Equal(t, "a-8", m.Focused())
+}
+
+// TestModel_EndLandsOnLastMatch_WithMultilineInWindow exercises the
+// regression case fixed by the back-walk-and-rotate scrollToEnd: a
+// multi-line entry between the head and the last match must NOT
+// prevent End from focusing the last match.
+func TestModel_EndLandsOnLastMatch_WithMultilineInWindow(t *testing.T) {
+	t.Parallel()
+	multi := "middle\nL1\nL2\nL3\nL4\nL5\nL6\nL7"
+	choices := []string{
+		"head-1", "head-2", "head-3", "head-4", "head-5", "head-6",
+		multi,
+		"tail-1", "tail-2", "tail-3", "tail-4",
+	}
+	m := NewModel("", choices, 15, 80, 1, 1, DefaultMaxLimit)
+	m.Render(RenderOptions{})
+
+	m.Update(keys.KeyEvent{Key: keys.KeyEnd})
+	m.Render(RenderOptions{PrevSize: m.Limit})
+
+	require.Equal(t, "tail-4", m.Focused(),
+		"End must focus the last match even when the previous "+
+			"visible window contained a multi-line entry")
+}
+
+// TestModel_EndOnEmptyFilter is a no-op smoke test: pressing End
+// with no matches must not panic and must keep state coherent.
+func TestModel_EndOnEmptyFilter(t *testing.T) {
+	t.Parallel()
+	m := NewModel("zzz-no-such", []string{"git", "echo"}, 15, 80, 1, 1, DefaultMaxLimit)
+	m.Render(RenderOptions{})
+
+	m.Update(keys.KeyEvent{Key: keys.KeyEnd})
+	require.Empty(t, m.Filter)
+	require.Equal(t, 0, m.Idx)
+}

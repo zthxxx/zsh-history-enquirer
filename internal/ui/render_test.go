@@ -7,6 +7,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// stripHighlight removes the bold-cyan SGR pair so tests can match
+// against the plain payload that the user effectively sees.
+func stripHighlight(s string) string {
+	out := strings.ReplaceAll(s, highlightOn, "")
+	out = strings.ReplaceAll(out, highlightOff, "")
+	return out
+}
+
 func TestRender_FirstFrameWritesPrompt(t *testing.T) {
 	t.Parallel()
 
@@ -14,9 +22,12 @@ func TestRender_FirstFrameWritesPrompt(t *testing.T) {
 	frame := m.Render(RenderOptions{PrevSize: 0})
 
 	require.NotEmpty(t, frame.Body)
-	// Body must echo the input and at least one entry.
-	require.Contains(t, frame.Body, "git")
-	require.Contains(t, frame.Body, "git status")
+	// Body must echo the input and at least one entry. Strip the
+	// highlight escapes inserted by the matcher so we compare
+	// against the user-visible characters.
+	plain := stripHighlight(frame.Body)
+	require.Contains(t, plain, "git")
+	require.Contains(t, plain, "git status")
 	require.Greater(t, frame.Size, 0)
 	require.Greater(t, frame.Limit, 0)
 }
