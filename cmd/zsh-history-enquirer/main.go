@@ -21,12 +21,14 @@ import (
 	"github.com/zthxxx/zsh-history-enquirer/internal/app"
 )
 
-// versionFlagLong / versionFlagShort are the only two argv tokens
-// that cause main() to short-circuit before fx.New. Constants exist
-// to satisfy goconst — also used by the test for parity.
+// Flag tokens that cause main() to short-circuit before fx.New.
+// Constants exist to satisfy goconst — also used by the test.
 const (
 	versionFlagLong  = "--version"
 	versionFlagShort = "-version"
+	helpFlagLong     = "--help"
+	helpFlagShort    = "-help"
+	helpFlagShortest = "-h"
 )
 
 // isVersionFlag reports whether os.Args is invoked as a pure
@@ -45,6 +47,23 @@ func isVersionFlag(args []string) bool {
 		return false
 	}
 	return args[1] == versionFlagLong || args[1] == versionFlagShort
+}
+
+// isHelpFlag mirrors isVersionFlag for the help-text fast-path. A
+// bare `--help` / `-help` / `-h` is treated as a documentation
+// query — print the usage to stdout and exit 0 cleanly without
+// running the fx graph (which would otherwise fail to parse the
+// flag and emit a confusing "startup failed:" error to the user).
+//
+// The same pickier-check rationale applies: we never short-circuit
+// when --help arrives in combination with positional args, so
+// $LBUFFER text containing "--help" still opens the picker and
+// the user's typed input is not destroyed.
+func isHelpFlag(args []string) bool {
+	if len(args) != 2 {
+		return false
+	}
+	return args[1] == helpFlagLong || args[1] == helpFlagShort || args[1] == helpFlagShortest
 }
 
 // recoverStartFailure echoes the user's typed input ($LBUFFER) back
@@ -69,6 +88,19 @@ func main() {
 	// line. Version output and picker output are mutually exclusive.
 	if isVersionFlag(os.Args) {
 		fmt.Fprintln(os.Stdout, app.VersionLine())
+		return
+	}
+
+	// Same fast-path treatment for --help: don't run fx, just print
+	// the auto-generated usage to stdout and exit 0. Without this,
+	// flag.ErrHelp from inside NewConfig surfaces as a confusing
+	// "startup failed: ... flag: help requested" message stacked
+	// after the help text the user actually wanted.
+	if isHelpFlag(os.Args) {
+		// Help text goes to stdout — matches the CLI convention so
+		// `zsh-history-enquirer --help | grep histfile` works the
+		// same way `--version | grep` does.
+		app.PrintHelp(os.Stdout)
 		return
 	}
 

@@ -17,7 +17,16 @@
 
 function history_enquire() {
   if [[ -n ${commands[zsh-history-enquirer]} ]]; then
-    BUFFER=$(zsh-history-enquirer "$LBUFFER")
+    # The `--` terminator tells the binary's flag parser that
+    # everything that follows is positional. Without it, a user who
+    # has typed something like `--version` or `--help` at the prompt
+    # and pressed ^R would invoke the binary as
+    # `zsh-history-enquirer "--version"`, which the flag parser would
+    # short-circuit on — printing the version into BUFFER and
+    # destroying the user's typed input. With `--` the picker always
+    # opens and `$LBUFFER` is treated as the initial filter even when
+    # it happens to look like a flag.
+    BUFFER=$(zsh-history-enquirer -- "$LBUFFER")
     CURSOR=$#BUFFER
     zle -R -c
   else

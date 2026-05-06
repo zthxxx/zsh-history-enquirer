@@ -25,6 +25,33 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — Two flag-fast-path foot-guns, fixed in one
+  iteration:
+  - **`$LBUFFER="--version"` blanked input.** The widget invoked the
+    binary as `bin "$LBUFFER"`, so when LBUFFER literally was
+    `--version` (or any other doc fast-path token), `args=["bin",
+    "--version"]` matched `isVersionFlag` and the binary printed
+    the version into `BUFFER` instead of opening the picker. The
+    `isVersionFlag` comment claimed protection ("the picker opens
+    normally because there's a positional arg alongside the flag")
+    that wasn't actually true for the bare-flag case. Fix: the
+    plugin now passes `--` before `$LBUFFER`, so widget invocations
+    are always `len(args) == 3` and never trip the fast-path. The
+    `--` is a stdlib `flag` package terminator that stops flag
+    parsing.
+  - **`--help` stacked help text under "startup failed:".** The
+    flag parser returned `flag.ErrHelp`, which propagated through
+    fx as a provider failure. Users saw the help text *and* a
+    stack-trace-shaped error. Added `app.PrintHelp` helper plus an
+    `isHelpFlag` fast-path in main.go. Clean help, exit 0, no
+    spurious error. Drift-detection test
+    (`TestPrintHelp_MatchesNewConfigFlags`) catches future
+    regressions where one declares a flag and the other forgets.
+  
+  Both fixes documented in spec/10-widget-contract.md as a new
+  "doc fast-paths" row in the binary contract table, plus the `--`
+  separator behavior in the widget definition.
+
 * **2026-05-07** — Highlighter emitted invalid UTF-8 on Unicode
   case-fold mismatches. The match-detection layer (`search.AndFilter`)
   is correct because it only checks `strings.Contains(lc, t)`. But

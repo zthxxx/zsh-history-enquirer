@@ -90,11 +90,48 @@ func TestIsVersionFlag(t *testing.T) {
 		{"single positional", []string{"bin", "foo"}, false},
 		{"no args", []string{"bin"}, false},
 		{"empty argv", []string{}, false},
+		// Widget-mode invocations always pass `--` before $LBUFFER,
+		// so even when LBUFFER literally is "--version" the args are
+		// ["bin", "--", "--version"] and isVersionFlag returns false.
+		// The picker opens normally and the user's typed text is
+		// preserved. See plugin/zsh-history-enquirer.plugin.zsh.
+		{"widget-mode --version", []string{"bin", "--", "--version"}, false},
+		{"widget-mode empty", []string{"bin", "--", ""}, false},
 	}
 	for _, tc := range cases {
 		got := isVersionFlag(tc.args)
 		require.Equalf(t, tc.want, got,
 			"isVersionFlag(%v) = %v, want %v", tc.args, got, tc.want)
+	}
+}
+
+// TestIsHelpFlag mirrors TestIsVersionFlag — the help fast-path uses
+// the same len==2 narrow-check pattern, so the same widget-mode
+// protection holds: a user typing `--help` or `-h` at the prompt
+// and pressing ^R does NOT trigger the help fast-path because the
+// widget always passes `--` before $LBUFFER.
+func TestIsHelpFlag(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{"bare --help", []string{"bin", "--help"}, true},
+		{"bare -help", []string{"bin", "-help"}, true},
+		{"bare -h", []string{"bin", "-h"}, true},
+		{"--help with extra arg", []string{"bin", "--help", "foo"}, false},
+		{"positional then --help", []string{"bin", "foo", "--help"}, false},
+		{"single positional", []string{"bin", "foo"}, false},
+		{"no args", []string{"bin"}, false},
+		{"widget-mode --help", []string{"bin", "--", "--help"}, false},
+		{"widget-mode -h", []string{"bin", "--", "-h"}, false},
+	}
+	for _, tc := range cases {
+		got := isHelpFlag(tc.args)
+		require.Equalf(t, tc.want, got,
+			"isHelpFlag(%v) = %v, want %v", tc.args, got, tc.want)
 	}
 }
 

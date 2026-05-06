@@ -33,6 +33,24 @@ type Config struct {
 	PrintVersion bool
 }
 
+// PrintHelp writes the binary's auto-generated usage to `out`. Used
+// by `cmd/zsh-history-enquirer/main.go` for the `--help` fast-path
+// so the help text isn't stacked under a confusing "startup failed:"
+// message from the fx graph (which would otherwise see flag.ErrHelp
+// from the inner Parse call).
+func PrintHelp(out io.Writer) {
+	fs := flag.NewFlagSet("zsh-history-enquirer", flag.ContinueOnError)
+	fs.SetOutput(out)
+	// Re-declare the same flags as NewConfig so the help text stays
+	// in sync. Drift is caught by TestPrintHelp_MatchesNewConfig.
+	fs.String("histfile", os.Getenv("HISTFILE"), "override $HISTFILE")
+	fs.Int("histsize", 0, "HISTSIZE; 0 means default (100000)")
+	fs.Int("max-limit", 0, "max choices rendered (0 = default 15)")
+	fs.Bool("version", false, "print version and exit")
+	fmt.Fprintf(out, "Usage: %s [flags] [initial input...]\n", fs.Name())
+	fs.PrintDefaults()
+}
+
 // NewConfig parses os.Args into a Config and returns it. Errors are
 // wrapped with the full usage so the caller can write them to /dev/tty.
 func NewConfig(args []string, stderr io.Writer) (*Config, error) {

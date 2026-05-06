@@ -120,6 +120,28 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `cmd/zsh-history-enquirer/main.go` that reconstructs `cfg.Input`
   via `app.NewConfig` and echoes it back to stdout. Three table
   tests pin the (preserves-input, no-args, malformed-argv) cases.
+- **`$LBUFFER="--version"` (or `--help`, `-h`) silently destroyed
+  user input.** When the user typed a flag-shaped string at the
+  prompt and pressed `^R`, the widget shelled out as
+  `zsh-history-enquirer "$LBUFFER"`, the binary saw `args=["bin",
+  "--version"]` matching `isVersionFlag`, fast-pathed to the version
+  print, and `BUFFER=$(...)` resolved to the version string instead
+  of opening the picker with `--version` as the filter. The plugin
+  now passes a `--` separator (`bin -- "$LBUFFER"`) so widget-mode
+  invocations are always 3-arg, never trigger the fast-path, and
+  Go's `flag.Parse` correctly treats anything after `--` as
+  positional. Two new isVersionFlag / isHelpFlag test cases pin
+  the widget-mode shape so a future plugin edit that drops the `--`
+  can't re-introduce the bug silently.
+- **`--help` printed help, then a confusing "startup failed" error.**
+  `flag.Parse` returns `flag.ErrHelp` on `-h` / `--help`, which
+  bubbled up through fx as a provider error. The user got the help
+  text (good) followed by a stack-trace-shaped error (bad). Added
+  an `isHelpFlag` fast-path in `main.go` that calls a new
+  `app.PrintHelp(os.Stdout)` helper before fx wires up — clean help
+  text, exit 0, no spurious error. A drift-detection test
+  (`TestPrintHelp_MatchesNewConfigFlags`) keeps PrintHelp's listed
+  flags in sync with NewConfig's runtime parser.
 - **Highlighter produced invalid UTF-8 on Unicode case-fold mismatches.**
   `highlight()` did `lc := strings.ToLower(s)` and then sliced `s`
   with byte indices computed against `lc`. For most input this is

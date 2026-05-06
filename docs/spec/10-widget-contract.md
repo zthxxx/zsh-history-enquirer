@@ -10,8 +10,11 @@ The widget side of the project is a single file
    to enter `vicmd`.
 3. On invocation:
    1. If the binary `zsh-history-enquirer` is on `$PATH`, runs
-      `BUFFER=$(zsh-history-enquirer "$LBUFFER")` and snaps `CURSOR`
-      to the new buffer length.
+      `BUFFER=$(zsh-history-enquirer -- "$LBUFFER")` and snaps `CURSOR`
+      to the new buffer length. The `--` terminator is mandatory:
+      without it, a `$LBUFFER` like `--version` / `--help` / `-h`
+      would short-circuit into the binary's documentation
+      fast-paths and silently destroy the user's typed input.
    2. If the binary is missing (mid-install, broken `$PATH`, …),
       falls back to `zsh`'s native widget via
       `zle .history-incremental-search-backward` (the leading `.`
@@ -27,7 +30,8 @@ The Go binary shall:
 
 | concern | contract |
 | --- | --- |
-| **input** | `argv[1..]` joined with `' '` is the initial search input (i.e. the contents of `$LBUFFER` at invocation). |
+| **input** | `argv[1..]` joined with `' '` is the initial search input (i.e. the contents of `$LBUFFER` at invocation), processed *after* the `--` flag-terminator if any. |
+| **doc fast-paths** | A bare `--version` / `-version` (exactly one arg) prints the version and exits 0. A bare `--help` / `-help` / `-h` prints the auto-generated usage to stdout and exits 0. Both are gated on `len(args) == 2` so widget-mode invocations (`bin -- "$LBUFFER"`, always `len(args) == 3`) never trip them. |
 | **stdout** | exactly one line: the chosen history entry, or — on cancel — the original input, or — on hard error — the original input. No trailing newline beyond what `BUFFER=$(...)` will strip. |
 | **stderr** | reserved for diagnostics; never appears in `$BUFFER`. |
 | **exit code** | `0` on submit, on cancel, on probe / load failure, and on every other code path. A non-zero exit code aborts `BUFFER=$(...)` and loses the user's typed input — see [legacy gotcha §2](../design/30-tty.md). |
