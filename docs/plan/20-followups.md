@@ -18,7 +18,10 @@ Each entry must include:
   only matters for tests. How to apply: don't try to fix it for
   expect — the renderer's correctness is verified at the model layer.
 
-(no current open items beyond the two pty-related ones above)
+(One open item — the docker pty's DSR limitation. Intrinsic to the
+test harness, not a code bug. The earlier narrow-terminal-wrap
+companion was resolved in the
+\`test(e2e): + narrow-terminal-wrap scenario\` commit.)
 
 ## Addressed
 
