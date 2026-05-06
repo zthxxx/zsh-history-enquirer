@@ -1,7 +1,7 @@
 <h1 align="center">zsh-history-enquirer</h1>
 
 <p align="center">
-  <a href="https://github.com/zthxxx/zsh-history-enquirer/actions?query=workflow%3ACI"><img src="https://github.com/zthxxx/zsh-history-enquirer/workflows/CI/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/zthxxx/zsh-history-enquirer/actions/workflows/ci.yml"><img src="https://github.com/zthxxx/zsh-history-enquirer/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI" /></a>
   <a href="https://www.npmjs.com/package/zsh-history-enquirer"><img src="https://badgen.net/npm/v/zsh-history-enquirer" alt="NPM Version" /></a>
   <a href="https://www.npmjs.com/package/zsh-history-enquirer"><img src="https://badgen.net/npm/dt/zsh-history-enquirer" alt="NPM Downloads" /></a>
 </p>
