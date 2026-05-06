@@ -83,8 +83,11 @@ Node.js port counted UTF-16 code units (JS `String.length`), which
 approximates rune count for the BMP — both ports show the same
 behaviour on realistic shell history.
 
-`options.limit` defaults to **15**. It can be lowered in tests or by an
-env var, but the user-facing default is fixed.
+`options.limit` defaults to **15**. The `--max-limit N` CLI flag
+overrides it (mostly used by the e2e harness and `bin/dev.js`-style
+debug invocations); there is no env var because the picker
+auto-shrinks based on terminal height for the legitimate small-
+terminal case.
 
 ## Erase + restore
 
