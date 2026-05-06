@@ -8,6 +8,17 @@ pre-commit:
       stage_fixed: true
     lint-go:
       run: task lint:go
+    lint-arch:
+      # Only fires when a .go file is staged — arch violations only
+      # surface as import-graph changes, so non-Go commits skip this
+      # to keep the hook fast.
+      glob: "*.go"
+      run: task lint:arch
+    lint-sh:
+      # Only fires when a .sh file is staged. Hook is no-op without
+      # shellcheck installed (see Taskfile.yml lint:sh recipe).
+      glob: "*.sh"
+      run: task lint:sh
     lint-md:
       glob: "*.md"
       # Fall back to npx if bun isn't on the host. CI uses npx; the
