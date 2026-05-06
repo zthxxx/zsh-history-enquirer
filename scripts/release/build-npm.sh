@@ -119,7 +119,10 @@ done
 umbrella="${BUILD}/zsh-history-enquirer"
 mkdir -p "${umbrella}/bin" "${umbrella}/plugin"
 cp "${UMBRELLA_SRC}/bin/cli.js"  "${umbrella}/bin/cli.js"
-cp "${UMBRELLA_SRC}/plugin/zsh-history-enquirer.plugin.zsh" "${umbrella}/plugin/"
+# Source the plugin from the project root, not from a stale copy
+# inside npm/packages/. Single source of truth: any plugin fix lands
+# in plugin/ and flows through to the npm release at build time.
+cp "plugin/zsh-history-enquirer.plugin.zsh" "${umbrella}/plugin/"
 cp "${UMBRELLA_SRC}/README.md"   "${umbrella}/README.md"
 cp "${UMBRELLA_SRC}/LICENSE"     "${umbrella}/LICENSE"
 chmod +x "${umbrella}/bin/cli.js"
