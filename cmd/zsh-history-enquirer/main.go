@@ -36,9 +36,11 @@ func main() {
 	defer cancel()
 	if err := a.Start(startCtx); err != nil {
 		// Errors from Start are already printed to stderr by the app
-		// hook. Honor the widget contract: exit 0.
+		// hook. Honor the widget contract: exit 0. Run cancel()
+		// explicitly because os.Exit skips deferred functions.
 		_ = err
-		os.Exit(0)
+		cancel()
+		os.Exit(0) //nolint:gocritic // exitAfterDefer is acknowledged.
 	}
 
 	// Wait for fx.Shutdowner. Done() returns the requested exit code

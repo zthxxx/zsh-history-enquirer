@@ -9,7 +9,7 @@ import "strings"
 // The cost is O(N * len(tokens)) substring searches; for the realistic
 // upper bound (100k entries × ~5 tokens) it completes in single-digit
 // milliseconds.
-func AndFilter(choices []string, tokens []string) []string {
+func AndFilter(choices, tokens []string) []string {
 	if len(tokens) == 0 {
 		return choices
 	}

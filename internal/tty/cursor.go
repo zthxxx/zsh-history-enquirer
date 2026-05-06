@@ -39,7 +39,7 @@ func NewProbe(t *TTY) *Probe {
 //
 // Implementation: instead of relying on os.File.SetReadDeadline (which
 // is unreliable on /dev/tty in some kernels — notably docker's pty
-// emulation) we drive the read with unix.Poll directly. Poll honours
+// emulation) we drive the read with unix.Poll directly. Poll honors
 // the absolute timeout we pass it byte-for-byte regardless of the
 // underlying file's blocking mode.
 func (p *Probe) Cursor(ctx context.Context, timeout time.Duration) (row, col int, err error) {
@@ -127,10 +127,10 @@ func (e *TimeoutError) Error() string {
 // Unwrap allows errors.Is / errors.As to reach the underlying cause.
 func (e *TimeoutError) Unwrap() error { return e.Cause }
 
-// parseDSRResponse extracts row/col from a CSI <row>;<col>R reply.
+// parseDSRResponse extracts (row, col) from a CSI <row>;<col>R reply.
 // Bytes outside the bracketed payload are tolerated (terminals
 // occasionally emit one or two stray bytes ahead of the response).
-func parseDSRResponse(s string) (int, int, error) {
+func parseDSRResponse(s string) (row, col int, err error) {
 	start := strings.Index(s, "[")
 	end := strings.IndexByte(s, 'R')
 	if start < 0 || end < 0 || end <= start {
@@ -142,10 +142,11 @@ func parseDSRResponse(s string) (int, int, error) {
 		return 0, 0, fmt.Errorf("malformed DSR response %q (no semicolon)", s)
 	}
 	rowStr, colStr := body[:semi], body[semi+1:]
-	row, rerr := strconv.Atoi(rowStr)
-	col, cerr := strconv.Atoi(colStr)
+	rowVal, rerr := strconv.Atoi(rowStr)
+	colVal, cerr := strconv.Atoi(colStr)
 	if rerr != nil || cerr != nil {
 		return 0, 0, fmt.Errorf("malformed DSR response %q (non-numeric)", s)
 	}
+	row, col = rowVal, colVal
 	return row, col, nil
 }

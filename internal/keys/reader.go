@@ -2,8 +2,6 @@ package keys
 
 import (
 	"context"
-	"errors"
-	"io"
 	"os"
 	"os/signal"
 	"sync"
@@ -37,7 +35,7 @@ func (r *Reader) Prefeed(s string) []Event {
 }
 
 // Events returns a channel that yields Event values. The channel is
-// closed when ctx is cancelled or the TTY signals EOF. The returned
+// closed when ctx is canceled or the TTY signals EOF. The returned
 // goroutine cleans up its signal subscription on exit.
 //
 // Implementation notes:
@@ -107,9 +105,6 @@ func (r *Reader) Events(ctx context.Context) <-chan Event {
 				case <-ctx.Done():
 					return false
 				}
-				if _, ok := ev.(KeyEvent); ok {
-					// Lone Esc was already flushed via FlushEsc; nothing more to do.
-				}
 			}
 			return true
 		}
@@ -147,11 +142,9 @@ func (r *Reader) Events(ctx context.Context) <-chan Event {
 					return
 				}
 
-			case err := <-readerErr:
-				if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, os.ErrClosed) {
-					// Surface as a synthetic event? For now just exit
-					// — the caller observes the channel close.
-				}
+			case <-readerErr:
+				// EOF or other read error; exit cleanly so the caller
+				// observes the channel close.
 				return
 			}
 		}

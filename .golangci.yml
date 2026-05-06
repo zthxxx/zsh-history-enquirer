@@ -140,11 +140,50 @@ linters:
           - gocritic
           - errcheck
           - unparam
-      # The renderer emits ANSI escape sequences. The leading ``
-      # confuses misspell; permit it.
+          - revive
+      # ANSI escape sequences trip misspell on byte literals; permit it.
       - path: 'internal/(ansi|ui)/'
         linters:
           - misspell
+      # The TTY package converts os.File.Fd() (uintptr) to int and
+      # int32 for syscalls — that is the documented golang.org/x/sys
+      # idiom. G115 flags it as "integer overflow" which is a false
+      # positive on the platforms we ship.
+      - path: 'internal/tty/'
+        text: 'G115:'
+        linters:
+          - gosec
+      # Debug log files (ZHE_DEBUG path) are dev-machine only; 0o644
+      # is fine for them and keeping them open-by-tail-friendly is
+      # the whole point. The path comes from the user's own env var,
+      # so G304 / G703 path-traversal warnings are noise.
+      - path: 'internal/app/run.go'
+        text: 'G302:|G304:|G703:|G104:'
+        linters:
+          - gosec
+      # Subprocess invocation in the history loader uses a fixed
+      # binary name ("zsh") with caller-controlled args; this is the
+      # documented zsh shell-out and not a vulnerability.
+      - path: 'internal/history/loader.go'
+        text: 'G204:|G702:'
+        linters:
+          - gosec
+      # `_, _ = io.WriteString(...)` pattern is the documented way to
+      # ignore writes to a tty/stderr where there is no recovery. The
+      # errcheck "exclude-functions" list above already covers
+      # io.Writer.Write but not io.WriteString itself.
+      - text: 'WriteString.*is not checked'
+        linters:
+          - errcheck
+      - text: 'a.Stop.*is not checked'
+        linters:
+          - errcheck
+      - text: 'f.Close.*is not checked'
+        linters:
+          - errcheck
+      - text: '`t.LeaveRaw` is not checked'
+        linters:
+          - errcheck
     paths:
       - vendor
 

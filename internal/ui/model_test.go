@@ -99,7 +99,7 @@ func TestModel_EscCancelsAndPreservesInput(t *testing.T) {
 	m := newTestModel("3jdfn2-9jgf")
 	terminate := m.Update(keys.KeyEvent{Key: keys.KeyEsc})
 	require.True(t, terminate)
-	require.True(t, m.Cancelled)
+	require.True(t, m.Canceled)
 	require.Equal(t, "3jdfn2-9jgf", m.Result)
 }
 

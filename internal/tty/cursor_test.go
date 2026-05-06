@@ -33,9 +33,9 @@ func TestParseDSRResponse_Malformed(t *testing.T) {
 	cases := []string{
 		"",
 		"R",
-		"[12R",            // no semicolon
-		"[abc;1R",         // non-numeric
-		"[1;abcR",         // non-numeric
+		"[12R",    // no semicolon
+		"[abc;1R", // non-numeric
+		"[1;abcR", // non-numeric
 		"prefix without R",
 	}
 	for _, c := range cases {

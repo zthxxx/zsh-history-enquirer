@@ -52,7 +52,7 @@ func (m *Model) Render(opts RenderOptions) Frame {
 	return Frame{Pre: pre, Body: body, Post: post, Size: size, Limit: limit}
 }
 
-func (m *Model) renderBody() (string, int, int) {
+func (m *Model) renderBody() (string, int, int) { //nolint:gocritic // unnamed result is clearer here
 	// Step 1: write the input row at the captured prompt column.
 	var body strings.Builder
 	body.WriteString(ansi.CursorToCol(m.InitCol))

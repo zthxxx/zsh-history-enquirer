@@ -36,7 +36,7 @@ type Model struct {
 
 	// Status flags.
 	Submitted bool
-	Cancelled bool
+	Canceled  bool
 	Result    string
 }
 
@@ -113,7 +113,7 @@ func (m *Model) Focused() string {
 // end of the session. Cancel preserves the typed input; submit prefers
 // the focused entry, falling back to Input if there are no matches.
 func (m *Model) SubmitResult() string {
-	if m.Cancelled {
+	if m.Canceled {
 		return m.Input
 	}
 	if f := m.Focused(); f != "" {

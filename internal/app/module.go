@@ -62,14 +62,14 @@ func invokeRun(
 			// which is exactly what we want on probe / load failure.
 			result, err := Run(context.Background(), cfg, t, loader, stderr)
 
-			// Always print the result — even cancelled paths produce
+			// Always print the result — even canceled paths produce
 			// the user's original input as Result.
 			if result != nil {
 				PrintResult(stdout, result)
 			}
 
 			// Shutdown signals fx to begin teardown. The exit code
-			// reported back here is forced to 0 to honour the widget
+			// reported back here is forced to 0 to honor the widget
 			// contract.
 			code := HandleError(stderr, err)
 			if shErr := shutdowner.Shutdown(fx.ExitCode(code)); shErr != nil {

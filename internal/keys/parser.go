@@ -41,8 +41,7 @@ func NewParser() *Parser {
 // calls.
 func (p *Parser) Feed(in []byte) []Event {
 	out := []Event{}
-	for i := 0; i < len(in); i++ {
-		b := in[i]
+	for _, b := range in {
 		switch p.state {
 		case stateNormal:
 			out = p.feedNormal(b, out)
@@ -167,7 +166,7 @@ func (p *Parser) feedCSI(b byte, out []Event) []Event {
 		// arrives here is leftover or unsolicited.
 		return out
 	default:
-		// Unrecognised CSI; ignore quietly so unknown sequences do
+		// Unrecognized CSI; ignore quietly so unknown sequences do
 		// not corrupt input.
 		return out
 	}

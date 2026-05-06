@@ -41,7 +41,7 @@ func (m *Model) appendString(s string) {
 func (m *Model) applyKey(k keys.Key) (terminate bool) {
 	switch k {
 	case keys.KeyBackspace:
-		if len(m.Input) > 0 {
+		if m.Input != "" {
 			m.Input = m.Input[:len(m.Input)-1]
 			m.Cursor = len(m.Input)
 			m.recomputeFilter()
@@ -57,7 +57,7 @@ func (m *Model) applyKey(k keys.Key) (terminate bool) {
 		m.Result = m.SubmitResult()
 		return true
 	case keys.KeyEsc, keys.KeyCtrlC:
-		m.Cancelled = true
+		m.Canceled = true
 		m.Result = m.Input
 		return true
 	case keys.KeyUp:

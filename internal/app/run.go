@@ -118,7 +118,7 @@ func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, st
 		}
 	}
 
-	// Defence-in-depth: a poorly-behaved emulator may reply with row
+	// Defense-in-depth: a poorly-behaved emulator may reply with row
 	// or col values outside the terminal — bytes that happened to
 	// match the DSR shape but were never a real response. Clamp to
 	// reasonable bounds before doing the initCol arithmetic so a
@@ -208,13 +208,13 @@ func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, st
 	for {
 		select {
 		case <-ctx.Done():
-			model.Cancelled = true
+			model.Canceled = true
 			model.Result = model.Input
 			render(true)
 			return &RunResult{Output: model.Result}, ctx.Err()
 		case ev, ok := <-events:
 			if !ok {
-				model.Cancelled = true
+				model.Canceled = true
 				model.Result = model.Input
 				render(true)
 				return &RunResult{Output: model.Result}, errors.New("input closed")
@@ -248,7 +248,7 @@ func PrintResult(stdout io.Writer, r *RunResult) {
 	fmt.Fprintln(stdout, r.Output)
 }
 
-// HandleError produces the exit-0-always behaviour required by the
+// HandleError produces the exit-0-always behavior required by the
 // widget contract. The error is logged to stderr (which is invisible
 // to the widget's `$(...)` capture) and the function returns 0.
 func HandleError(stderr io.Writer, err error) int {
@@ -264,7 +264,8 @@ func HandleError(stderr io.Writer, err error) int {
 	return 0
 }
 
-// Default os.Stderr proxy so callers in tests can swap it out cleanly.
+// Stderr is a default os.Stderr proxy so callers in tests can swap it
+// out cleanly.
 //
 //nolint:gochecknoglobals // intentional swap point.
 var Stderr io.Writer = os.Stderr
