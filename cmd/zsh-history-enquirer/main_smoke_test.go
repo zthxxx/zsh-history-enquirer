@@ -61,3 +61,36 @@ func TestSmoke_VersionFlag(t *testing.T) {
 		strings.HasSuffix(stdout.String(), "\n"),
 		"--version output must end with newline (CLI convention)")
 }
+
+// TestIsVersionFlag pins the narrowed argv check that protects
+// widget-mode invocations. The widget calls
+//
+//	BUFFER=$(zsh-history-enquirer "$LBUFFER")
+//
+// — passing $LBUFFER as a single positional arg. Earlier code used
+// `slices.Contains(os.Args[1:], "--version")` which would
+// erroneously fast-path on inputs like `LBUFFER="foo --version"`
+// where --version was a positional token, not a flag. The narrowed
+// check requires --version to be the ONLY arg.
+func TestIsVersionFlag(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{"bare --version", []string{"bin", "--version"}, true},
+		{"bare -version", []string{"bin", "-version"}, true},
+		{"--version with extra arg", []string{"bin", "--version", "foo"}, false},
+		{"positional then --version", []string{"bin", "foo", "--version"}, false},
+		{"single positional", []string{"bin", "foo"}, false},
+		{"no args", []string{"bin"}, false},
+		{"empty argv", []string{}, false},
+	}
+	for _, tc := range cases {
+		got := isVersionFlag(tc.args)
+		require.Equalf(t, tc.want, got,
+			"isVersionFlag(%v) = %v, want %v", tc.args, got, tc.want)
+	}
+}

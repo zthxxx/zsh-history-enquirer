@@ -14,7 +14,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"slices"
 	"time"
 
 	"go.uber.org/fx"
@@ -22,15 +21,33 @@ import (
 	"github.com/zthxxx/zsh-history-enquirer/internal/app"
 )
 
+// isVersionFlag reports whether os.Args is invoked as a pure
+// `--version` query: the binary plus exactly one of the version
+// flag tokens, with nothing else.
+//
+// The pickier check exists because the widget invokes the binary as
+// `BUFFER=$(zsh-history-enquirer "$LBUFFER")`. If $LBUFFER is the
+// literal string "--version", a sloppy contains-check would
+// short-circuit and print the version into BUFFER instead of opening
+// the picker — silently destroying the user's typed input. With this
+// check, the picker opens normally because there's a positional arg
+// alongside the flag.
+func isVersionFlag(args []string) bool {
+	if len(args) != 2 {
+		return false
+	}
+	return args[1] == "--version" || args[1] == "-version"
+}
+
 func main() {
-	// Fast path: `--version` doesn't need a TTY at all. Detect it
-	// before fx.New so we don't open /dev/tty in environments where
+	// Fast path: a bare `--version` doesn't need a TTY at all. Detect
+	// it before fx.New so we don't open /dev/tty in environments where
 	// it isn't usable (CI runners, scripts piped from a non-tty
 	// shell, etc.). Print to stdout — that is the CLI convention
 	// (so `zsh-history-enquirer --version | grep` works) and only
 	// the *interactive* picker path uses stdout for the chosen
 	// line. Version output and picker output are mutually exclusive.
-	if slices.Contains(os.Args[1:], "--version") || slices.Contains(os.Args[1:], "-version") {
+	if isVersionFlag(os.Args) {
 		fmt.Fprintln(os.Stdout, app.VersionLine())
 		return
 	}
