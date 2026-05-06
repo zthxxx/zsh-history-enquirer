@@ -56,18 +56,37 @@ standalone `.zsh` source under `plugin/` and is not compiled in.
 ## Layered dependency rules
 
 ```
-cmd ─→ internal/app ─→ internal/{history, ui, tty, keys}
-                          │            │     │     │
-                          ▼            ▼     ▼     ▼
-                     internal/search   ─── internal/ansi
+                    cmd/zsh-history-enquirer
+                              │
+                              ▼
+                       internal/app
+                              │
+                              │   (everything below)
+       ┌──────────────┬───────┼────────┬────────┬──────────┐
+       ▼              ▼       ▼        ▼        ▼          ▼
+  internal/      internal/  internal/ internal/ internal/  pkg/
+  history        search     ui        keys      tty        version
+                              │        │         │
+                              ▼        ▼         ▼
+                          (search,    (tty)    (ansi)
+                            ansi,
+                            keys)
+                                              ▲
+                                              │
+                                          internal/ansi
 ```
 
-- No package may import a package "above" it in the diagram.
+- No package may import a package "above" it in the graph.
 - No package may import `cmd/`.
 - `pkg/` may be imported by anything.
-- The dependency rule is enforced statically by a `task lint:layers`
-  recipe (using `go-arch-lint` or a hand-rolled grep — TBD; see
-  `plan/30-architecture-enforcement.md`).
+- `internal/ui` imports `internal/keys` because Update dispatches
+  on `keys.Event` types. The transitive `ui → keys → tty` edge is
+  intended; the actual byte stream stays inside keys/Reader.
+
+The graph is enforced statically by `task lint:arch` (uses
+[`go-arch-lint`](https://github.com/fe3dback/go-arch-lint); config
+in `.go-arch-lint.yml`). CI runs it and the pre-commit hook runs
+it on `*.go` changes.
 
 ## Why fx?
 
