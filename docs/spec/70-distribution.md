@@ -64,7 +64,11 @@ The plugin file (`zsh-history-enquirer.plugin.zsh`) is shipped with both
 distributions:
 
 - npm: under `<package>/plugin/zsh-history-enquirer.plugin.zsh`.
-- homebrew: installed into the formula's prefix.
+- homebrew: into `#{opt_share}/zsh-history-enquirer/plugin.zsh`. The
+  formula's `resource "plugin"` block downloads the file from the
+  same GitHub Release that supplies the binary, then installs it
+  into pkgshare. Users source it via
+  `source "$(brew --prefix)/share/zsh-history-enquirer/plugin.zsh"`.
 
 Users source it themselves. The Go port deliberately does **not**
 auto-modify `.zshrc` or oh-my-zsh's plugin list (the legacy did, and
