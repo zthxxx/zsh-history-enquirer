@@ -301,6 +301,47 @@ func TestModel_DownBeforeFirstRender_AdvancesModulo(t *testing.T) {
 	require.Equal(t, 1, m.Idx, "Down before render must advance Idx by 1")
 }
 
+// TestModel_CtrlCCancelsAndPreservesInput — pins the Ctrl-C cancel
+// path. Was missing from explicit tests; the only Esc/^C variant
+// asserted before was Esc.
+func TestModel_CtrlCCancelsAndPreservesInput(t *testing.T) {
+	t.Parallel()
+	m := newTestModel("xyz-no-such-input")
+	terminate := m.Update(keys.KeyEvent{Key: keys.KeyCtrlC})
+	require.True(t, terminate)
+	require.True(t, m.Canceled)
+	require.False(t, m.Submitted, "Ctrl-C must not also set Submitted")
+	require.Equal(t, "xyz-no-such-input", m.Result,
+		"Ctrl-C must preserve typed input verbatim — widget contract")
+}
+
+// TestSubmitResult_Branches exercises all three branches of
+// SubmitResult directly:
+//   - Canceled → Input
+//   - Submitted with focused → focused
+//   - Submitted with no match → Input
+func TestSubmitResult_Branches(t *testing.T) {
+	t.Parallel()
+
+	// Canceled.
+	m1 := newTestModel("typed")
+	m1.Canceled = true
+	require.Equal(t, "typed", m1.SubmitResult())
+
+	// Submitted with focused match.
+	m2 := newTestModel("git")
+	require.NotEmpty(t, m2.Filter, "git should have matches in fixture")
+	m2.Submitted = true
+	require.Equal(t, m2.Filter[0], m2.SubmitResult())
+
+	// Submitted with no match.
+	m3 := newTestModel("zzz-no-match-zzz")
+	require.Empty(t, m3.Filter)
+	m3.Submitted = true
+	require.Equal(t, "zzz-no-match-zzz", m3.SubmitResult(),
+		"Enter on no-match must return typed input verbatim")
+}
+
 // TestModel_PageUpBeforeFirstRender exercises max1's n<1 branch:
 // before any Render(), m.Limit is 0; PageUp calls rotateUp(max1(0))
 // which must rotate by 1, not by 0 (which would be a no-op and
