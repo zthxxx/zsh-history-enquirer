@@ -33,11 +33,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - Static-linkage assertion in `scripts/build-all.sh` and CI's
   `build` job — Linux builds that accidentally pull in CGO fail
   loudly.
-- 11 e2e scenarios in Docker (debian + alpine) covering: basic
-  pick, multi-line scroll, cancel-preserves-input, multi-word
-  search, bracketed paste, PageUp/Down, Home, LBUFFER prefilter,
+- 17 e2e scenarios in Docker (debian + alpine, two libcs) covering:
+  basic pick, multi-line scroll, cancel-preserves-input, multi-word
+  search, bracketed paste, PageUp/Down, Home/End, LBUFFER prefilter,
   multi-line submit + run, multi-line render-and-cancel, multi-line
-  scroll-into-view.
+  scroll-into-view, empty history, Unicode entries (CJK / accented
+  / emoji), long-line wrap, vi-mode keymap, narrow-terminal wrap,
+  in-picker input editing.
+- Go-native fuzz target on `keys.Parser.Feed` — pinned via the
+  test corpus, run for longer windows via
+  `go test -fuzz=FuzzParser_NoPanicOnArbitraryBytes`.
 - Property-based tests with `pgregory.net/rapid`:
   - `internal/history` — reverse-dedupe-unescape invariants.
   - `internal/search` — AND-filter monotonicity, every-match-
