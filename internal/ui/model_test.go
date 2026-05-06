@@ -502,6 +502,23 @@ func TestModel_RotateDown_ModuloWrap(t *testing.T) {
 		"rotateDown(len(Filter)) must be a full revolution = identity")
 }
 
+// TestModel_RotateDown_NoOpEdges pins the early-return guards on
+// rotateDown — empty Filter and zero/negative n. Both must leave
+// the model unchanged. Symmetric to TestModel_RotateUp_NoOpEdges.
+func TestModel_RotateDown_NoOpEdges(t *testing.T) {
+	t.Parallel()
+	m := NewModel("zzz", []string{"git", "echo"}, 15, 80, 1, 1, DefaultMaxLimit)
+	require.Empty(t, m.Filter)
+	m.rotateDown(1) // empty Filter — must not panic
+
+	m2 := newTestModel("")
+	before := slices.Clone(m2.Filter)
+	m2.rotateDown(0)
+	require.Equal(t, before, m2.Filter, "rotateDown(0) must be a no-op")
+	m2.rotateDown(-3)
+	require.Equal(t, before, m2.Filter, "rotateDown(-n) must be a no-op")
+}
+
 // TestModel_RotateUpDown_RoundTrip — rotateDown(n) then rotateUp(n)
 // must restore the original Filter for any 0 < n < len(Filter).
 func TestModel_RotateUpDown_RoundTrip(t *testing.T) {
