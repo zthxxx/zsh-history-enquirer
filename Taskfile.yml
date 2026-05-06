@@ -187,7 +187,16 @@ tasks:
     cmds:
       - mkdir -p release
       - find dist -type f -name '{{.APP_NAME}}-*' -exec cp {} release/ \;
-      - cd release && (sha256sum {{.APP_NAME}}-* 2>/dev/null || shasum -a 256 {{.APP_NAME}}-*) > checksums.txt
+      # The plugin file ships as a separate release asset so the
+      # Homebrew formula can install it into share/. Without this,
+      # a brew-installed picker has no plugin.zsh on disk and the
+      # README's `source $(brew --prefix)/share/zsh-history-enquirer/plugin.zsh`
+      # line points at a non-existent path.
+      - cp plugin/zsh-history-enquirer.plugin.zsh release/
+      # Pass each file by name — globbing `*` would re-include
+      # checksums.txt as we write to it, with itself's hash listed
+      # against an empty file.
+      - cd release && (sha256sum zsh-history-enquirer-* zsh-history-enquirer.plugin.zsh 2>/dev/null || shasum -a 256 zsh-history-enquirer-* zsh-history-enquirer.plugin.zsh) > checksums.txt
 
   ci:release:bump-homebrew-tap:
     desc: "CI — open a PR bumping zsh-history-enquirer Formula in zthxxx/homebrew-tap (usage: VERSION=v2.0.0 task ci:release:bump-homebrew-tap)"

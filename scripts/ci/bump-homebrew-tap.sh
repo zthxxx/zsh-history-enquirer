@@ -79,10 +79,18 @@ SHA_LINUX_ARM64="$(sha_for zsh-history-enquirer-linux-arm64)" \
 SHA_LINUX_AMD64="$(sha_for zsh-history-enquirer-linux-amd64)" \
   || { echo "error: zsh-history-enquirer-linux-amd64 missing from checksums.txt" >&2; exit 1; }
 
+# The plugin file ships as a separate release asset so the formula
+# can install it into share/. Without this, a brew-installed binary
+# has no plugin.zsh on disk and the README's `source ...` line points
+# at a non-existent path.
+SHA_PLUGIN="$(sha_for zsh-history-enquirer.plugin.zsh)" \
+  || { echo "error: zsh-history-enquirer.plugin.zsh missing from checksums.txt" >&2; exit 1; }
+
 echo "    darwin-arm64: ${SHA_DARWIN_ARM64}"
 echo "    darwin-amd64: ${SHA_DARWIN_AMD64}"
 echo "    linux-arm64:  ${SHA_LINUX_ARM64}"
 echo "    linux-amd64:  ${SHA_LINUX_AMD64}"
+echo "    plugin.zsh:   ${SHA_PLUGIN}"
 
 echo "==> Cloning ${TAP_REPO}"
 TAP_DIR="${work}/tap"
@@ -127,8 +135,16 @@ class ZshHistoryEnquirer < Formula
     end
   end
 
+  resource "plugin" do
+    url "https://github.com/zthxxx/zsh-history-enquirer/releases/download/v#{version}/zsh-history-enquirer.plugin.zsh"
+    sha256 "${SHA_PLUGIN}"
+  end
+
   def install
     bin.install Dir["zsh-history-enquirer-*"].first => "zsh-history-enquirer"
+    resource("plugin").stage do
+      pkgshare.install "zsh-history-enquirer.plugin.zsh" => "plugin.zsh"
+    end
   end
 
   def caveats
@@ -157,6 +173,7 @@ text = re.sub(r'(zsh-history-enquirer-darwin-arm64".*?sha256 ")[^"]+', r'\g<1>${
 text = re.sub(r'(zsh-history-enquirer-darwin-amd64".*?sha256 ")[^"]+', r'\g<1>${SHA_DARWIN_AMD64}', text, flags=re.S)
 text = re.sub(r'(zsh-history-enquirer-linux-arm64".*?sha256 ")[^"]+', r'\g<1>${SHA_LINUX_ARM64}', text, flags=re.S)
 text = re.sub(r'(zsh-history-enquirer-linux-amd64".*?sha256 ")[^"]+', r'\g<1>${SHA_LINUX_AMD64}', text, flags=re.S)
+text = re.sub(r'(zsh-history-enquirer\.plugin\.zsh".*?sha256 ")[^"]+', r'\g<1>${SHA_PLUGIN}', text, flags=re.S)
 p.write_text(text)
 PY
 fi
