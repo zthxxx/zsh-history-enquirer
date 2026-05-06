@@ -10,7 +10,10 @@ pre-commit:
       run: task lint:go
     lint-md:
       glob: "*.md"
-      run: bun markdownlint-cli2 {staged_files}
+      # Fall back to npx if bun isn't on the host. CI uses npx; the
+      # `bun markdownlint-cli2` form is just slightly faster when
+      # the contributor happens to have bun locally.
+      run: command -v bun >/dev/null && bun markdownlint-cli2 {staged_files} || npx --yes markdownlint-cli2 {staged_files}
     test-unit:
       run: task test:unit
 
