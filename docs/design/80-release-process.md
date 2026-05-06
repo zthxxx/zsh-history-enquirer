@@ -42,13 +42,21 @@ Downloads all 4 artifacts into `dist/<artifact-name>/<binary>`, then
 ```
 mkdir -p release
 find dist -type f -name 'zsh-history-enquirer-*' -exec cp {} release/ \;
-cd release && (sha256sum zsh-history-enquirer-* 2>/dev/null
-                 || shasum -a 256 zsh-history-enquirer-*) > checksums.txt
+# The plugin file ships as a separate release asset so the Homebrew
+# formula's `resource "plugin"` stanza can fetch it.
+cp plugin/zsh-history-enquirer.plugin.zsh release/
+cd release && (sha256sum zsh-history-enquirer-* zsh-history-enquirer.plugin.zsh 2>/dev/null
+                 || shasum -a 256 zsh-history-enquirer-* zsh-history-enquirer.plugin.zsh) > checksums.txt
 ```
 
-Checksums fall back to `shasum -a 256` for non-Linux runners (the CI
-matrix is ubuntu-latest, so `sha256sum` works; the fallback exists
-for parity with `task build:release` on macOS dev machines).
+Five files end up in `release/` after this step: 4 binaries plus
+the plugin file. `checksums.txt` covers all of them (passed by
+name rather than `*` glob so `checksums.txt` itself does not get
+its own line as we write to it).
+
+Checksums fall back to `shasum -a 256` for non-Linux runners (the
+CI matrix is ubuntu-latest, so `sha256sum` works; the fallback
+exists for parity with `task build:release` on macOS dev machines).
 
 `softprops/action-gh-release@v2` then uploads `release/*` and
 auto-generates release notes. The `prerelease:` field is computed
