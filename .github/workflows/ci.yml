@@ -74,7 +74,11 @@ jobs:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - run: npx --yes markdownlint-cli2 "**/*.md"
+      # Use the task recipe so CI matches what contributors run
+      # locally (`task lint:md`). The recipe handles the bun → npx
+      # fallback so this CI runner — which has node but not bun —
+      # picks up the npx path.
+      - run: task ci:lint:md
 
   test:
     name: Test
