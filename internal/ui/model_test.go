@@ -2,6 +2,7 @@ package ui
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -299,6 +300,29 @@ func TestModel_DownBeforeFirstRender_AdvancesModulo(t *testing.T) {
 
 	m.Update(keys.KeyEvent{Key: keys.KeyDown})
 	require.Equal(t, 1, m.Idx, "Down before render must advance Idx by 1")
+}
+
+// TestModel_EndOnEntryLargerThanTerminal exercises the
+// visibleCount==0 fallback in scrollToEnd: when the LAST filtered
+// entry's wrapped row count alone exceeds heightLimit, the
+// back-walk loop never increments visibleCount. The fallback
+// bumps it to 1 so End still lands on a focused entry rather
+// than nothing.
+func TestModel_EndOnEntryLargerThanTerminal(t *testing.T) {
+	t.Parallel()
+	huge := "huge-tail\n" + strings.Repeat("L\n", 30)
+	choices := []string{"a-1", "a-2", huge}
+	// Tiny terminal — heightLimit = 5-3 = 2, but `huge` alone wraps
+	// to ~32 rows.
+	m := NewModel("", choices, 5, 80, 1, 1, DefaultMaxLimit)
+	m.Render(RenderOptions{})
+
+	m.Update(keys.KeyEvent{Key: keys.KeyEnd})
+	// Idx must be 0 (visibleCount-1 with visibleCount=1 from the
+	// fallback). The Filter has been rotated by 1 — the huge entry
+	// (last in original Filter) is now at position 0.
+	require.Equal(t, 0, m.Idx,
+		"End on overflow-only entry must still focus index 0")
 }
 
 // TestModel_NewModel_ZeroMaxLimitDefaults pins the maxLimit<=0
