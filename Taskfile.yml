@@ -324,7 +324,7 @@ tasks:
         go-arch-lint check
 
   lint:sh:
-    desc: Run shellcheck on every release / CI shell script
+    desc: Run shellcheck on every release / CI / e2e shell script
     cmds:
       # Skip silently if shellcheck is missing; otherwise run it and
       # propagate the exit code. The previous `&& ... || (echo ...)`
@@ -335,7 +335,7 @@ tasks:
           echo "shellcheck not installed; skipping" >&2
           exit 0
         fi
-        find scripts -name "*.sh" -print0 | xargs -0 shellcheck
+        find scripts e2e -name "*.sh" -print0 | xargs -0 shellcheck
 
   lint:md:
     desc: Run markdownlint via bun (npx fallback if no bun)
