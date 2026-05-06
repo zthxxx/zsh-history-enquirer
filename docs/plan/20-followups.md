@@ -181,3 +181,13 @@ Each entry must include:
   prompts that nudge contributors toward project conventions
   (spec/design/plan workflow, multi-line e2e, conventional
   commits). Resolved in this iteration's commit.
+
+* **2026-05-07** — The pnpm workspace lived under `npm-workspace/`
+  but the user spec called for it under `npm/` ("npm 包管理使用
+  pnpm workspace, workspace 放在 npm"). Renamed via `git mv`
+  (history preserved) and updated every reference in
+  pnpm-workspace.yaml, .gitignore, Taskfile.yml, docs/spec,
+  docs/design, docs/plan, AGENTS.md, CONTRIBUTING.md, and
+  scripts/release/build-npm.sh. Build + render-umbrella +
+  per-platform packages reproduce the right shape after the
+  rename. Resolved in this iteration's commit.
