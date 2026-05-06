@@ -94,6 +94,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **`VERSION=v2.0.0 task release:dry-run` ignored the env override**
   — Task's `vars: VERSION: { sh: ... }` always resolved via git
   describe. The local override now works.
+- **Pre-release versions published under npm `latest`** — the
+  release script ran `npm publish --access public` with no
+  `--tag`, so a `v1.0.0-rc.1` would have replaced stable `v1.0.0`
+  as the `latest` install. Pre-releases now correctly publish
+  under `next`; stable under `latest`.
+- **`task lint:sh` and `task lint:arch` silently masked real
+  failures.** The `&& cmd || (echo "not installed")` chain
+  routed real shellcheck / go-arch-lint violations to the "not
+  installed" message and exited 0. Replaced with `if/else` so
+  violations actually fail the task.
 
 ### Distribution
 
