@@ -104,6 +104,11 @@ tasks:
     cmds:
       - go test -race -count=1 -run "TestProperty" ./...
 
+  test:bench:
+    desc: Run Go benchmarks for performance characterization
+    cmds:
+      - go test -bench=. -benchmem -run="^$" ./internal/search/ ./internal/history/
+
   test:cover:
     desc: Show test coverage in browser
     deps: [test:unit]
