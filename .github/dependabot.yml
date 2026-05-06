@@ -1,0 +1,42 @@
+version: 2
+updates:
+  # Go module updates — the picker has 5 direct dependencies.
+  # Group all minor/patch updates into one PR per week to keep
+  # noise low; major bumps still come as individual PRs so the
+  # human has a chance to read changelogs.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      go-minor-patch:
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+      - go
+
+  # GitHub Actions are pinned by major version (`@v4` etc.). One PR
+  # per minor/patch bump is fine since they're rare.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - ci
+
+  # NPM dependencies — only the umbrella package's devDependencies
+  # are real (commitlint, markdownlint). Platform sub-packages are
+  # template-rendered and not in the lockfile.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - js

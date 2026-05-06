@@ -1,0 +1,21 @@
+# Default reviewer for everything not matched below.
+*                                       @zthxxx
+
+# Spec / design / plan changes affect the whole project; they
+# always need maintainer review.
+/docs/                                  @zthxxx
+
+# Picker behavior — UX-critical paths.
+/internal/ui/                           @zthxxx
+/internal/keys/                         @zthxxx
+/internal/tty/                          @zthxxx
+/plugin/                                @zthxxx
+
+# CI / release / distribution — these affect every downstream
+# user, so no one should self-merge.
+/.github/                               @zthxxx
+/scripts/                               @zthxxx
+/npm/                                   @zthxxx
+/Taskfile.yml                           @zthxxx
+/.go-arch-lint.yml                      @zthxxx
+/.golangci.yml                          @zthxxx
