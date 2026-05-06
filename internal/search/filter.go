@@ -24,14 +24,10 @@ func AndFilter(choices, tokens []string) []string {
 }
 
 // matchesAll reports whether every token is a substring of c (case-
-// insensitive). The lowercase normalisation is performed lazily so the
-// short-circuit on the first failed token avoids the full ToLower
-// allocation when possible.
+// insensitive). Precondition: tokens is non-empty — AndFilter handles
+// the empty-tokens case at the boundary, so we don't duplicate the
+// guard here.
 func matchesAll(c string, tokens []string) bool {
-	if len(tokens) == 0 {
-		return true
-	}
-
 	// Lower-cased once per choice; this is the dominant cost.
 	lc := strings.ToLower(c)
 	for _, t := range tokens {
