@@ -40,8 +40,10 @@ idempotent action.
 - [x] `internal/ui/model.go` + `update.go`: state struct + Update fn
   - [x] table tests for every keybinding
 - [x] `internal/ui/render.go`: Frame builder
-  - [x] golden tests
-- [x] `internal/ui/throttle.go`: leading-edge throttle + trailing-edge flush in run.go
+  - [x] targeted property tests (no golden frames; assert specific
+    properties — escape sequence presence, highlight wrapping,
+    dynamic-limit math)
+- [x] `internal/ui/throttle.go`: leading-edge throttle + trailing-edge flush in loop.go
 
 ## P4. App
 
@@ -52,7 +54,7 @@ idempotent action.
 
 ## P5. Distribution
 
-- [x] `npm/`: pnpm.yaml, umbrella package, install shim
+- [x] `npm/`: pnpm-workspace.yaml at repo root, umbrella package, cli.js shim with postinstall hint
 - [x] `npm/templates/platform/`: render template
 - [x] `scripts/release/build-npm.sh`: render + publish flow (dry-run mode tested)
 
