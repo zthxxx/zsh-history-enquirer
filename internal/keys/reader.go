@@ -28,11 +28,16 @@ var PanicWriter io.Writer = os.Stderr
 // back to stdout, preserving the widget contract. The panic itself is
 // reported to PanicWriter (stderr by default — invisible to the
 // command substitution).
+//
+// Output uses "\r\n" rather than "\n" because the panic happens while
+// the terminal is still in raw mode (OPOST disabled) — a bare "\n"
+// drops the cursor down a row without resetting to col 0, so any
+// subsequent stderr write (from main's recover or the shell prompt
+// after we exit) would land at a stale column.
 func recoverGoroutinePanic() {
 	if rec := recover(); rec != nil {
-		_, _ = io.WriteString(PanicWriter,
-			"zsh-history-enquirer: keys reader panic recovered: ")
-		_, _ = fmt.Fprintln(PanicWriter, rec)
+		_, _ = fmt.Fprintf(PanicWriter,
+			"zsh-history-enquirer: keys reader panic recovered: %v\r\n", rec)
 	}
 }
 
