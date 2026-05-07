@@ -36,24 +36,38 @@ type Frame struct {
 	Body string
 	Post string
 
-	// Size is the number of rows the new Body occupies (counting only
-	// the choice rows, not the input row). Stored on the model after
-	// each render so the next frame's Pre can erase exactly that many
-	// rows.
+	// Size is the number of body rows BELOW the input start row N —
+	// that is, input wrap rows (when the input overflows the terminal
+	// width) plus the choice rows. Stored on the model so the next
+	// frame's Pre can erase exactly that many rows.
 	Size int
 
 	// Limit is the number of choices that ended up visible. The caller
 	// stores this on the model so subsequent up/down navigation can
 	// use it.
 	Limit int
+
+	// CursorRow is the 0-indexed row offset (from input row N) where
+	// Post left the terminal cursor. When the input wraps, the cursor
+	// rests on one of the input wrap rows rather than on row N itself,
+	// so the next frame's Pre must walk up CursorRow lines before it
+	// can address the input row to redraw it.
+	CursorRow int
 }
 
-// RenderOptions lets the caller pass the previous-frame size into the
-// renderer. We do not store it on the Model because the Model is
+// RenderOptions carries the previous frame's geometry into the next
+// render pass. We do not store these on the Model because the Model is
 // otherwise a pure data struct; mixing rendering bookkeeping into it
 // would leak abstraction.
 type RenderOptions struct {
+	// PrevSize is the previous Frame.Size (rows below input row N).
 	PrevSize int
+
+	// PrevCursorRow is the previous Frame.CursorRow — required when
+	// the previous input wrapped and Post left the cursor below row N.
+	// Defaults to 0 (the natural value for the very first frame and
+	// for any prior frame whose input fit on a single row).
+	PrevCursorRow int
 }
 
 // pointerSelected is the glyph drawn before the focused choice.
@@ -66,14 +80,57 @@ const pointerUnselected = "  "
 // The Frame is purely a byte-string description; it does not touch
 // the terminal directly.
 func (m *Model) Render(opts RenderOptions) Frame {
-	body, size, limit := m.renderBody()
-	pre := m.renderPre(opts.PrevSize)
-	post := m.renderPost(size)
+	// Compute input geometry once — the wrap math is consumed by all
+	// three render stages (Body reserves choice space, Pre walks up
+	// from the previous cursor row, Post lands the caret on the right
+	// wrap row).
+	inputCells := CellWidth(m.Input)
+	cursorCells := CellWidth(m.Input[:clampCursor(m.Cursor, len(m.Input))])
+	inputExtra := InputExtraRows(m.InitCol, inputCells, m.Width)
+	cursorRow, cursorCol := InputCursorPosition(m.InitCol, cursorCells, m.Width)
+
+	body, choiceRows, limit := m.renderBody(inputExtra)
+	size := inputExtra + choiceRows
+	pre := m.renderPre(opts.PrevSize, opts.PrevCursorRow)
+	post := m.renderPost(size, cursorRow, cursorCol)
 	m.Limit = limit
-	return Frame{Pre: pre, Body: body, Post: post, Size: size, Limit: limit}
+	return Frame{Pre: pre, Body: body, Post: post, Size: size, Limit: limit, CursorRow: cursorRow}
 }
 
-func (m *Model) renderBody() (string, int, int) { //nolint:gocritic // unnamed result is clearer here
+// clampCursor guards against a model whose Cursor was mutated past the
+// input length (defensive: an upstream bug or a buggy edit op should
+// not crash the renderer).
+func clampCursor(cur, length int) int {
+	if cur < 0 {
+		return 0
+	}
+	if cur > length {
+		return length
+	}
+	return cur
+}
+
+// choiceHeightLimit returns the row budget the dynamic-limit walk has
+// for choices, given that the input row consumes 1 + inputExtra rows.
+// Floored at 1 so the picker still draws something on a tiny terminal.
+//
+// Shared between renderBody (forward walk) and scrollToEnd (backward
+// walk) so the two never disagree on row arithmetic — disagreement
+// here was the bug class behind the wrap-math/sanitize regression.
+func choiceHeightLimit(height, inputExtra int) int {
+	limit := height - 3 - inputExtra
+	if limit < 1 {
+		limit = 1
+	}
+	return limit
+}
+
+// renderBody returns the body string, the number of CHOICE rows it
+// occupies (excluding input wrap rows), and the visible-choice count.
+// inputExtra is fed in so the dynamic-limit walk can subtract those
+// rows from the available height — without it, a wrapped input
+// silently steals choice space and we draw past the bottom.
+func (m *Model) renderBody(inputExtra int) (string, int, int) { //nolint:gocritic // unnamed result is clearer here
 	tokens := search.Tokenize(m.Input)
 
 	// Step 1: write the input row at the captured prompt column.
@@ -83,12 +140,11 @@ func (m *Model) renderBody() (string, int, int) { //nolint:gocritic // unnamed r
 	body.WriteString(m.Input)
 
 	// Step 2: walk the filtered list, accumulating row counts until
-	// either MaxLimit or terminal-3 is reached. This is the dynamic
-	// limit logic from spec/40.
-	heightLimit := m.Height - 3
-	if heightLimit < 1 {
-		heightLimit = 1
-	}
+	// either MaxLimit or the available choice height is reached.
+	// Reserve room for the input row itself plus its wrap rows — when
+	// input overflows the terminal width the wrap rows shift choices
+	// down, so heightLimit must shrink accordingly.
+	heightLimit := choiceHeightLimit(m.Height, inputExtra)
 
 	// We compute wrap-rows on the SANITIZED text (the version that
 	// will actually be written to the terminal), not the raw entry.
@@ -303,34 +359,55 @@ func sanitizeChoiceForRender(s string) string {
 }
 
 // renderPre erases the previous frame's body so the next draw lands
-// on a clean slate. We assume the cursor is currently on the input
-// row (where Render leaves it after every frame).
-func (m *Model) renderPre(prevSize int) string {
-	if prevSize <= 0 {
-		// First frame: nothing to erase below, but we still want to
-		// wipe the input row from initCol onwards.
-		return ansi.CursorToCol(m.InitCol) + ansi.EraseLineEnd
-	}
+// on a clean slate.
+//
+// Cursor location at entry: wherever the previous frame's Post left
+// it. With wrap-aware rendering that's row N+prevCursorRow (0-indexed
+// from input row N), col=cursorCol from prev input. To erase the prev
+// body we first walk back to row N, then erase row N's input portion,
+// then walk down prevSize rows erasing each, then walk back up to row
+// N for the next Body to draw on.
+//
+// First frame (prevSize==0 && prevCursorRow==0) skips the walk-down
+// step — there is no prior body to erase.
+func (m *Model) renderPre(prevSize, prevCursorRow int) string {
 	var b strings.Builder
-	// Walk down the prevSize body rows, erasing each.
+	// Walk up to row N from wherever the previous Post landed.
+	if prevCursorRow > 0 {
+		b.WriteString(ansi.CursorPrevLine(prevCursorRow))
+	}
+	// Erase the input row's tail starting at the captured prompt col.
+	b.WriteString(ansi.CursorToCol(m.InitCol))
+	b.WriteString(ansi.EraseLineEnd)
+	if prevSize <= 0 {
+		// First frame (or a previous frame with empty body, which
+		// cannot actually happen because we always emit "(no matches)"
+		// when nothing matches): nothing more to erase.
+		return b.String()
+	}
+	// Walk down the prevSize body rows, erasing each. CR+LF advances
+	// to col 0 of the next row in raw mode; EraseLine wipes the row.
 	for range prevSize {
 		b.WriteString("\r\n")
 		b.WriteString(ansi.EraseLine)
 	}
-	// Walk back up to the input row and erase from initCol onward.
+	// Walk back up to the input row and reset the column for Body to
+	// continue from the captured prompt position.
 	b.WriteString(ansi.CursorPrevLine(prevSize))
 	b.WriteString(ansi.CursorToCol(m.InitCol))
-	b.WriteString(ansi.EraseLineEnd)
 	return b.String()
 }
 
-// renderPost returns the cursor to the input row at the user's caret.
-func (m *Model) renderPost(currentSize int) string {
+// renderPost places the terminal cursor at the user's caret, even when
+// the input wrapped to additional rows. After Body, the cursor sits at
+// row N+currentSize (the bottom of the body); we walk up the difference
+// to land on the cursor's wrap row, then position it at cursorCol.
+func (m *Model) renderPost(currentSize, cursorRow, cursorCol int) string {
 	var b strings.Builder
-	// Move from after the body back up to the input row.
-	if currentSize > 0 {
-		b.WriteString(ansi.CursorPrevLine(currentSize))
+	walkUp := currentSize - cursorRow
+	if walkUp > 0 {
+		b.WriteString(ansi.CursorPrevLine(walkUp))
 	}
-	b.WriteString(ansi.CursorToCol(m.InitCol + m.Cursor))
+	b.WriteString(ansi.CursorToCol(cursorCol))
 	return b.String()
 }

@@ -251,15 +251,24 @@ func (m *Model) scrollToEnd() {
 		return
 	}
 
-	heightLimit := m.Height - 3
-	if heightLimit < 1 {
-		heightLimit = 1
-	}
+	// Mirror renderBody's wrap-aware row budget: the input may wrap to
+	// multiple rows on narrow terminals, eating into the choice
+	// height. If we did the math against m.Height-3 (the legacy
+	// budget) the rotation count would over-shoot relative to what
+	// the renderer can actually fit, and the focused match would
+	// land off-screen.
+	inputExtra := InputExtraRows(m.InitCol, CellWidth(m.Input), m.Width)
+	heightLimit := choiceHeightLimit(m.Height, inputExtra)
 
 	visibleCount := 0
 	rows := 0
 	for i := len(m.Filter) - 1; i >= 0; i-- {
-		choiceRows := WrappedRowCount(m.Filter[i], m.Width)
+		// Use the SANITIZED form of each entry — same reason as
+		// renderBody: control bytes get rewritten as caret-notation
+		// and consume more cells than the raw bytes do, so the wrap
+		// arithmetic must run against what the terminal will see.
+		s := sanitizeChoiceForRender(m.Filter[i])
+		choiceRows := WrappedRowCount(s, m.Width)
 		if rows+choiceRows > heightLimit {
 			break
 		}

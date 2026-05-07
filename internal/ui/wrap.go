@@ -58,6 +58,60 @@ func rowCellWidth(line string, startCol int) int {
 	return col
 }
 
+// InputCursorPosition reports the (row, col) where the visual cursor
+// sits after `cellsBefore` cells of input have been written, given an
+// input row that started at 1-indexed column `initCol` of a `cols`-wide
+// terminal. Row is the 0-indexed offset from the input row; col is the
+// 1-indexed terminal column matching ANSI's CSI G escape.
+//
+// The convention is "cursor sits one cell to the right of the last
+// typed char, on the row that last char actually landed on" — matching
+// readline / fish / vim. When the last char exactly fills the row
+// (cursor would be at col cols+1) we clamp to col cols, the deferred-
+// wrap state every common terminal renders. Without the clamp the
+// renderer would jump the visible caret to col 1 of the next row even
+// though no character has wrapped yet, surprising the user mid-type.
+func InputCursorPosition(initCol, cellsBefore, cols int) (row, col int) {
+	if cols <= 0 {
+		return 0, initCol
+	}
+	if cellsBefore <= 0 {
+		return 0, initCol
+	}
+	lastCharFlat := initCol + cellsBefore - 1
+	if lastCharFlat < 1 {
+		return 0, 1
+	}
+	row = (lastCharFlat - 1) / cols
+	colInRow := ((lastCharFlat - 1) % cols) + 1
+	col = colInRow + 1
+	if col > cols {
+		col = cols
+	}
+	return row, col
+}
+
+// InputExtraRows reports how many wrap rows below the input start row
+// the input occupies when `cellsTotal` cells are written starting at
+// 1-indexed column `initCol` of a `cols`-wide terminal. Returns 0
+// when the input fits on row N (or is empty). The renderer uses this
+// to (a) reserve choice space (heightLimit -= inputExtra) and
+// (b) compute the total body row count for renderPre/renderPost.
+//
+// We treat exactly-filling-the-row as 0 extra rows: 16 cells from
+// initCol=5 on a 20-col terminal land the last cell at col 20 with the
+// cursor in deferred wrap on row N — visually still one row.
+func InputExtraRows(initCol, cellsTotal, cols int) int {
+	if cellsTotal <= 0 || cols <= 0 {
+		return 0
+	}
+	lastCellCol := initCol + cellsTotal - 1
+	if lastCellCol < 1 {
+		return 0
+	}
+	return (lastCellCol - 1) / cols
+}
+
 // WrappedRowCount returns the number of terminal rows that the given
 // text occupies when printed at column 0 of a `cols`-wide terminal,
 // after prefixing each visual line with the pointer.

@@ -25,6 +25,39 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — `Frame.Size` only counted choice rows, leaving the
+  renderer blind to input rows that wrap on narrow terminals. With a
+  long input (or a long argv prefilled into the picker) on a narrow
+  terminal, `renderPost` emitted `CursorToCol(initCol+m.Cursor)` —
+  terminals clamped that to the right margin, so the cursor landed
+  on the wrong row. The next `renderPre` then walked down from the
+  wrong starting row and erased too few rows; stale wrap rows leaked
+  between frames. Fixed by:
+  - `internal/ui/wrap.go` — added `InputCursorPosition(initCol,
+    cellsBefore, cols)` and `InputExtraRows(initCol, cellsTotal, cols)`
+    helpers (pure picker-overlay arithmetic; no library equivalent
+    because TUI libs assume full-screen control, not the
+    captured-prompt overlay model this picker uses).
+  - `internal/ui/render.go` — `Frame.Size` now means
+    `inputExtra + choiceRows`. Added `Frame.CursorRow` and
+    `RenderOptions.PrevCursorRow` so subsequent passes can walk back
+    from wherever Post left the caret. New shared `choiceHeightLimit`
+    helper.
+  - `internal/ui/update.go` — `scrollToEnd` (KeyEnd) mirrors the
+    new `inputExtra`-aware budget AND uses the sanitized form of each
+    entry, eliminating the cross-walk discrepancy with `renderBody`.
+  - `internal/app/loop.go` — event loop tracks `prevCursorRow`
+    alongside `prevSize`.
+  - Tests: `TestInputCursorPosition` (10 cases, hand-traced against
+    xterm/iTerm wrap behaviour), `TestInputExtraRows` (10 cases),
+    `TestRender_LongInputWraps`, `TestRender_PreWalksUpFromInputWrapCursor`,
+    `TestRender_HeightLimitReservesInputWrapSpace`,
+    `TestRender_WrapInvariantAcrossPasses` (multi-step round-trip),
+    `TestModel_EndScrollWithWrappedInput`.
+  - E2E: scenario 21-input-wrap-edit.exp exercises the full
+    type-long-input → backspace-50-times → match-fully-revealed cycle
+    on a 40-col Docker pty (debian + alpine, 21/21 pass).
+
 * **2026-05-07** — Added `NO_COLOR` opt-out per the
   [no-color.org](https://no-color.org) convention. Setting any
   non-empty value suppresses both the bold-cyan token highlight

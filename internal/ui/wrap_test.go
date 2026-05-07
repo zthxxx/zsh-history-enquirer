@@ -113,6 +113,86 @@ func TestRowCellWidth(t *testing.T) {
 	}
 }
 
+// TestInputCursorPosition pins the wrap arithmetic the renderer uses
+// to land the caret on the right (row, col) when input overflows the
+// terminal width. The function maps (initCol, cellsBefore, cols) to
+// (rowOffset, col1Indexed) — each case below is hand-traced against
+// xterm/iTerm wrap behaviour.
+func TestInputCursorPosition(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name        string
+		initCol     int
+		cellsBefore int
+		cols        int
+		wantRow     int
+		wantCol     int
+	}{
+		{"empty-input-on-row-N", 5, 0, 80, 0, 5},
+		{"single-cell-no-wrap", 5, 1, 80, 0, 6},
+		{"end-of-row-no-wrap", 5, 15, 20, 0, 20},
+		// Deferred wrap: 16 x's from col 5 land cells at cols 5-20.
+		// Cursor would be at col 21 (one past last); clamp to col 20.
+		{"deferred-wrap-clamps-to-last-col", 5, 16, 20, 0, 20},
+		// 17th x triggers actual wrap to row N+1 col 1; cursor at col 2.
+		{"one-cell-into-wrap-row", 5, 17, 20, 1, 2},
+		{"thirty-cells-from-col-5", 5, 30, 20, 1, 15},
+		// 36 cells: row N has 16, row N+1 has 20 (deferred again at end).
+		{"row-2-deferred-wrap", 5, 36, 20, 1, 20},
+		// 37 cells: actual wrap to row N+2 col 1.
+		{"row-2-with-overflow", 5, 37, 20, 2, 2},
+		{"zero-cols-degrades-gracefully", 5, 10, 0, 0, 5},
+		{"col-1-prompt-edge", 1, 20, 20, 0, 20},
+		// 21 cells from col 1: 20 fill row N (deferred), 21st on row N+1
+		// col 1, cursor right after at col 2.
+		{"col-1-just-past-edge", 1, 21, 20, 1, 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			row, col := InputCursorPosition(tc.initCol, tc.cellsBefore, tc.cols)
+			require.Equalf(t, tc.wantRow, row,
+				"row mismatch for initCol=%d cells=%d cols=%d", tc.initCol, tc.cellsBefore, tc.cols)
+			require.Equalf(t, tc.wantCol, col,
+				"col mismatch for initCol=%d cells=%d cols=%d", tc.initCol, tc.cellsBefore, tc.cols)
+		})
+	}
+}
+
+// TestInputExtraRows pins the helper that decides how many wrap rows
+// the input occupies below the input start row. The renderer subtracts
+// this from heightLimit and adds it into Frame.Size, so any drift here
+// directly causes either choice over-draws or stale wrap rows in Pre.
+func TestInputExtraRows(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name       string
+		initCol    int
+		cellsTotal int
+		cols       int
+		want       int
+	}{
+		{"empty-input", 5, 0, 80, 0},
+		{"fits-on-row", 5, 15, 20, 0},
+		{"exactly-fills-row-no-wrap", 5, 16, 20, 0},
+		{"one-past-fill", 5, 17, 20, 1},
+		{"thirty-cells-wraps-once", 5, 30, 20, 1},
+		{"thirty-six-cells-wraps-twice", 5, 36, 20, 1},
+		{"thirty-seven-cells-wraps-twice", 5, 37, 20, 2},
+		{"col-1-twenty-cells", 1, 20, 20, 0},
+		{"col-1-twenty-one-cells", 1, 21, 20, 1},
+		{"zero-cols-degrades", 5, 30, 0, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := InputExtraRows(tc.initCol, tc.cellsTotal, tc.cols)
+			require.Equalf(t, tc.want, got,
+				"initCol=%d cells=%d cols=%d", tc.initCol, tc.cellsTotal, tc.cols)
+		})
+	}
+}
+
 func TestProperty_WrappedRowCount_Monotonic(t *testing.T) {
 	t.Parallel()
 

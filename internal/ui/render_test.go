@@ -153,6 +153,135 @@ func TestRender_NegativeIdxClampedToZero(t *testing.T) {
 		"row 0 must be the focused entry after clamp")
 }
 
+// TestRender_LongInputWraps locks down the wrap-aware Frame contract
+// for inputs that overflow the terminal width.
+//
+// Setup: 30 x's typed at initCol=5 on a 20-col terminal.
+//   - Row N has cols 5–20 filled (16 x's).
+//   - Row N+1 has cols 1–14 filled (14 more x's), cursor at col 15.
+//
+// The previous renderer math counted only choice rows in Frame.Size and
+// emitted CursorPrevLine(1) + CursorToCol(35). Col 35 > 20 → terminal
+// clamps to col 20 of the wrap row, so the caret landed at the end of
+// the visible x's instead of where m.Cursor pointed. The fix below
+// computes inputExtra (1 wrap row) and folds it into both Size and the
+// Post arithmetic.
+func TestRender_LongInputWraps(t *testing.T) {
+	t.Parallel()
+
+	m := NewModel(strings.Repeat("x", 30), nil, 10, 20, 1, 5, DefaultMaxLimit)
+	frame := m.Render(RenderOptions{PrevSize: 0, PrevCursorRow: 0})
+
+	require.Equal(t, 2, frame.Size,
+		"Size must include the input wrap row (1) plus the (no matches) row (1)")
+	require.Equal(t, 1, frame.CursorRow,
+		"CursorRow must point at the wrap row where the caret actually rests")
+
+	// Post must walk up exactly (Size - CursorRow) = 1 row, then place
+	// the caret at the col-15 wrap position. Pre-fix it emitted "[35G".
+	require.Contains(t, frame.Post, "\x1b[1F",
+		"Post must walk up 1 row from the bottom of the body to the cursor wrap row")
+	require.Contains(t, frame.Post, "\x1b[15G",
+		"Post must position the caret at col 15 (where the 30th char's caret rests on the wrap row)")
+	require.NotContains(t, frame.Post, "\x1b[35G",
+		"Post must not emit a clamped col 35 — terminals would land at col 20 instead")
+}
+
+// TestRender_PreWalksUpFromInputWrapCursor pins that the second-frame
+// Pre walks up the previous CursorRow before erasing — without this
+// step, the input wrap rows above the caret bleed into the next frame.
+func TestRender_PreWalksUpFromInputWrapCursor(t *testing.T) {
+	t.Parallel()
+
+	m := NewModel(strings.Repeat("x", 30), nil, 10, 20, 1, 5, DefaultMaxLimit)
+	// Simulate a second render pass: the previous frame's Post left
+	// the cursor at (row N+1, col 15). Pre must walk back up to row N
+	// before it can address the input row to redraw.
+	frame := m.Render(RenderOptions{PrevSize: 2, PrevCursorRow: 1})
+
+	require.Contains(t, frame.Pre, "\x1b[1F",
+		"Pre must walk up the previous CursorRow (1) before erasing")
+	// Two CSI 2K erase-line sequences for the two prev body rows.
+	require.Equal(t, 2, strings.Count(frame.Pre, "\x1b[2K"),
+		"Pre must erase exactly PrevSize lines below the input row")
+	require.Contains(t, frame.Pre, "\x1b[2F",
+		"Pre must walk back up PrevSize lines after erasing to land on row N")
+}
+
+// TestRender_WrapInvariantAcrossPasses simulates a typing burst that
+// pushes the input across the wrap boundary and back, asserting that
+// the (PrevSize, PrevCursorRow) round-trip is self-consistent across
+// passes. Concretely: we capture each frame's (Size, CursorRow), feed
+// them to the next pass as opts, and assert the renderer never asks
+// to walk further up than it can. This catches off-by-one drift in
+// either the formula or the bookkeeping in the event loop.
+func TestRender_WrapInvariantAcrossPasses(t *testing.T) {
+	t.Parallel()
+
+	// Sequence: empty → "x"*15 (fits row) → "x"*30 (wraps once) →
+	// "x"*36 (deferred at end of row N+1) → "x"*37 (wraps twice).
+	steps := []string{
+		"",
+		strings.Repeat("x", 15),
+		strings.Repeat("x", 30),
+		strings.Repeat("x", 36),
+		strings.Repeat("x", 37),
+		strings.Repeat("x", 30), // Shrinking back down.
+		strings.Repeat("x", 1),
+	}
+
+	prevSize := 0
+	prevCursorRow := 0
+	for i, input := range steps {
+		m := NewModel(input, nil, 10, 20, 1, 5, DefaultMaxLimit)
+		opts := RenderOptions{PrevSize: prevSize, PrevCursorRow: prevCursorRow}
+		frame := m.Render(opts)
+
+		// CursorRow must never exceed Size — Post would otherwise emit
+		// a negative walk-up which CursorPrevLine cannot represent.
+		require.LessOrEqualf(t, frame.CursorRow, frame.Size,
+			"step %d (%q): CursorRow (%d) must not exceed Size (%d)",
+			i, input, frame.CursorRow, frame.Size)
+
+		// CursorRow >= 0 always.
+		require.GreaterOrEqualf(t, frame.CursorRow, 0,
+			"step %d (%q): CursorRow must be non-negative", i, input)
+
+		prevSize = frame.Size
+		prevCursorRow = frame.CursorRow
+	}
+}
+
+// TestRender_HeightLimitReservesInputWrapSpace pins that the dynamic
+// limit walk subtracts input wrap rows from the available height.
+// Without this, a wrapped input + multi-line choices would draw past
+// the terminal bottom and the next Pre would erase too few rows.
+func TestRender_HeightLimitReservesInputWrapSpace(t *testing.T) {
+	t.Parallel()
+
+	// Construct an input that wraps but still passes the AND filter
+	// against single-line choices. Tokenize splits on whitespace and
+	// dedupes; "x x x x ..." becomes a single token "x" that matches
+	// any choice containing the letter x. Total cells of the input row
+	// itself drive inputExtra independently of token semantics.
+	//
+	// 99 cells from initCol=1 on 60-col → lastCellCol=99 → inputExtra=1.
+	// heightLimit base = m.Height - 3 = 12 - 3 = 9. With inputExtra=1
+	// the dynamic walk caps at 8. Provide 9 single-row "x"-bearing
+	// choices and assert only 8 land in the frame.
+	input := strings.TrimRight(strings.Repeat("x ", 50), " ")
+	choices := []string{"xa", "xb", "xc", "xd", "xe", "xf", "xg", "xh", "xi"}
+	m := NewModel(input, choices, 12, 60, 1, 1, DefaultMaxLimit)
+	frame := m.Render(RenderOptions{})
+
+	require.Equal(t, 8, frame.Limit,
+		"heightLimit must shrink by inputExtra so wrapped input does not push choices off-screen")
+	require.Equal(t, 9, frame.Size,
+		"Size must include both input wrap rows (1) and choice rows (8)")
+	require.Equal(t, 1, frame.CursorRow,
+		"cursor sits on wrap row N+1 because m.Cursor lands at the end of a 99-cell input")
+}
+
 // TestRender_DynamicLimitMatchesSanitizedRender pins that the
 // dynamic-limit walk and the actual render arithmetic agree on
 // row counts even when entries contain control bytes that will

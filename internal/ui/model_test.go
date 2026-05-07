@@ -483,6 +483,32 @@ func TestModel_EndLandsOnLastMatch_WithMultilineInWindow(t *testing.T) {
 			"visible window contained a multi-line entry")
 }
 
+// TestModel_EndScrollWithWrappedInput pins that scrollToEnd
+// (KeyEnd) accounts for input wrap rows, mirroring renderBody.
+//
+// Setup: 12-row terminal, 60-col, initCol=1. Input is 99 cells of
+// "x x ..." which wraps to 1 extra row, so the choice height budget
+// drops from 9 (=12-3) to 8 (=12-3-1). With 9 single-line choices in
+// the filter, scrollToEnd must rotate by 8 (not 9) so the last match
+// lands inside the visible window — pre-fix it rotated by 9 and
+// pushed the focused entry off the top.
+func TestModel_EndScrollWithWrappedInput(t *testing.T) {
+	t.Parallel()
+	input := strings.TrimRight(strings.Repeat("x ", 50), " ")
+	choices := []string{"xa", "xb", "xc", "xd", "xe", "xf", "xg", "xh", "xi"}
+	m := NewModel(input, choices, 12, 60, 1, 1, DefaultMaxLimit)
+	first := m.Render(RenderOptions{})
+
+	m.Update(keys.KeyEvent{Key: keys.KeyEnd})
+	m.Render(RenderOptions{PrevSize: first.Size, PrevCursorRow: first.CursorRow})
+
+	// scrollToEnd rotates so the last match lands at visibleCount-1.
+	// With heightLimit=8 and 9 single-row matches, it rotates by 8.
+	// The last entry "xi" must be focused.
+	require.Equal(t, "xi", m.Focused(),
+		"End must focus the last match even when the input wraps a row")
+}
+
 // TestModel_EndOnEmptyFilter is a no-op smoke test: pressing End
 // with no matches must not panic and must keep state coherent.
 func TestModel_EndOnEmptyFilter(t *testing.T) {

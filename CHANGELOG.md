@@ -383,6 +383,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   Ctrl-R. Refactored the BUFFER-preservation echo into an
   `echoArgvAndExit()` helper and wired the `result.error` branch
   to call it after a stderr diagnostic.
+- **`Frame.Size` ignored input row wraps; long inputs misplaced the
+  caret and leaked stale wrap rows.** When the picker's input row
+  exceeded the terminal width (a long argv prefilled by the zsh widget,
+  or a long filter typed live) the renderer's bookkeeping only counted
+  choice rows. `renderPost` then emitted `CursorToCol(initCol+m.Cursor)`
+  which terminals clamped at the right margin, so the caret landed on
+  the wrong row, and the next `renderPre` walked down from the wrong
+  starting row and erased too few lines. Fixed by introducing
+  `InputCursorPosition` / `InputExtraRows` helpers
+  (`internal/ui/wrap.go`), tracking `inputExtra` + a new
+  `Frame.CursorRow` / `RenderOptions.PrevCursorRow` round-trip in
+  `internal/ui/render.go` and `internal/app/loop.go`, and aligning
+  `scrollToEnd` (`KeyEnd`) with the same wrap-aware budget. New
+  `choiceHeightLimit` shared between `renderBody` and `scrollToEnd`
+  prevents future drift. 23 new test cases + e2e scenario
+  21-input-wrap-edit (debian + alpine, 21/21 pass).
 - **Parser's `stateCSI` could get stuck.** A flaky terminal
   sending `\e[` and stopping (a kill mid-sequence, programmatic
   input that paused, or a very real network glitch over ssh)

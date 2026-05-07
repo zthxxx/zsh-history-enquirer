@@ -26,14 +26,19 @@ func runEventLoop(
 ) (*RunResult, error) {
 	throttle := ui.NewThrottle(RenderInterval)
 	prevSize := 0
+	prevCursorRow := 0
 
 	render := func(force bool) {
 		if !force && !throttle.Fire(time.Now()) {
 			return
 		}
-		frame := model.Render(ui.RenderOptions{PrevSize: prevSize})
+		frame := model.Render(ui.RenderOptions{
+			PrevSize:      prevSize,
+			PrevCursorRow: prevCursorRow,
+		})
 		_, _ = io.WriteString(t.Writer(), frame.Pre+frame.Body+frame.Post)
 		prevSize = frame.Size
+		prevCursorRow = frame.CursorRow
 	}
 
 	render(true)

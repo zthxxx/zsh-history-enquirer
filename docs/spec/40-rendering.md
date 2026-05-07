@@ -95,17 +95,35 @@ case.
 
 ## Erase + restore
 
+The picker draws as an **overlay** on the user's existing zsh prompt at
+a captured `initCol`. The input row itself can wrap when its cell width
+exceeds the available room from `initCol` to the terminal's right
+margin — so the renderer's bookkeeping must distinguish "rows the input
+occupied" from "rows the choice list occupied."
+
 On every render, the picker:
 
-1. **Clears** the area it owns: cursor down `state.size` rows, then
-   `(erase line + cursor prev-line) × state.size`, then move cursor to
-   `(row=current, col=initCol)` and erase from there to end-of-line.
-   The crucial detail: clearing erases only **from `initCol` rightward**
-   — the left of the prompt is never touched.
-2. **Draws** the new input + visible list.
-3. **Restores** the cursor up `state.size` rows and to `(initCol + cursor)`
-   on the input row, where `cursor` is the user's caret offset within
-   their typed input.
+1. **Walks back** to the input start row. After the previous frame's
+   restore step the cursor sits on whichever wrap row of the input the
+   user's caret was on. The renderer remembers the previous
+   `cursorRow` and emits `cursor prev-line × prev_cursor_row` to land
+   back on row N before doing anything else.
+2. **Clears** the area it owns from row N downward: erase the input
+   row's tail starting at `initCol`, then walk down `prev_size` rows
+   (= `prev_input_extra + prev_choice_rows`) emitting `\r\n + erase
+   line` per row, then walk back up `prev_size` and reset the column.
+   The crucial detail: erasing happens only **from `initCol` rightward**
+   on the input row — the left of the prompt is never touched. Choice
+   rows are erased completely because they own the full row width.
+3. **Draws** the new input + visible list. The dynamic-limit walk
+   uses `height_limit = terminal.height - 3 - input_extra` so the
+   choice list always fits below a wrapped input.
+4. **Restores** the cursor by walking up `(size - cursor_row)` from
+   the bottom of the body to the cursor's wrap row, then
+   `cursor to col cursor_col`. The cursor convention is "one cell to
+   the right of the last typed char on that char's row, clamped to
+   `terminal.width`" — matching readline / fish / vim deferred-wrap
+   behaviour.
 
 If `state.size` is 0 (empty matches), the picker still reserves one row
 to draw a "no matches" hint or a blank line — it does not collapse
