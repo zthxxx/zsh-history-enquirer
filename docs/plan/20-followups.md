@@ -43,8 +43,11 @@ Each entry must include:
   only matters for tests. How to apply: don't try to fix it for
   expect — the renderer's correctness is verified at the model layer.
 
-(One open item — docker pty DSR limitation, intrinsic to the
-test harness, not a code bug.)
+(Two open items: the x/input parser swap above is a longer-form
+refactor held for a focused session, and the docker pty DSR
+limitation is intrinsic to the expect-based test harness — not a
+code bug. No open user-facing defect remains in the picker
+itself.)
 
 ## Addressed
 
