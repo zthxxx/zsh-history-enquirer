@@ -65,12 +65,12 @@ func rowCellWidth(line string, startCol int) int {
 	return col
 }
 
-// InputCursorPosition walks `input` rune-by-rune (up to `cellsBefore`
-// cells via runewidth) and returns the (row, col) where the visual
-// cursor rests on a `cols`-wide terminal whose input row started at
-// 1-indexed column `initCol`. Row is the 0-indexed offset from the
-// input row; col is the 1-indexed terminal column matching ANSI's
-// CSI G escape.
+// InputCursorPosition walks `input` grapheme-cluster by cluster (up
+// to `cellsBefore` cells via uniseg.StringWidth) and returns the
+// (row, col) where the visual cursor rests on a `cols`-wide terminal
+// whose input row started at 1-indexed column `initCol`. Row is the
+// 0-indexed offset from the input row; col is the 1-indexed terminal
+// column matching ANSI's CSI G escape.
 //
 // We grapheme-walk rather than use a closed-form division because of
 // two terminal quirks no cell-only formula handles correctly:
