@@ -3,14 +3,18 @@
 # e2e/run.sh — entrypoint inside the docker image.
 #
 # For each *.exp under /scenarios/, reset $HOME (fresh .zshrc + fresh
-# .zsh_history seeded from /fixtures/seed_history) and run the
-# scenario. Aggregate pass/fail; non-zero exit if any failed.
+# .zsh_history written inline by write_seed_history below) and run
+# the scenario. Aggregate pass/fail; non-zero exit if any failed.
 #
 # Mounts (provided by `task ci:e2e:run`):
 #   /usr/local/bin/zsh-history-enquirer       — Go binary
 #   /opt/zsh-history-enquirer/plugin.zsh      — widget plugin
 #   /scenarios/                               — *.exp files
 #   /run.sh                                   — this script
+#
+# Note: e2e/fixtures/ is reserved for scenarios that need an
+# alternate seed (none currently). The default history is the inline
+# heredoc in write_seed_history.
 set -eu
 
 USER_HOME="${HOME:-/home/tester}"
