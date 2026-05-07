@@ -80,6 +80,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   zsh's `source` treated the second word as a separate argument.
   Hint now prints `source "/path/..."` so the suggestion survives
   any space-containing prefix.
+- **Self-overlapping search tokens highlight every match.** A token
+  whose suffix is also its prefix (e.g. `ana` typed against the
+  history entry `banana`, or `abab` against `abababab`) used to
+  highlight only the first occurrence — the inner search loop
+  advanced by `len(token)` rather than by one byte and skipped past
+  every overlapping match. The filter itself was always correct
+  (`strings.Contains`); only the visual emphasis was incomplete.
+  Now every match is collected and the merge step folds the
+  overlapping spans into one continuous SGR-wrapped run.
 - **User-arrow-before-DSR-probe race**: pressing
   <kbd>Ctrl</kbd>+<kbd>R</kbd> and immediately tapping an arrow / Home
   / End used to leave the picker rendered at the col=1 fallback

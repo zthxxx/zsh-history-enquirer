@@ -49,6 +49,45 @@ func TestHighlight_NonAdjacentMatchesSeparate(t *testing.T) {
 	)
 }
 
+// TestHighlight_SelfOverlappingTokenAllMatchesCovered pins the
+// fix for the self-overlap miss: a token whose suffix matches its
+// prefix (the "ana"-in-"banana" case) used to skip every match
+// after the first because the inner loop advanced offset by len(t)
+// rather than by one byte. The merge step folds the overlapping
+// spans into one continuous range, so the whole `anana` substring
+// is highlighted as a single SGR-wrapped run.
+//
+// Why it matters: a user typing `ana` to find any history entry
+// containing the substring would visually see only the first match
+// emphasized when the entry happened to contain "anana" or longer
+// — the second-hit dimness made the picker look like the search
+// was substring-incomplete. Visual correctness, not correctness of
+// the filter (which already used strings.Contains and was always
+// right).
+func TestHighlight_SelfOverlappingTokenAllMatchesCovered(t *testing.T) {
+	t.Parallel()
+	got := highlight("banana", []string{"ana"})
+	// Token at positions 1..4 and 3..6 overlap; merge yields (1,6).
+	require.Equal(t,
+		"b\x1b[1;36manana\x1b[0m",
+		got,
+		"both `ana` matches must merge into a single highlighted run")
+}
+
+// TestHighlight_LongerSelfOverlap checks the same invariant for a
+// longer self-overlap pattern. "abab" inside "abababab" matches at
+// positions 0, 2, 4 (each four-char window starting at an even
+// index); merge consolidates them into one wrapped run covering
+// the whole string.
+func TestHighlight_LongerSelfOverlap(t *testing.T) {
+	t.Parallel()
+	got := highlight("abababab", []string{"abab"})
+	require.Equal(t,
+		"\x1b[1;36mabababab\x1b[0m",
+		got,
+		"every overlapping `abab` match must merge into one highlighted run")
+}
+
 func TestHighlight_NoMatch(t *testing.T) {
 	t.Parallel()
 	require.Equal(t, "git status", highlight("git status", []string{"xyz"}))

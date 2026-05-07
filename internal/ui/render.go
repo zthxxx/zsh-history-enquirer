@@ -287,7 +287,15 @@ func highlight(s string, tokens []string) string {
 			begin := offset + idx
 			end := begin + len(t)
 			spans = append(spans, span{begin, end})
-			offset = end
+			// Advance by one rune-or-byte rather than len(t) so a
+			// self-overlapping token (e.g. "ana" in "banana", or "abab"
+			// in "abababab") still produces every visual match — the
+			// merge step below collapses overlaps into a single span,
+			// so the cost is paid only when the token has a non-trivial
+			// self-overlap pattern. Advancing by len(t) instead would
+			// silently miss matches at offsets where the next match
+			// starts inside the previous one.
+			offset = begin + 1
 		}
 	}
 	if len(spans) == 0 {
