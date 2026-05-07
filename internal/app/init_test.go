@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -412,6 +413,44 @@ func TestHandleError_NonNilStillReturnsZero(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "boom") {
 		t.Fatalf("stderr should contain error message, got %q", buf.String())
+	}
+}
+
+// TestHandleError_ContextCanceledIsSilent pins the ctx.Err() branch:
+// a parent-cancelled run (Ctrl-C upstream of the picker, e.g. the
+// surrounding shell sent SIGINT to the whole pipeline) is a "user
+// asked to stop" signal — not an error worth printing. The widget
+// contract still expects exit 0, but stderr must stay empty so the
+// surrounding shell doesn't get a spurious "context canceled" line
+// after every aborted Ctrl-R.
+func TestHandleError_ContextCanceledIsSilent(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	rc := HandleError(&buf, context.Canceled)
+	if rc != 0 {
+		t.Fatalf("HandleError(ctx.Canceled) = %d, widget contract requires 0", rc)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("ctx.Canceled must not write to stderr, got %q", buf.String())
+	}
+}
+
+// TestHandleError_WrappedContextCanceledIsSilent — errors.Is unwraps
+// through fmt.Errorf("%w", …) wrappers, so a runEventLoop layer that
+// returns `fmt.Errorf("loop: %w", context.Canceled)` must still take
+// the silent branch. Pins the unwrap behaviour explicitly so a
+// future refactor can't switch the check to `==` without breaking
+// this contract.
+func TestHandleError_WrappedContextCanceledIsSilent(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	wrapped := fmt.Errorf("loop terminated: %w", context.Canceled)
+	rc := HandleError(&buf, wrapped)
+	if rc != 0 {
+		t.Fatalf("HandleError(wrapped ctx.Canceled) = %d, widget contract requires 0", rc)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("wrapped ctx.Canceled must not write to stderr, got %q", buf.String())
 	}
 }
 
