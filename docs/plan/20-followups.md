@@ -25,6 +25,18 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — `InputCursorPosition` used a closed-form
+  `(initCol + cellsBefore - 1) / cols` division that mishandled wide
+  glyphs at wrap boundaries. When a 2-cell CJK character meets a
+  1-cell remainder at the right margin, every common terminal
+  soft-wraps the entire glyph to the next row (most common
+  behaviour); the division-based formula assumed contiguous packing
+  and miscounted by 1 col. Switched to a rune-walking implementation
+  using `runewidth.RuneWidth` per rune, simulating wrap explicitly.
+  Also fixed a latent slice bug: `m.Input[:m.Cursor]` was wrong
+  because `m.Cursor` is a cell count, not a byte offset — the slice
+  mis-cut multi-byte runes for non-ASCII input.
+
 * **2026-05-07** — `Frame.Size` only counted choice rows, leaving the
   renderer blind to input rows that wrap on narrow terminals. With a
   long input (or a long argv prefilled into the picker) on a narrow

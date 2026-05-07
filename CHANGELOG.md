@@ -383,6 +383,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   Ctrl-R. Refactored the BUFFER-preservation echo into an
   `echoArgvAndExit()` helper and wired the `result.error` branch
   to call it after a stderr diagnostic.
+- **CJK glyph at a wrap boundary positioned the caret 1 col off.**
+  The closed-form cursor formula assumed contiguous cell packing, but
+  every common terminal soft-wraps a 2-cell glyph that meets a 1-cell
+  remainder at the right margin. `InputCursorPosition` now walks the
+  input rune-by-rune, simulating the wrap exactly. Same change fixes
+  a latent bug where `Render` sliced `m.Input[:m.Cursor]` to compute
+  cells-before-cursor — but `m.Cursor` is a cell count, not a byte
+  offset, so the slice mis-cut multi-byte runes.
 - **`Frame.Size` ignored input row wraps; long inputs misplaced the
   caret and leaked stale wrap rows.** When the picker's input row
   exceeded the terminal width (a long argv prefilled by the zsh widget,
