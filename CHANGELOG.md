@@ -67,6 +67,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed (vs. legacy 1.x bugs that survived into the rewrite)
 
+- DSR cursor-probe **malformed-parse** errors no longer drop the
+  bytes the probe consumed. A user who presses
+  <kbd>Ctrl</kbd>+<kbd>R</kbd> then immediately presses an arrow key
+  produces a buffer like `\x1b[A\x1b[12;5R`; `parseDSRResponse`
+  anchors on the first `\x1b[`, the parse fails, and the fallback
+  used to honor only `TimeoutError.Leftover` — silently dropping the
+  arrow press. The fallback now uses `cur.leftover` (which parseDSR
+  populates with the full input on its error paths) so the bytes
+  round-trip through `reader.Prefeed` and the up-arrow surfaces as
+  a `KeyUp` event.
 - `End` semantics now correctly land focus on the last match even
   when multi-line entries reshuffle into the visible window after
   rotation.
