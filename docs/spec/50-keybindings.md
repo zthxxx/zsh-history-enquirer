@@ -6,6 +6,7 @@
 | <kbd>Backspace</kbd> | delete one rune to the left (NOT one byte — multi-byte UTF-8 chars must delete atomically), re-filter |
 | <kbd>Ctrl</kbd>+<kbd>U</kbd> | clear input, re-filter |
 | <kbd>Ctrl</kbd>+<kbd>W</kbd> | delete the previous word (strip trailing whitespace + the run of non-whitespace before it). Matches zsh's default `backward-kill-word` muscle memory |
+| <kbd>Alt</kbd>+<kbd>Backspace</kbd> | alias for <kbd>Ctrl</kbd>+<kbd>W</kbd>. Maps the xterm-style meta prefix `\e\x7f` (and `\e\x08`) to the same word-delete path. Without this, the lone Esc would cancel the picker on every Alt+Backspace press, which is high-frequency muscle memory on macOS and Linux |
 | <kbd>↑</kbd> / <kbd>Ctrl</kbd>+<kbd>P</kbd> | move selection up; if at top of visible window, scroll the visible window up by 1 (rotate-in-place). Ctrl-P matches zsh's emacs-keymap `up-line-or-history` |
 | <kbd>↓</kbd> / <kbd>Ctrl</kbd>+<kbd>N</kbd> | move selection down; if at bottom, scroll down enough rows to make the next entry fit (taking multi-line into account). Ctrl-N matches zsh's emacs-keymap `down-line-or-history` |
 | <kbd>PageUp</kbd> | rotate visible window up by `limit` |

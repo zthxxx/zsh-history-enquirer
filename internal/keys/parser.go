@@ -137,6 +137,17 @@ func (p *Parser) feedEsc(b byte, out []Event) []Event {
 		// new sequence.
 		p.state = stateEsc
 		return append(out, KeyEvent{Key: KeyEsc})
+	case 0x7f, 0x08:
+		// Meta-Backspace (Alt+Backspace on macOS Terminal, iTerm2,
+		// GNOME Terminal, and any xterm-style terminal where Alt
+		// sends an ESC prefix). zsh's emacs keymap binds `\e\x7f` to
+		// `backward-kill-word`; mirror that semantic by routing to
+		// Ctrl-W's word-delete path. Without this, the lone Esc would
+		// cancel the picker on every Alt+Backspace press — a very
+		// common stroke for shell users who reach for word-delete
+		// muscle memory mid-search.
+		p.state = stateNormal
+		return append(out, KeyEvent{Key: KeyCtrlW})
 	default:
 		// ESC followed by an unrelated byte: emit Esc, then process
 		// the byte as if it arrived in normal state.

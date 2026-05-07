@@ -489,3 +489,17 @@ companion was resolved in the
   (direct invariant) and
   `TestModel_ScrollThenClear_RestoresChronologicalOrder`
   (user-visible scenario). Resolved in this iteration's commit.
+
+* **2026-05-07** — Alt+Backspace (`\e\x7f`) was a UX footgun: the
+  parser saw the lone Esc, dispatched it as KeyEsc which cancels
+  the picker, and the trailing Backspace was orphaned. Mac/iTerm
+  /GNOME Terminal users who reach for word-delete muscle memory
+  (zsh's emacs-keymap default) had the picker drop them out
+  every time. Fixed by handling `\e\x7f` and `\e\x08` in
+  `feedEsc` as a single chord routed to KeyCtrlW (the existing
+  word-delete path). Plain Esc → ...later... → Backspace still
+  works because the reader's 50ms flushTimer separates them into
+  distinct Feed calls. Pinned by `TestParser_AltBackspaceMapsToCtrlW`,
+  `TestParser_PlainEscThenBackspaceStillCancels`, and e2e
+  scenario 20-alt-backspace.exp (validated on both glibc and
+  musl). Resolved in this iteration's commit.

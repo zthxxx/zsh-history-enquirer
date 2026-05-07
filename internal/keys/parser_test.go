@@ -176,6 +176,60 @@ func TestParser_FlushEsc_DuringSS3Pending(t *testing.T) {
 	}, got)
 }
 
+// TestParser_AltBackspaceMapsToCtrlW pins the Mac/iTerm/xterm meta
+// modifier behavior: Alt+Backspace arrives as `\e\x7f` (or `\e\x08`
+// on terminals using BS as backspace). zsh's emacs keymap binds the
+// chord to backward-kill-word; the picker mirrors it as Ctrl-W.
+//
+// Without the fix, the lone Esc would cancel the picker on every
+// Alt+Backspace press — a high-frequency footgun for shell users
+// who reach for word-delete muscle memory mid-search. The chord
+// arrives as a single Read() (terminals emit the two bytes in one
+// write), so the parser sees them paired and routes through this
+// branch.
+func TestParser_AltBackspaceMapsToCtrlW(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		in   string
+	}{
+		{"alt-backspace-del", "\x1b\x7f"},
+		{"alt-backspace-bs", "\x1b\x08"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			p := NewParser()
+			got := feedAll(p, tc.in)
+			require.Equal(t, []Event{KeyEvent{Key: KeyCtrlW}}, got,
+				"Alt+Backspace must map to Ctrl-W, not Esc + Backspace")
+		})
+	}
+}
+
+// TestParser_PlainEscThenBackspaceStillCancels guards the slow path:
+// when the user presses Esc deliberately, then Backspace some time
+// later, the bytes arrive in separate Feed calls (the reader's
+// flushTimer fires between them and emits the standalone Esc). The
+// Alt+Backspace fast-path must NOT swallow the Esc in that case.
+func TestParser_PlainEscThenBackspaceStillCancels(t *testing.T) {
+	t.Parallel()
+
+	p := NewParser()
+	// First feed: just Esc. State enters stateEsc.
+	got := feedAll(p, "\x1b")
+	require.Empty(t, got, "Esc alone emits nothing until flush or follow-up byte")
+
+	// Caller's flushTimer would fire here (50ms timeout in reader.go).
+	flushed := p.FlushEsc()
+	require.Equal(t, []Event{KeyEvent{Key: KeyEsc}}, flushed)
+
+	// Subsequent Backspace arrives in stateNormal — emitted as plain
+	// Backspace, no chord interpretation.
+	got2 := feedAll(p, "\x7f")
+	require.Equal(t, []Event{KeyEvent{Key: KeyBackspace}}, got2)
+}
+
 func TestParser_HomeEnd(t *testing.T) {
 	t.Parallel()
 
