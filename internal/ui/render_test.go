@@ -208,6 +208,43 @@ func TestRender_PreWalksUpFromInputWrapCursor(t *testing.T) {
 		"Pre must walk back up PrevSize lines after erasing to land on row N")
 }
 
+// TestRender_ResizeFlagTriggersScreenBelowErase pins the SIGWINCH
+// reflow recovery: when the resize handler in update.go sets
+// m.NeedsFullErase, the next render's Pre emits `\x1b[J`
+// (EraseScreenBelow) right after walking back to row N — terminals
+// reflow wrapped lines on resize so the previous frame's row offsets
+// no longer match physical positions, and a row-by-row erase would
+// miss reflowed leftovers.
+func TestRender_ResizeFlagTriggersScreenBelowErase(t *testing.T) {
+	t.Parallel()
+
+	m := NewModel("hi", []string{"hello", "hint"}, 24, 80, 1, 5, DefaultMaxLimit)
+	// Prime a normal render so PrevSize / PrevCursorRow are set.
+	first := m.Render(RenderOptions{})
+
+	// Simulate a SIGWINCH: model dimensions change, NeedsFullErase
+	// flips on.
+	m.Width = 40
+	m.Height = 12
+	m.NeedsFullErase = true
+
+	frame := m.Render(RenderOptions{
+		PrevSize:      first.Size,
+		PrevCursorRow: first.CursorRow,
+	})
+
+	require.Contains(t, frame.Pre, "\x1b[J",
+		"Pre after a WINCH must emit EraseScreenBelow so reflowed leftovers go away")
+	// Per-row erase should NOT happen — EraseScreenBelow already
+	// wiped everything below row N.
+	require.NotContains(t, frame.Pre, "\x1b[2K",
+		"Pre after a WINCH skips per-row erase: EraseScreenBelow already cleared the area")
+	// The flag must be consumed so a subsequent normal render doesn't
+	// keep erasing aggressively.
+	require.False(t, m.NeedsFullErase,
+		"NeedsFullErase must reset to false after one render consumes it")
+}
+
 // TestRender_WrapInvariantAcrossPasses simulates a typing burst that
 // pushes the input across the wrap boundary and back, asserting that
 // the (PrevSize, PrevCursorRow) round-trip is self-consistent across

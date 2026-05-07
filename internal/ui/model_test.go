@@ -443,6 +443,8 @@ func TestModel_ResizeUpdatesGeometry(t *testing.T) {
 	m.Update(keys.ResizeEvent{Rows: 30, Cols: 100})
 	require.Equal(t, 30, m.Height)
 	require.Equal(t, 100, m.Width)
+	require.True(t, m.NeedsFullErase,
+		"Resize must arm the next render to wipe any reflowed leftovers")
 }
 
 // TestModel_EndLandsOnLastMatch_NoMultiline asserts that End on a

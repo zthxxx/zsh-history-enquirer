@@ -383,6 +383,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   Ctrl-R. Refactored the BUFFER-preservation echo into an
   `echoArgvAndExit()` helper and wired the `result.error` branch
   to call it after a stderr diagnostic.
+- **Mid-pick SIGWINCH left stale wrap rows visible until the next
+  keystroke.** Most terminals reflow wrapped content on resize, so the
+  previous frame's `PrevSize` / `PrevCursorRow` no longer matched the
+  physical row positions and the row-by-row erase missed reflowed
+  leftovers. Added `Model.NeedsFullErase` flag (set by the resize
+  handler in `update.go`); on the next render, `Pre` walks back to
+  row N and emits `\x1b[J` (EraseScreenBelow) to wipe everything
+  below at once, skipping the per-row walk-down (the broader erase
+  already cleared the picker's area). Three bytes per WINCH burst.
+  Two regression tests cover the model side and the renderer side.
 - **CJK glyph at a wrap boundary positioned the caret 1 col off.**
   The closed-form cursor formula assumed contiguous cell packing, but
   every common terminal soft-wraps a 2-cell glyph that meets a 1-cell

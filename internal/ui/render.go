@@ -366,6 +366,15 @@ func sanitizeChoiceForRender(s string) string {
 //
 // First frame (prevSize==0 && prevCursorRow==0) skips the walk-down
 // step — there is no prior body to erase.
+//
+// SIGWINCH handling: when m.NeedsFullErase is set, after walking back
+// to row N we additionally emit `\x1b[J` (EraseScreenBelow). Most
+// terminals reflow wrapped lines on resize, so the previous frame's
+// row offsets no longer correspond to physical positions; row-by-row
+// erase via prevSize would leave reflowed leftovers visible until the
+// user types one more keystroke. The broader erase costs 3 bytes per
+// resize burst and the picker owns everything below row N for its
+// session — safe to wipe.
 func (m *Model) renderPre(prevSize, prevCursorRow int) string {
 	var b strings.Builder
 	// Walk up to row N from wherever the previous Post landed.
@@ -375,6 +384,14 @@ func (m *Model) renderPre(prevSize, prevCursorRow int) string {
 	// Erase the input row's tail starting at the captured prompt col.
 	b.WriteString(ansi.CursorHorizontalAbsolute(m.InitCol))
 	b.WriteString(ansi.EraseLineRight)
+	if m.NeedsFullErase {
+		// One-shot full screen-below wipe; consumes the flag.
+		b.WriteString(ansi.EraseScreenBelow)
+		m.NeedsFullErase = false
+		// After EraseScreenBelow there is no prior body left, so the
+		// row-by-row walk would erase already-blank rows. Skip it.
+		return b.String()
+	}
 	if prevSize <= 0 {
 		// First frame (or a previous frame with empty body, which
 		// cannot actually happen because we always emit "(no matches)"

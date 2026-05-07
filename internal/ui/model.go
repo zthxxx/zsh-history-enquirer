@@ -48,6 +48,15 @@ type Model struct {
 	Submitted bool
 	Canceled  bool
 	Result    string
+
+	// NeedsFullErase is set by the resize handler so the next render
+	// can include `\x1b[J` (erase from cursor to end of screen) after
+	// walking back to the input row. Most terminals reflow wrapped
+	// lines on SIGWINCH, leaving stale rows below the row count the
+	// PrevSize bookkeeping recorded; without the broader erase the
+	// reflowed leftovers stay visible until the user types one more
+	// keystroke. Render consumes the flag once and resets it.
+	NeedsFullErase bool
 }
 
 // NewModel constructs a Model with sensible defaults given an initial

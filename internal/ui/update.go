@@ -23,6 +23,14 @@ func (m *Model) Update(ev keys.Event) (terminate bool) {
 	case keys.ResizeEvent:
 		m.Height = e.Rows
 		m.Width = e.Cols
+		// Most terminals reflow wrapped lines on resize. The previous
+		// frame's geometry (PrevSize, PrevCursorRow) refers to row
+		// offsets that no longer correspond to physical positions, so
+		// the next Pre's row-by-row erase would miss rows. Flag the
+		// next render to add an EraseScreenBelow after walking back
+		// to row N — cheap (3 bytes), and the picker owns everything
+		// below row N for its session anyway.
+		m.NeedsFullErase = true
 	}
 	return false
 }

@@ -50,6 +50,22 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — Mid-pick SIGWINCH used to leave stale wrap rows
+  visible until the user typed another keystroke. Most terminals
+  reflow wrapped lines on resize, so the previous frame's row
+  offsets no longer matched physical positions and Pre's row-by-row
+  erase missed reflowed leftovers. Fixed by adding
+  `Model.NeedsFullErase` set by the ResizeEvent handler in
+  `update.go`; on the next render, `Pre` adds `\x1b[J`
+  (EraseScreenBelow) after walking back to row N and skips the
+  per-row walk-down (the broader erase already cleared everything
+  the picker owns). The flag resets after one render so subsequent
+  frames stay incremental. 3 bytes of extra escape per WINCH burst,
+  cheap. Two regression tests pin both halves of the contract:
+  `TestModel_ResizeUpdatesGeometry` confirms the flag flips, and
+  `TestRender_ResizeFlagTriggersScreenBelowErase` confirms Pre
+  honours and consumes it.
+
 * **2026-05-07** — Library audit (per user direction) replaced two
   hand-rolled modules with community-standard equivalents:
   - `internal/ansi/ansi.go` (100 LOC) → `charmbracelet/x/ansi`
