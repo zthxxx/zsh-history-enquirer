@@ -164,6 +164,35 @@ func TestReadGeometry_FallsBackOnZeroSize(t *testing.T) {
 	require.Equal(t, 80, cols, "cols<=0 must fall back to 80")
 }
 
+// TestReadGeometry_PropagatesIoctlError pins the failure arm: when
+// TIOCGWINSZ returns an error (the ioctl can't succeed because the
+// fd was closed, the kernel rejected the call, etc.) readGeometry
+// must surface the error rather than silently substituting 24x80
+// fallback values. The wrapping prefix ("query size:") gives
+// callers a stable string to match on without coupling to the
+// underlying syscall errno.
+//
+// Production sees this exclusively when the fx graph closes the
+// TTY before Run finishes — extremely rare but the err != nil
+// branch is what guarantees Run propagates a clean shutdown error
+// instead of computing renders against bogus geometry.
+func TestReadGeometry_PropagatesIoctlError(t *testing.T) {
+	t.Parallel()
+	_, slave, err := pty.Open()
+	require.NoError(t, err)
+
+	ttyHandle, err := tty.NewFromFile(slave)
+	require.NoError(t, err)
+
+	// Close the underlying fd so TIOCGWINSZ returns EBADF.
+	require.NoError(t, ttyHandle.Close())
+
+	_, _, err = readGeometry(ttyHandle)
+	require.Error(t, err, "ioctl on a closed fd must surface as readGeometry error")
+	require.Contains(t, err.Error(), "query size",
+		"err must wrap with the readGeometry prefix so callers can pattern-match")
+}
+
 func TestComputeInitCol_Normal(t *testing.T) {
 	t.Parallel()
 	// Cursor was at column 12; input was 5 chars long → prompt starts at 7.
