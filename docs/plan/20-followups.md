@@ -553,3 +553,19 @@ companion was resolved in the
   `TestHandleProbeFallback_NonASCIIUsesRuneCount`. Spec/40 updated
   to clarify the cell-vs-byte semantic. Resolved in this
   iteration's commit.
+
+* **2026-05-07** — `cli.js` (the npm shim) used
+  `process.argv.includes('--print-install-hint')` to trigger the
+  postinstall hint fast-path. The check was too permissive: a
+  widget invocation with `$LBUFFER` literally equal to
+  `--print-install-hint` (argv shape `[bin, --, --print-install-hint]`)
+  also tripped the fast-path. The hint was written to stderr and
+  the process exited 0 with empty stdout — silently destroying
+  the user's typed text per `BUFFER=$(...)`. Fixed by narrowing
+  to `argv.length === 3 && argv[2] === '--print-install-hint'`,
+  matching the discipline used by `--version` / `--help` on the
+  Go side. Pinned by three node:test scenarios in a new
+  `cli.test.js`; wired into `task test:js`, the CI test job, and
+  the lefthook `test-js` pre-commit hook (gated by glob
+  `**/cli.js` or `**/cli.test.js`). Resolved in this iteration's
+  commit.

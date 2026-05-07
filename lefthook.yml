@@ -29,6 +29,15 @@ pre-commit:
       # in the npm shim that ships to every user.
       glob: "**/cli.js"
       run: task lint:js
+    test-js:
+      # Pins the widget-contract fast-paths in cli.js: e.g. that a
+      # $LBUFFER of "--print-install-hint" cannot trip the install
+      # hint and silently destroy the user's typed text. node:test
+      # ships with node 18+ so no install-time deps. Runs in ~200ms.
+      glob:
+        - "**/cli.js"
+        - "**/cli.test.js"
+      run: task test:js
     lint-md:
       glob: "*.md"
       # Fall back to npx if bun isn't on the host. CI uses npx; the

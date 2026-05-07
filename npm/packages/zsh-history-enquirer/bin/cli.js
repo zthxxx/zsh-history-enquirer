@@ -43,10 +43,21 @@ function locateBinary() {
   }
 }
 
-// `npm i` calls us with `--print-install-hint`. Print a one-shot
-// reminder telling the user to source the plugin file. We never
-// modify the user's .zshrc.
-if (process.argv.includes('--print-install-hint')) {
+// `npm i` calls us with exactly `--print-install-hint`. Print a
+// one-shot reminder telling the user to source the plugin file.
+// We never modify the user's .zshrc.
+//
+// The check is narrowed to `argv.length === 3 && argv[2] === ...`
+// (matching the version / help fast-path discipline) so a widget
+// invocation `bin -- "$LBUFFER"` whose $LBUFFER literally equals
+// "--print-install-hint" cannot trip the fast-path. With the prior
+// `argv.includes(...)` check, that argv shape would have printed
+// the hint to stderr and exited with empty stdout — silently
+// destroying the user's typed text per `BUFFER=$(...)`.
+if (
+  process.argv.length === 3 &&
+  process.argv[2] === '--print-install-hint'
+) {
   process.stderr.write([
     '',
     '  zsh-history-enquirer installed.',

@@ -81,7 +81,8 @@ hand-edited.
 task build            # build host binary (CGO disabled → static)
 task build:linux      # build linux/amd64 for e2e
 task build:all        # cross-compile every release target
-task test:unit        # unit tests (no docker)
+task test:unit        # Go unit tests (no docker)
+task test:js          # Node tests for the npm shim (cli.js)
 task test:e2e         # docker-driven e2e for both libcs
 task lint             # go + arch + md + sh + zsh + js (parse-only)
 task check            # fmt + lint + all tests (incl. e2e)

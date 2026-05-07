@@ -102,6 +102,15 @@ jobs:
 
       - run: task ci:unit
 
+      # node:test is built into node 18+; no npm install needed.
+      # Pinned by setup-node above (used in the lint job too).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run JS tests for npm shim (widget contract)
+        run: task test:js
+
       - name: Coverage gate (≥ 70% overall)
         # Pull-up gate: if a refactor drops coverage below 70%, CI
         # fails. Includes cmd/ + pkg/version in the average (the
