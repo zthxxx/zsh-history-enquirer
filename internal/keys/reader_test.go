@@ -370,6 +370,9 @@ func TestRecoverGoroutinePanic_WritesAndContinues(t *testing.T) {
 		"recovery message must surface to the diagnostic writer")
 	require.Contains(t, out, "simulated parser blow-up",
 		"panic value must be included in the diagnostic")
+	require.Contains(t, out, "TestRecoverGoroutinePanic",
+		"a stack trace must accompany the panic value so post-mortem "+
+			"debugging can find the faulting frame")
 }
 
 // Defensive compile-time check: the unix package must export the

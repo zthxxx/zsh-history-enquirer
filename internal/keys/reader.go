@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"runtime"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -34,10 +35,20 @@ var PanicWriter io.Writer = os.Stderr
 // drops the cursor down a row without resetting to col 0, so any
 // subsequent stderr write (from main's recover or the shell prompt
 // after we exit) would land at a stale column.
+//
+// A stack trace is included so post-mortem debugging can locate the
+// faulting frame without needing to repro the panic — the panic
+// report is invisible to the widget's `BUFFER=$(...)` capture, so it
+// stays in the user's terminal as a visible signal that something
+// unusual happened, rather than disappearing silently.
 func recoverGoroutinePanic() {
 	if rec := recover(); rec != nil {
 		_, _ = fmt.Fprintf(PanicWriter,
 			"zsh-history-enquirer: keys reader panic recovered: %v\r\n", rec)
+		buf := make([]byte, 64*1024)
+		n := runtime.Stack(buf, false)
+		_, _ = PanicWriter.Write(buf[:n])
+		_, _ = io.WriteString(PanicWriter, "\r\n")
 	}
 }
 
