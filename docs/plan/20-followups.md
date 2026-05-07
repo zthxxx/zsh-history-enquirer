@@ -51,6 +51,22 @@ itself.)
 
 ## Addressed
 
+* **2026-05-07** — F1-F4 (and any unrecognized SS3 sequence) used to
+  cancel the picker. On most modern terminals F1..F4 emit `\eOP`,
+  `\eOQ`, `\eOR`, `\eOS` — single-shift-three sequences the picker
+  doesn't bind. The previous fallback at `feedSS3`'s default arm
+  emitted `Esc + 'O' + byte`, and the leading `KeyEsc` event hit the
+  picker's cancel branch. The widget contract preserved `$LBUFFER`,
+  so no input was lost — but the picker closing on a stray F-key is
+  hostile UX (every other modern fuzzy finder silently ignores
+  unknown keys). Both the synchronous arm (`feedSS3` default) and
+  the timing arm (`FlushEsc` on `stateSS3`) now reset state and
+  swallow silently. Four tests pin the new contract: the unknown-
+  byte case, F1-F4 each individually, the flush-during-pending case
+  (asserting state reset via a follow-on keystroke), and the
+  reader-level integration that watches the follow-on keystroke
+  parse as a plain rune rather than the SS3 body byte.
+
 * **2026-05-07** — Highlight loop missed self-overlapping search
   tokens. `highlight()` advanced `offset = end` after each match so a
   token whose suffix is also its prefix (e.g. `ana` against
