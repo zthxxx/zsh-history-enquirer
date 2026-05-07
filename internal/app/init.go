@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"unicode/utf8"
 
 	"github.com/zthxxx/zsh-history-enquirer/internal/history"
 	"github.com/zthxxx/zsh-history-enquirer/internal/tty"
+	"github.com/zthxxx/zsh-history-enquirer/internal/ui"
 )
 
 // cursorResult is the inner channel payload from the parallel DSR
@@ -74,11 +74,9 @@ func readGeometry(t *tty.TTY) (rows, cols int, err error) {
 //
 // The fallback assumes the prompt starts at column 1 with the input
 // filling the first inputCells cells; the cursor sits one cell past
-// the last input cell. We approximate cell-count via rune-count
-// (correct for ASCII / Latin / Cyrillic / Greek; off by ~1 cell per
-// CJK glyph). Using bytes here would over-count input width by
-// 1.5–3× for non-ASCII, sending the picker to draw out past the
-// terminal edge.
+// the last input cell. ui.CellWidth gives the precise cell count
+// (East Asian Width-aware) so non-ASCII LBUFFER no longer mis-aligns
+// the picker against the actual cursor position.
 func handleProbeFallback(cur *cursorResult, cfg *Config, stderr io.Writer) string {
 	if cur.err == nil {
 		return ""
@@ -90,17 +88,18 @@ func handleProbeFallback(cur *cursorResult, cfg *Config, stderr io.Writer) strin
 	}
 	_, _ = fmt.Fprintf(stderr, "warning: DSR cursor probe failed: %v (using col=1 fallback)\n", cur.err)
 	cur.row = 1
-	cur.col = utf8.RuneCountInString(cfg.Input) + 1
+	cur.col = ui.CellWidth(cfg.Input) + 1
 	return leftover
 }
 
 // clampCursor enforces the cur.{row,col} into the terminal bounds.
 // Defends against bytes that happened to match the DSR shape but
-// were never a real response. Same rune-count approximation as
-// handleProbeFallback; see that doc for the cell-vs-rune trade-off.
+// were never a real response. Uses ui.CellWidth for the same
+// reason as handleProbeFallback — exact cell math, not byte or
+// rune approximation.
 func clampCursor(cur *cursorResult, cfg *Config, rows, cols int) {
 	if cur.col < 1 || cur.col > cols {
-		cur.col = utf8.RuneCountInString(cfg.Input) + 1
+		cur.col = ui.CellWidth(cfg.Input) + 1
 	}
 	if cur.row < 1 || cur.row > rows {
 		cur.row = 1

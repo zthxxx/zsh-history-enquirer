@@ -472,20 +472,17 @@ func TestModel_NewModel_ZeroMaxLimitDefaults(t *testing.T) {
 		"negative maxLimit must also default")
 }
 
-// TestModel_Cursor_IsRuneCountNotByteCount pins the regression
-// where m.Cursor stored len(m.Input) — the byte length — but the
-// renderer used `m.InitCol + m.Cursor` as a CSI column number,
-// which is a cell count. For non-ASCII input every byte beyond the
-// rune count would push the caret one column too far right; the
-// user saw the cursor floating in empty space after their typed
-// "café" or "你好".
+// TestModel_Cursor_IsCellWidth pins the regression where m.Cursor
+// stored len(m.Input) — bytes — but the renderer used
+// `m.InitCol + m.Cursor` as a CSI column number, which is a cell
+// count. The same bug applied with rune-count: off by 1 per CJK
+// glyph, off by 1 per emoji. Now the cursor goes through
+// ui.CellWidth (East Asian Width-aware via mattn/go-runewidth) so
+// the value is exact for every script the Unicode tables cover.
 //
-// We approximate cells by runes (correct for Latin-extended /
-// Greek / Cyrillic / Hebrew / Arabic; off by ~1 cell per CJK glyph).
-// The fix is documented on the Cursor field; this test pins the
-// approximation so a future refactor that re-introduces byte-count
-// would surface immediately.
-func TestModel_Cursor_IsRuneCountNotByteCount(t *testing.T) {
+// Fixtures cover ASCII (1 cell/rune), accented Latin (1), CJK
+// (2), emoji (2), and mixed input.
+func TestModel_Cursor_IsCellWidth(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name  string
@@ -493,10 +490,10 @@ func TestModel_Cursor_IsRuneCountNotByteCount(t *testing.T) {
 		want  int
 	}{
 		{"ascii", "git", 3},
-		{"accented-latin", "café", 4}, // 5 bytes, 4 runes
-		{"chinese", "你好", 2},          // 6 bytes, 2 runes
-		{"emoji", "🚀ship", 5},         // 8 bytes, 5 runes
-		{"mixed", "git café 你好", 11},  // 14 bytes, 11 runes
+		{"accented-latin", "café", 4}, // 5 bytes, 4 runes, 4 cells
+		{"chinese", "你好", 4},          // 6 bytes, 2 runes, 4 cells (2 each)
+		{"emoji", "🚀ship", 6},         // 8 bytes, 5 runes, 6 cells (emoji=2)
+		{"mixed", "git café 你好", 13},  // 14 bytes, 11 runes, 13 cells
 		{"empty", "", 0},
 	}
 	for _, tc := range cases {
@@ -506,7 +503,7 @@ func TestModel_Cursor_IsRuneCountNotByteCount(t *testing.T) {
 			// Initial cursor (set by NewModel).
 			m := NewModel(tc.input, []string{}, 24, 80, 1, 1, DefaultMaxLimit)
 			require.Equalf(t, tc.want, m.Cursor,
-				"NewModel(%q): Cursor must be rune-count, got %d", tc.input, m.Cursor)
+				"NewModel(%q): Cursor must be cell-width, got %d", tc.input, m.Cursor)
 
 			// Cursor after a typed-rune update.
 			m2 := NewModel("", []string{}, 24, 80, 1, 1, DefaultMaxLimit)
@@ -514,7 +511,7 @@ func TestModel_Cursor_IsRuneCountNotByteCount(t *testing.T) {
 				m2.Update(keys.RuneEvent{R: r})
 			}
 			require.Equalf(t, tc.want, m2.Cursor,
-				"after typing %q rune-by-rune: Cursor must be rune-count, got %d",
+				"after typing %q rune-by-rune: Cursor must be cell-width, got %d",
 				tc.input, m2.Cursor)
 		})
 	}

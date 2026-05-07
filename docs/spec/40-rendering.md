@@ -13,12 +13,13 @@ To achieve this:
    `\e[6n` to `/dev/tty`.
 2. The terminal replies with `\e[<row>;<col>R`.
 3. The binary parses that, computes
-   `initCol = current_col - cells(initial_input)`. We approximate
-   `cells()` with `utf8.RuneCountInString` — exact for ASCII, Latin
-   extended, Greek, Cyrillic, Hebrew, Arabic; off by ~1 cell per
-   CJK glyph because the East Asian Width tables are not yet wired
-   in. Bytes (the previous form) were wrong for ALL non-ASCII input
-   by 1.5–3× and visibly mis-aligned the picker against the prompt.
+   `initCol = current_col - cells(initial_input)`. `cells()` is
+   `mattn/go-runewidth.StringWidth` (wrapped as `ui.CellWidth`) —
+   East Asian Width-aware, so CJK ideographs / fullwidth
+   punctuation / emoji each contribute 2 cells, combining marks
+   contribute 0, and everything else contributes 1. Earlier
+   approximations (rune-count, byte-count) all visibly mis-aligned
+   the picker against the prompt for non-ASCII LBUFFER text.
 4. All subsequent draws and erases use `initCol` as the leftmost column
    they may touch.
 
@@ -65,27 +66,26 @@ for choice in visible {
 
 ```
 sum over each "\n"-split line L of:
-    ceil(rune_count(L) / width)  # 0-length line counts as 1
+    ceil(cell_width(L) / width)  # 0-length line counts as 1
 ```
 
 The first logical line additionally counts the 2-cell selection
 pointer prefix (`›` + space).
 
-This is a *rune-count* estimate (one rune ≈ one cell):
+`cell_width()` is `mattn/go-runewidth.StringWidth` (wrapped as
+`ui.CellWidth`). Concretely:
 
-- For ASCII text it is exact.
-- For CJK glyphs it slightly under-counts (a CJK glyph takes 2 cells
-  but is 1 rune); the user sees one fewer match on a heavily-CJK
-  line that would just barely overflow.
-- For mixed text the estimate is between cell-true and rune-true.
+- ASCII / Latin extended / Cyrillic / Greek / Hebrew / Arabic: 1
+  cell per rune.
+- CJK ideographs, fullwidth punctuation, emoji, hangul syllables:
+  2 cells per rune.
+- Combining marks, zero-width joiners: 0 cells.
 
-We chose rune count over either byte count or full cell-aware
-arithmetic: byte count over-counts CJK by 3×, full cell counting
-needs a lookup table for East-Asian Width and zero-width joiners
-that adds dependency surface for marginal benefit. The legacy
-Node.js port counted UTF-16 code units (JS `String.length`), which
-approximates rune count for the BMP — both ports show the same
-behaviour on realistic shell history.
+The library packages the Unicode East Asian Width and emoji
+presentation tables, kept current with Unicode updates upstream.
+This replaces the earlier rune-count approximation (off by 1 per
+CJK glyph) and the byte-count formerly inherited from the legacy
+Node.js port.
 
 `options.limit` defaults to **15**. The `--max-limit N` CLI flag
 overrides it (mostly used by the e2e harness and `task run -- --max-limit 5`

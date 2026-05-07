@@ -11,10 +11,7 @@
 //  7. throttle.go      — leading-edge timer
 package ui
 
-import (
-	"strings"
-	"unicode/utf8"
-)
+import "strings"
 
 // PointerWidth is the number of cells reserved for the selection
 // pointer in front of every visible choice (matches the legacy
@@ -27,7 +24,7 @@ const PointerWidth = 2
 //
 // Rules (mirroring the legacy `calcTextTakeRows`):
 //   - text is split on `\n` into logical lines
-//   - each logical line takes ceil(len(line) / cols) rows, with empty
+//   - each logical line takes ceil(width / cols) rows, with empty
 //     lines counting as 1
 //   - the pointer is conceptually prefixed only to the first logical
 //     line, but the row math treats every line as wrapping
@@ -37,14 +34,14 @@ const PointerWidth = 2
 //     than under-estimating: we draw one fewer match instead of
 //     overflowing).
 //
-// We count *runes* (utf8.RuneCountInString) rather than bytes. For
-// ASCII this equals cells exactly. For CJK it slightly under-counts
-// (a CJK glyph takes 2 cells but is 1 rune); for mixed text the
-// estimate is between cell-true and rune-true. This matches the
-// legacy Node.js implementation's behaviour (JS `String.length`
-// counts UTF-16 code units, which approximates runes for the BMP)
-// — both ports occasionally show one extra match on lines that
-// would just barely overflow if cells were counted exactly.
+// We count *cells* via CellWidth (mattn/go-runewidth). East Asian
+// wide glyphs (CJK, fullwidth punctuation, emoji) consume 2 cells
+// per rune; combining marks 0; everything else 1. The previous
+// implementations counted runes (under-counted CJK by 1 cell each)
+// or bytes (over-counted everything multi-byte by 2-3×); both
+// produced visible mis-alignments. With CellWidth the wrap is
+// accurate for every script the Unicode East Asian Width table
+// covers.
 func WrappedRowCount(text string, cols int) int {
 	if cols <= 0 {
 		return 1
@@ -56,7 +53,7 @@ func WrappedRowCount(text string, cols int) int {
 		// continuation lines don't get one (they are wraps, not new
 		// pointer-eligible items), but we still factor the prefix
 		// into the *first* line's wrap math.
-		width := utf8.RuneCountInString(line)
+		width := CellWidth(line)
 		if first {
 			width += PointerWidth
 			first = false

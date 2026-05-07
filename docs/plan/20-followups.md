@@ -569,3 +569,22 @@ companion was resolved in the
   the lefthook `test-js` pre-commit hook (gated by glob
   `**/cli.js` or `**/cli.test.js`). Resolved in this iteration's
   commit.
+
+* **2026-05-07** — Added `mattn/go-runewidth` (the same library
+  every Charm / bubbletea / cobra-style TUI uses) and centralized
+  it behind `ui.CellWidth`. Replaced all rune-count and byte-count
+  display arithmetic — `WrappedRowCount`, `Model.Cursor`,
+  `computeInitCol` arg, `handleProbeFallback`, `clampCursor` — so
+  the picker's column / wrap math is now exact for every script
+  the Unicode East Asian Width tables cover (CJK, emoji, fullwidth
+  punctuation, hangul, combining marks). Previously CJK and emoji
+  were off by 1 cell per rune; now they match the terminal's
+  actual rendering. BenchmarkRender went from ~4 µs to ~20 µs at
+  100k entries — well under the 72 ms throttle window (~3500×
+  headroom). Tests updated accordingly:
+  `TestModel_Cursor_IsCellWidth` (renamed from
+  `TestModel_Cursor_IsRuneCountNotByteCount`),
+  `TestClampCursor_NonASCIIUsesCellWidth`,
+  `TestHandleProbeFallback_NonASCIIUsesCellWidth`. Spec/40,
+  design/50, e2e scenario 13 comments all updated to match.
+  Resolved in this iteration's commit.

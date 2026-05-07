@@ -2,12 +2,12 @@
 # 13-unicode-entries.exp
 #
 # History entries with CJK / accented / emoji characters must
-# render and filter correctly. The renderer's wrap math counts
-# runes (`utf8.RuneCountInString`), which is exact for ASCII /
-# Latin-extended / Greek / Cyrillic / Hebrew / Arabic and off
-# by ~1 cell per CJK glyph (East Asian Width tables not yet
-# wired in). Documented as a known limitation; the picker must
-# NOT fail outright on unicode entries.
+# render and filter correctly. The renderer's wrap math now
+# counts cells via mattn/go-runewidth (East Asian Width-aware),
+# so CJK ideographs and emoji each contribute 2 cells per rune
+# and combining marks contribute 0. The picker must render
+# unicode entries with the correct visible width and accept them
+# as filter input.
 #
 # Seeded by run.sh? No — the seed is ASCII. We invoke the binary
 # directly with --histfile pointing at a fresh file containing

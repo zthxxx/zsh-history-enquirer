@@ -2,7 +2,6 @@ package ui
 
 import (
 	"slices"
-	"unicode/utf8"
 
 	"github.com/zthxxx/zsh-history-enquirer/internal/search"
 )
@@ -33,12 +32,13 @@ type Model struct {
 	// of Input, expressed in terminal cells. It is what the renderer
 	// adds to InitCol to position the cursor on the input row.
 	//
-	// We approximate cell-width as rune-count via utf8.RuneCountInString:
-	// correct for ASCII, Latin-extended, Greek, Cyrillic, Hebrew, Arabic
-	// (1 cell per rune); off by ~1 cell per CJK glyph since the East
-	// Asian Width tables are not yet wired in. Bytes (the previous
-	// implementation) were wrong for ALL non-ASCII input — sometimes by
-	// 1.5–3× the visible width — and visibly mis-positioned the caret.
+	// Cell-width via CellWidth (mattn/go-runewidth): exact for
+	// every script the Unicode East Asian Width tables cover —
+	// ASCII, Latin-extended, Greek, Cyrillic, Hebrew, Arabic, CJK,
+	// emoji, fullwidth punctuation. Bytes were wrong for all
+	// non-ASCII input (over-counting by 2-3×); rune-count was off
+	// for CJK and emoji (under-counting by 1 cell each). CellWidth
+	// is the fix.
 	Cursor int
 
 	// Configuration.
@@ -63,7 +63,7 @@ func NewModel(input string, choices []string, rows, cols, initRow, initCol, maxL
 		Height:   rows,
 		Choices:  choices,
 		Input:    input,
-		Cursor:   utf8.RuneCountInString(input),
+		Cursor:   CellWidth(input),
 		MaxLimit: maxLimit,
 	}
 	m.recomputeFilter()
