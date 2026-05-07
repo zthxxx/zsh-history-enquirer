@@ -67,16 +67,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed (vs. legacy 1.x bugs that survived into the rewrite)
 
-- DSR cursor-probe **malformed-parse** errors no longer drop the
-  bytes the probe consumed. A user who presses
-  <kbd>Ctrl</kbd>+<kbd>R</kbd> then immediately presses an arrow key
-  produces a buffer like `\x1b[A\x1b[12;5R`; `parseDSRResponse`
-  anchors on the first `\x1b[`, the parse fails, and the fallback
-  used to honor only `TimeoutError.Leftover` — silently dropping the
-  arrow press. The fallback now uses `cur.leftover` (which parseDSR
-  populates with the full input on its error paths) so the bytes
-  round-trip through `reader.Prefeed` and the up-arrow surfaces as
-  a `KeyUp` event.
+- **User-arrow-before-DSR-probe race**: pressing
+  <kbd>Ctrl</kbd>+<kbd>R</kbd> and immediately tapping an arrow / Home
+  / End used to leave the picker rendered at the col=1 fallback
+  (instead of inline at the prompt) AND, until the
+  leftover-preservation fix landed, dropped the keypress entirely.
+  Two-step fix: (1) `handleProbeFallback` now reads `cur.leftover`
+  as the default fallback for non-`Timeout` errors so the bytes
+  round-trip through `reader.Prefeed`; (2) `parseDSRResponse` now
+  scans forward through every `\x1b[` introducer and picks the
+  first valid `<digits>;<digits>R` body, which lets the picker
+  recognise the real DSR even when a user-typed CSI sequence
+  precedes it. Net effect: the picker renders inline AND the
+  user's arrow press becomes a real `KeyUp` event.
 - `End` semantics now correctly land focus on the last match even
   when multi-line entries reshuffle into the visible window after
   rotation.
