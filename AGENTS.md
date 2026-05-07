@@ -192,6 +192,24 @@ Run a single Go test: `go test ./internal/ui -run TestRender_PointerOnFocused`.
   the `stateEsc` flush still emits `KeyEsc` (preserving the user's
   intent to cancel via a bare Esc). See `docs/design/40-keys.md`
   for the full table.
+- **`moveDown` is wrap-aware — don't reduce it to `rotateDown(1)`.**
+  When pressing ↓ at the visible bottom and the next entry is
+  multi-line (or the visible window is bounded by `MaxLimit` rather
+  than `heightLimit`), a fixed 1-row rotation lets the renderer's
+  dynamic limit shrink and clamp `m.Idx` back onto the previous
+  entry — the user observes a "lost" keypress. The current
+  implementation walks the visible window from the bottom backward,
+  bounded by `min(MaxLimit-1, heightLimit-fitting count)`, and
+  rotates by `m.Limit - keepCount` so the target lands at the new
+  visible bottom. Three regression tests + e2e scenario 25 pin
+  the contract; see `docs/spec/50-keybindings.md` for the algorithm.
+- **↑/↓ wrap-around in a fully-visible filter does NOT rotate
+  the list.** When `len(Filter) <= m.Limit` the entire match list
+  is on screen at once; pressing ↓ at the bottom or ↑ at the top
+  must move focus to the other edge but keep the displayed order
+  intact. Earlier code did `m.Idx = 0; rotateDown(1)` (and
+  `rotateUp(1)` symmetrically), which left the list in
+  `[a-2, a-3, a-1]` order with focus on a-2 instead of a-1.
 
 ## Triggers for `/ship`
 
