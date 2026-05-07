@@ -388,9 +388,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   picker drew at the wrong column whenever LBUFFER had any
   non-ASCII content — visibly mis-aligning against the prompt and
   parking the caret in empty space after the input row. Now goes
-  through `ui.CellWidth` (mattn/go-runewidth, the same library every
-  Charm / bubbletea TUI uses), East Asian Width-aware so CJK
-  ideographs and emoji each contribute their actual 2 cells.
+  through `ui.CellWidth` (rivo/uniseg, see the "Internal — replace
+  hand-rolled libs with community standards" section below for the
+  swap from runewidth), East Asian Width-aware AND grapheme-cluster-
+  aware so CJK ideographs, decomposed accents, and emoji ZWJ
+  families each contribute their actual rendered cell footprint.
 - **`splitNonEmptyLines` was a misnomer, letting empty entries
   through.** A corrupt $HISTFILE (with `echo "" >> ~/.zsh_history`,
   partial-write blank lines, or CRLF-only blank lines that

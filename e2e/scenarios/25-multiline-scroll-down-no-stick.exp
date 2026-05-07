@@ -27,16 +27,22 @@
 set timeout 20
 log_user 1
 
-# HISTFILE order is chronological. zsh-history-enquirer reverses
-# (most-recent first), so we put the multi-line entry FIRST
-# (oldest) and the singles AFTER (most-recent last single).
+# HISTFILE entries carry explicit timestamps; zsh-history-enquirer
+# orders by timestamp and reverses (most-recent first). We give the
+# multi-line entry the OLDEST timestamp (1568797200) so it lands at
+# the BOTTOM of the picker's filter, and give single-N descending
+# timestamps so single-6 is most-recent (top) and single-1 is just
+# above the multi-line.
+#
+# Resulting picker filter (reverse-chronological):
+#   [single-6, single-5, single-4, single-3, single-2, single-1, multi-line]
 #
 # zsh stores multi-line commands with literal backslash-n between
-# logical lines; the loader's ReverseDedupeUnescape un-escapes
-# them back to real newlines so the picker sees a 3-row entry.
-# All 7 entries share the "scrolltok" filter token so a single
-# typed filter narrows to exactly this corpus regardless of
-# whatever history zsh -il loaded at startup.
+# logical lines; the loader's ReverseDedupeUnescape un-escapes them
+# back to real newlines so the picker sees a 3-row entry. All 7
+# entries share the "scrolltok" filter token so a single typed
+# filter narrows to exactly this corpus regardless of whatever
+# history zsh -il loaded at startup.
 exec sh -c {
   printf ': 1568797200:0;echo scrolltok-mline-alpha\\necho scrolltok-mline-beta\\necho scrolltok-mline-gamma\n' > /tmp/multiline-stick-history
   for i in 6 5 4 3 2 1; do

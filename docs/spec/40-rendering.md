@@ -51,20 +51,27 @@ To achieve this:
 
 ## Dynamic limit
 
-The picker renders at most `limit` matches *and* at most as many as fit
-in `terminal.height - 3` rows. It computes this each draw:
+The picker renders at most `options.limit` matches *and* at most as
+many as fit in the terminal's available choice height. The available
+height accounts for the input row (1 row at minimum) plus any rows
+the input itself wraps to on a narrow terminal:
 
 ```
+heightLimit := max(1, terminal.height - 3 - inputExtra)
 rows := 0
 limit := 0
 for choice in visible {
     cr := wrapped_row_count(pointer + choice, terminal.width)
-    if rows + cr >= terminal.height - 3 { break }
+    if rows + cr > heightLimit { break }    # strict > so equal fits
     rows += cr
     limit++
     if limit >= options.limit { break }
 }
 ```
+
+`inputExtra` is the count of rows the input row wraps to past the
+prompt (typically 0; nonzero only when the user has typed a filter
+long enough to overflow the terminal width, or pasted a long token).
 
 `wrapped_row_count` of a string is:
 

@@ -115,8 +115,11 @@ func (m *Model) recomputeFilter() {
 	m.Idx = 0
 }
 
-// rotateUp rotates the filtered list in-place by 1 (last element
-// becomes first). Used by the up-arrow scroll.
+// rotateUp rotates the filtered list in-place by n positions: the
+// last n elements move to the front (so a single rotateUp(1) brings
+// Filter[len-1] to position 0). Used by the up-arrow scroll, PageUp,
+// and the wrap-around cases. n is reduced modulo len(Filter); a
+// non-positive n is a no-op.
 func (m *Model) rotateUp(n int) {
 	if len(m.Filter) == 0 || n <= 0 {
 		return
@@ -131,8 +134,11 @@ func (m *Model) rotateUp(n int) {
 	copy(m.Filter, tail)
 }
 
-// rotateDown rotates the filtered list in-place by 1 (first element
-// becomes last).
+// rotateDown rotates the filtered list in-place by n positions: the
+// first n elements move to the back (so a single rotateDown(1) sends
+// Filter[0] to position len-1). Used by the down-arrow scroll, the
+// multi-line aware moveDown's variable shift count, and PageDown.
+// n is reduced modulo len(Filter); a non-positive n is a no-op.
 func (m *Model) rotateDown(n int) {
 	if len(m.Filter) == 0 || n <= 0 {
 		return

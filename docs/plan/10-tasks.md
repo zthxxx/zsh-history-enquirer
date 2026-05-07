@@ -67,12 +67,20 @@ idempotent action.
 ## P7. E2E
 
 - [x] `e2e/{debian,alpine}/Dockerfile`: zsh + expect
-- [x] `e2e/scenarios/*.exp`: 8 scenarios — basic-pick, multi-line-scroll,
-      cancel-preserves-input, multi-word-search, paste-bracketed,
-      pageup-pagedown, home-end, prefilter-from-lbuffer
+- [x] `e2e/scenarios/*.exp`: 25 scenarios covering basic pick, multi-
+      line scroll, cancel-preserves-input, multi-word search, bracketed
+      paste, PageUp/Down, Home/End, LBUFFER prefilter, multi-line
+      submit + run, multi-line render-and-cancel, multi-line scroll-
+      into-view, empty history, Unicode entries, long-line wrap,
+      vi-mode keymap, narrow-terminal wrap, in-picker input editing,
+      flag-shaped LBUFFER, Ctrl-W word delete, Alt+Backspace word
+      delete, input-row wrap editing, paste with embedded control
+      bytes, F1/F2 silent-swallow, multi-line + per-line wrap submit
+      (多行换行交互 compound boundary), and multi-line scroll-down
+      no-stick. See `docs/design/70-testing.md` for the full table.
 - [x] `e2e/run.sh`: scenario runner with fresh per-test state
 - [x] `task ci:e2e:run`: one-liner shared with CI
-- [x] Both targets pass: `summary: 8 passed, 0 failed`
+- [x] Both targets pass: `summary: 25 passed, 0 failed`
 
 ## P8. Polish
 
