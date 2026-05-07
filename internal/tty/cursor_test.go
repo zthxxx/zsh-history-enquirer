@@ -1,10 +1,40 @@
 package tty
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+// TestTimeoutError_ErrorAndUnwrap pins the two error-interface
+// methods. Error() formats the cause via %v so callers logging
+// the error see both the timeout marker and the underlying
+// reason. Unwrap() exposes the cause for errors.Is / errors.As
+// — handleProbeFallback in internal/app uses errors.As(err, &te)
+// to detect the timeout shape and pull Leftover off the struct;
+// without Unwrap, that detection fails when the timeout error is
+// wrapped by an upstream %w call.
+func TestTimeoutError_ErrorAndUnwrap(t *testing.T) {
+	t.Parallel()
+
+	cause := errors.New("read /dev/tty: i/o timeout")
+	te := &TimeoutError{Cause: cause, Leftover: "abc"}
+
+	require.Contains(t, te.Error(), "DSR cursor probe timed out",
+		"Error() must include the timeout-marker phrase")
+	require.Contains(t, te.Error(), cause.Error(),
+		"Error() must surface the underlying cause via %%v")
+
+	require.Same(t, cause, te.Unwrap(),
+		"Unwrap() must return the exact cause pointer for errors.Is/As")
+
+	// errors.As must walk through TimeoutError to find a *TimeoutError.
+	var got *TimeoutError
+	require.True(t, errors.As(te, &got),
+		"errors.As(te, &TimeoutError) must succeed")
+	require.Same(t, te, got)
+}
 
 func TestParseDSRResponse_OK(t *testing.T) {
 	t.Parallel()
