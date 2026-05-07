@@ -691,3 +691,23 @@ companion was resolved in the
   zsh line-editor's caret-notation rendering by 1-2 cells. No
   user impact in the common case (no control bytes in argv).
   Resolved in this iteration's commit.
+
+* **2026-05-07** — `FixtureLoader` had a sibling of the
+  embedded-blank-line bug at the post-strip layer: an extended-
+  history line with an empty command (`: 1700000001:0;`, no
+  command after the semicolon — produced by a corrupt write or an
+  unusual zsh config) would survive the `splitNonEmptyLines`
+  filter (the line itself is non-empty), then
+  `stripExtendedHistoryPrefix` would reduce it to "" — and that
+  empty entry would land in the picker as a blank row. Same UX
+  hazard as the previous empty-line fix: pressing Enter on a
+  blank row sets `$BUFFER` to "" and silently swallows the user's
+  typed prefix. Fix: `fixtureLoader.Load` now drops post-strip
+  empties symmetrically with the pre-strip drop. Pinned by
+  `TestFixtureLoader_ExtendedHistoryEmptyCmdDropped`. Note: the
+  live `zshLoader` path is not affected — `fc -ln 1` doesn't
+  emit empty-command lines from real zsh history. The fixture
+  path matters because it's what unit tests use, and because
+  users with corrupt `$HISTFILE` content might trip it on the
+  live path too if zsh ever decides to surface such lines
+  through `fc -ln`. Resolved in this iteration's commit.

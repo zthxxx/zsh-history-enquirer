@@ -111,6 +111,33 @@ func TestFixtureLoader_EmbeddedBlankLineDropped(t *testing.T) {
 	}
 }
 
+// TestFixtureLoader_ExtendedHistoryEmptyCmdDropped — a corrupt
+// extended-history line `: 1700000001:0;` records an empty command.
+// `splitNonEmptyLines` lets it through (the line itself is
+// non-empty), but `stripExtendedHistoryPrefix` reduces it to "".
+// Without a post-strip empty-drop, that "" survives the pipeline
+// and renders as a blank picker row — pressing Enter on which sets
+// $BUFFER to "" and silently swallows the user's typed prefix.
+// The fix is symmetric to the embedded-blank-line drop in
+// splitNonEmptyLines, applied after the prefix strip.
+func TestFixtureLoader_ExtendedHistoryEmptyCmdDropped(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "history.txt")
+	content := ": 1700000000:0;ls\n: 1700000001:0;\n: 1700000002:0;git\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	out, err := FixtureLoader(path).Load(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []string{"git", "ls"}, out,
+		"empty extended-history command must not survive as blank entry")
+	for _, line := range out {
+		require.NotEmptyf(t, line,
+			"output must not contain empty entries; got %q in %v", line, out)
+	}
+}
+
 // TestFixtureLoader_CRLFOnlyLineDropped — a `\r\n` (an empty CRLF
 // line) is `\r` after the LF strip; the trailing-CR pass turns it
 // into "", and the empty-line drop removes it entirely. So the

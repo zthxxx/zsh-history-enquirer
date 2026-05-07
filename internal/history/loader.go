@@ -134,7 +134,19 @@ func (l *fixtureLoader) Load(_ context.Context) ([]string, error) {
 	raw := splitNonEmptyLines(string(data))
 	cleaned := make([]string, 0, len(raw))
 	for _, ln := range raw {
-		cleaned = append(cleaned, stripExtendedHistoryPrefix(ln))
+		stripped := stripExtendedHistoryPrefix(ln)
+		// An extended-history line that records an empty command —
+		// e.g. `: 1700000001:0;` from a corrupt write or a
+		// HISTFILE generated with an unusual shell config — strips
+		// down to "" and would otherwise survive as a blank picker
+		// row. Pressing Enter on it would set $BUFFER to "" and
+		// swallow the user's typed prefix. Same impact as the
+		// embedded-blank-line bug fixed earlier; this is the
+		// post-strip arm of the same defense.
+		if stripped == "" {
+			continue
+		}
+		cleaned = append(cleaned, stripped)
 	}
 	return ReverseDedupeUnescape(cleaned), nil
 }
