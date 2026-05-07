@@ -401,6 +401,45 @@ func TestRender_DynamicLimitMatchesSanitizedRender(t *testing.T) {
 	}
 }
 
+// TestRender_MultiLineEntryRowCountMatchesWrap pins the user-emphasized
+// case: a multi-line entry where some logical lines also wrap on the
+// terminal width. Frame.Size must equal WrappedRowCount for the entry
+// (sum of per-line ceil(width/cols)), not a flat row-per-newline count
+// that would silently undershoot the pre-erase budget on the next
+// frame and leave reflowed leftovers visible.
+//
+// The fixture mirrors the e2e seed shape: command-6's literal-\n form
+// `command-6 \\n - line 1 \\n - line 2 \\n - line 3 \\n\\n - line 4
+// \\n - line 5` after un-escaping. We test against a narrow terminal
+// (20 cols) so at least one of the line bodies wraps.
+func TestRender_MultiLineEntryRowCountMatchesWrap(t *testing.T) {
+	t.Parallel()
+
+	// Choice with 3 logical lines:
+	// - line 1: 18 chars (fits at 20 cols + pointer 2 = 20 cells exactly)
+	// - line 2: 25 chars (wraps to 2 rows on 20 cols)
+	// - line 3: 5 chars  (1 row)
+	// Total: 4 rows.
+	choice := strings.Repeat("a", 18) + "\n" + strings.Repeat("b", 25) + "\nshort"
+
+	m := NewModel("", []string{choice}, 24, 20, 1, 1, DefaultMaxLimit)
+	frame := m.Render(RenderOptions{})
+
+	wantRows := WrappedRowCount(choice, 20)
+	require.Equal(t, 4, wantRows, "fixture must have 4 wrap rows on 20 cols")
+	// Frame.Size includes input wrap rows; with empty input on a wide
+	// initCol, inputExtra is 0, so Size equals choice rows alone.
+	require.Equal(t, wantRows, frame.Size,
+		"Frame.Size must equal WrappedRowCount for the choice — pre-erase "+
+			"budget on the next frame depends on this.")
+	// The entry should be visible (limit=1, fits within heightLimit).
+	require.Equal(t, 1, frame.Limit, "single multi-line entry must be visible")
+	// All three logical lines must appear in the body.
+	require.Contains(t, stripHighlight(frame.Body), strings.Repeat("a", 18))
+	require.Contains(t, stripHighlight(frame.Body), strings.Repeat("b", 25))
+	require.Contains(t, stripHighlight(frame.Body), "short")
+}
+
 // FuzzRender_NoPanicOnArbitraryGeometry runs Render against arbitrary
 // (input, choices, geometry) tuples to confirm the renderer never
 // panics. A panic here would crash the picker mid-session and leak the
