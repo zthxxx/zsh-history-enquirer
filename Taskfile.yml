@@ -23,8 +23,18 @@ vars:
     sh: '[ -n "${VERSION:-}" ] && printf "%s" "${VERSION}" || (git describe --tags --always --dirty 2>/dev/null || echo "dev")'
   COMMIT:
     sh: git rev-parse --short HEAD 2>/dev/null || echo "unknown"
+  # DATE uses the HEAD commit's ISO-8601 timestamp rather than the
+  # wall-clock build time. Two consequences:
+  #   - The same git tag produces byte-identical binaries across CI
+  #     re-runs (modulo Go toolchain version), simplifying release
+  #     verification — `sha256sum` of v2.0.0 is the same in every
+  #     publish.
+  #   - SOURCE_DATE_EPOCH-style supply-chain verification is
+  #     reproducible without an external time fix.
+  # Falls back to wall-clock when run outside a git checkout (rare;
+  # typical only for `go install`-style consumer builds).
   DATE:
-    sh: date -u '+%Y-%m-%dT%H:%M:%SZ'
+    sh: git log -1 --format=%cI HEAD 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ'
   LDFLAGS: >-
     -s -w
     -X {{.PKG_PATH}}/pkg/version.version={{.VERSION}}

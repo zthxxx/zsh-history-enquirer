@@ -51,6 +51,17 @@ itself.)
 
 ## Addressed
 
+* **2026-05-07** — Build was non-reproducible: `Taskfile.yml`'s `DATE`
+  variable used `date -u '+%Y-%m-%dT%H:%M:%SZ'` (wall-clock at build
+  time), so two CI re-runs of the same git tag produced byte-different
+  binaries — different sha256s, harder release verification, harder
+  bisection. Switched to `git log -1 --format=%cI HEAD`, falling back
+  to wall-clock outside a git checkout. Verified with consecutive
+  `task build` invocations: identical sha256 across runs (commit
+  `278d28f`-built artefact reproduces 1709bfd8…). `-X`-injected version
+  metadata still reflects HEAD; only the timestamp source changed.
+  Aligns with SOURCE_DATE_EPOCH-style supply-chain verification.
+
 * **2026-05-07** — `search.AndFilter`'s result-slice initial cap was
   `len(choices)`, sized for the worst-case "no narrow" filter where
   every entry matches. At HISTSIZE=100k that's 1.6 MB allocated and
