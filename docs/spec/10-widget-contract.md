@@ -59,7 +59,21 @@ The Go binary shall:
     `cmd/zsh-history-enquirer/main.go`)
   - external `kill -TERM <pid>` mid-render (handled by the
     `signal.NotifyContext`-wrapped `runCtx` in `invokeRun`)
-  
-  All four paths funnel through the same conceptual rule: if the user
+  - panic in the main goroutine (handled by `recoverPanic` deferred
+    at the top of `main()` in `cmd/zsh-history-enquirer/main.go`,
+    which echoes argv to stdout and the panic+stack to stderr)
+  - panic in the keys reader goroutine (handled by
+    `recoverGoroutinePanic` deferred at the top of the read loop in
+    `internal/keys/reader.go`, which closes the events channel so
+    the main loop falls through to the cancel path that echoes
+    `m.Input`)
+  - panic in the cursor-probe / history-load goroutines (handled by
+    per-goroutine deferred recovers in
+    `internal/app/init.go#fetchInitialState`, which convert the
+    panic to a sentinel error on the result channel so the join
+    completes cleanly and the picker degrades to its probe-failure
+    fallback path)
+
+  All paths above funnel through the same conceptual rule: if the user
   typed something into `$LBUFFER`, that string is what `BUFFER=$(...)`
   must capture, no matter what went wrong inside the binary.
