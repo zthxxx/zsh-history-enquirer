@@ -181,6 +181,17 @@ Run a single Go test: `go test ./internal/ui -run TestRender_PointerOnFocused`.
   also strips a leading `--` from its missing-binary-fallback
   echo. If you change either side, change both — and update
   `task release:smoke` step 3/4 accordingly.
+- **Unrecognized SS3 / aborted CSI sequences are silently consumed,
+  not bounced as `KeyEsc`.** F1-F4 emit `\eO[PQRS]` and a flaky-link
+  split arrow emits `\e[` paused mid-sequence. Earlier code emitted
+  the buffered prelude as `KeyEsc + body bytes` so the leading
+  `KeyEsc` cancelled the picker on every fat-fingered F-key or
+  every >50ms-paused arrow. Both arms (`feedSS3` default,
+  `feedCSI` default, and `FlushEsc` for `stateSS3` and `stateCSI`)
+  now reset state and emit nothing — the picker stays open. Only
+  the `stateEsc` flush still emits `KeyEsc` (preserving the user's
+  intent to cancel via a bare Esc). See `docs/design/40-keys.md`
+  for the full table.
 
 ## Triggers for `/ship`
 
