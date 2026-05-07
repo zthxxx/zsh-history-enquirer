@@ -1056,6 +1056,74 @@ func TestModel_DownAdvancesOntoTallerThanWindowEntry(t *testing.T) {
 		m.Focused())
 }
 
+// TestModel_DownThroughAllMultiLineEntries — walking ↓ through a
+// filter consisting entirely of multi-line entries must advance
+// focus by exactly one entry per press, even when the visible
+// window holds only a fraction of the filter.
+//
+// This pins the "rotate-then-target-at-bottom" invariant under the
+// most stressful shape: every entry is multi-line, so every ↓ at
+// the visible bottom requires the wrap-aware path AND the
+// rotation count is greater than 1. A regression on heightLimit
+// vs MaxLimit bounding here would manifest as repeated focus on
+// the same entry across multiple ↓ presses.
+func TestModel_DownThroughAllMultiLineEntries(t *testing.T) {
+	t.Parallel()
+	choices := []string{
+		"M1\nl2\nl3",
+		"M2\nl2\nl3",
+		"M3\nl2\nl3",
+		"M4\nl2\nl3",
+	}
+	// heightLimit=8 → 2 multi-line entries fit (3 rows each).
+	m := NewModel("", choices, 11, 80, 1, 1, DefaultMaxLimit)
+	m.Render(RenderOptions{})
+	require.True(t, m.Limit >= 2, "must fit at least 2 multi-line entries")
+	require.Equal(t, choices[0], m.Focused())
+
+	expectFocus := func(want string) {
+		t.Helper()
+		require.Equalf(t, want, m.Focused(),
+			"expected focus on %q, got %q (Idx=%d Limit=%d)",
+			strings.SplitN(want, "\n", 2)[0],
+			strings.SplitN(m.Focused(), "\n", 2)[0],
+			m.Idx, m.Limit)
+	}
+
+	for i := 1; i < len(choices); i++ {
+		m.Update(keys.KeyEvent{Key: keys.KeyDown})
+		m.Render(RenderOptions{PrevSize: m.Limit})
+		expectFocus(choices[i])
+	}
+}
+
+// TestModel_UpAtTopRotatesMultiLineIn — symmetric to moveUp's
+// rotateUp(1) behavior at the top boundary: the entry rotated in
+// from the back becomes the new visible top, and that entry can
+// be multi-line. Pressing ↑ N times cycles the multi-line entry
+// at index `len-N` to the front.
+func TestModel_UpAtTopRotatesMultiLineIn(t *testing.T) {
+	t.Parallel()
+	choices := []string{
+		"a-1", "a-2", "a-3", "a-4", "a-5",
+		"multi-X\n  l2\n  l3",
+		"a-7", "a-8", "a-9", "a-10",
+	}
+	m := NewModel("", choices, 8, 80, 1, 1, DefaultMaxLimit)
+	m.Render(RenderOptions{})
+	require.Equal(t, "a-1", m.Focused())
+
+	// 5 ↑ presses cycle multi-X (originally at index 5) to the front
+	// because rotateUp(1) brings the LAST entry to position 0 each press
+	// (a-10 → a-9 → a-8 → a-7 → multi-X).
+	for range 5 {
+		m.Update(keys.KeyEvent{Key: keys.KeyUp})
+		m.Render(RenderOptions{PrevSize: m.Limit})
+	}
+	require.Equal(t, "multi-X\n  l2\n  l3", m.Focused(),
+		"5 ↑ presses must rotate multi-X to the front")
+}
+
 // TestModel_DownAdvancesPastMaxLimitWhenHeightLimitIsLoose pins the
 // MaxLimit-bounded branch: heightLimit is loose enough to allow
 // every visible entry alongside target, but MaxLimit caps the
