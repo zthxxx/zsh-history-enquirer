@@ -89,3 +89,35 @@ func TestParseDSRResponse_Malformed(t *testing.T) {
 		require.Error(t, err, "input %q should fail", c)
 	}
 }
+
+// TestParseDSRResponse_MalformedReturnsFullInputAsLeftover pins the
+// contract that the malformed-parse error paths populate leftover
+// with the full input string. handleProbeFallback (in internal/app)
+// reads cur.leftover as the default fallback for non-Timeout errors
+// so the user's typed bytes round-trip through reader.Prefeed even
+// when the probe could not extract a (row, col) — the bug we fixed
+// in the fast-typing-arrow scenario. The non-numeric body case is
+// the realistic trigger: user presses Ctrl-R then types an arrow
+// before the probe completes; the buffer reads
+// `\x1b[A\x1b[12;5R`, parseDSR anchors on the FIRST `\x1b[`, and the
+// body `A\x1b[12;5` fails the numeric parse.
+func TestParseDSRResponse_MalformedReturnsFullInputAsLeftover(t *testing.T) {
+	t.Parallel()
+	cases := []string{
+		"\x1b[12R",            // no semicolon
+		"\x1b[abc;1R",         // non-numeric row
+		"\x1b[1;abcR",         // non-numeric col
+		"\x1b[A\x1b[12;5R",    // user typed Up before DSR; first CSI body fails the parse
+		"\x1b[\x1b[12;5R",     // bare CSI prefix wedged in front of the response
+	}
+	for _, c := range cases {
+		row, col, leftover, err := parseDSRResponse(c)
+		require.Errorf(t, err, "input %q should fail", c)
+		require.Equalf(t, 0, row, "row should be 0 on malformed parse for %q", c)
+		require.Equalf(t, 0, col, "col should be 0 on malformed parse for %q", c)
+		require.Equalf(t, c, leftover,
+			"leftover must round-trip the full input on malformed parse "+
+				"so handleProbeFallback can replay it via reader.Prefeed; "+
+				"input=%q got leftover=%q", c, leftover)
+	}
+}
