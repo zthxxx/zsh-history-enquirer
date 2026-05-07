@@ -383,6 +383,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   Ctrl-R. Refactored the BUFFER-preservation echo into an
   `echoArgvAndExit()` helper and wired the `result.error` branch
   to call it after a stderr diagnostic.
+- **A goroutine panic during the picker session would blank `BUFFER`.**
+  The existing `recoverStartFailure` only fires when fx.App.Start
+  errors before invokeRun runs — a runtime panic later in the picker
+  (a bug in update.go / render.go, or a third-party panic from
+  x/ansi / uniseg) would crash the process with no stdout output, so
+  `BUFFER=$(...)` resolved to empty and the user's typed `$LBUFFER`
+  was lost. Added a top-level `defer recoverPanic(...)` in `main()`
+  that prints the panic + stack to stderr (invisible to `$(...)`)
+  and echoes argv back to stdout so BUFFER survives even on the
+  crash path. 3 tests pin the recovery flow + the stack helper.
 - **Mid-pick SIGWINCH left stale wrap rows visible until the next
   keystroke.** Most terminals reflow wrapped content on resize, so the
   previous frame's `PrevSize` / `PrevCursorRow` no longer matched the

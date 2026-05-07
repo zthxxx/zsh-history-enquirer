@@ -268,6 +268,50 @@ func TestRecoverStartFailure_TolerantOfBadArgs(t *testing.T) {
 		"original startup error must still surface")
 }
 
+// TestRecoverPanic_PreservesInput pins the widget contract through a
+// runtime panic. handlePanicRecovery is the os.Exit-free body of the
+// real top-level recover; if a goroutine panics during the picker
+// session, the input from argv must still echo to stdout so
+// `BUFFER=$(...)` survives.
+func TestRecoverPanic_PreservesInput(t *testing.T) {
+	stdout, stderr := captureStdoutStderr(t)
+	handlePanicRecovery(stdout, stderr, []string{"git", "log"},
+		"runtime error: index out of range [5] with length 3")
+	require.NoError(t, stdout.Close())
+	require.NoError(t, stderr.Close())
+
+	require.Equal(t, "git log\n", readFile(t, stdout.Name()),
+		"panic-recovery must echo joined argv so BUFFER is preserved")
+	stderrContent := readFile(t, stderr.Name())
+	require.Contains(t, stderrContent, "panic recovered",
+		"panic value must surface to stderr for debugging")
+	require.Contains(t, stderrContent, "stack:",
+		"recovery must print a stack trace to stderr")
+}
+
+// TestRecoverPanic_NoArgsNoPanicOutput pins the cancel-with-empty-input
+// case: recoverPanic on a panic with no argv still exits 0 cleanly,
+// just with empty stdout (no spurious newline).
+func TestRecoverPanic_NoArgsStdoutEmpty(t *testing.T) {
+	stdout, stderr := captureStdoutStderr(t)
+	handlePanicRecovery(stdout, stderr, []string{}, "boom")
+	require.NoError(t, stdout.Close())
+	require.NoError(t, stderr.Close())
+
+	require.Empty(t, readFile(t, stdout.Name()),
+		"no argv → no input to recover → stdout stays empty")
+}
+
+// TestRuntimeStack_NonEmpty pins debugStack returns a usable stack.
+// Without a non-empty result the panic-recovery path would print a
+// truncated stderr message that's harder to debug.
+func TestRuntimeStack_NonEmpty(t *testing.T) {
+	got := runtimeStack()
+	require.NotEmpty(t, got, "runtime.Stack must return at least one frame")
+	require.Contains(t, string(got), "TestRuntimeStack",
+		"stack must include the calling test goroutine")
+}
+
 // captureStdoutStderr returns two *os.File handles backed by tempfiles
 // the test can read after closing them. Used because
 // recoverStartFailure takes *os.File specifically (matching the

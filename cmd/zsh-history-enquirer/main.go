@@ -14,6 +14,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"time"
 
 	"go.uber.org/fx"
@@ -78,7 +79,46 @@ func recoverStartFailure(stdout, stderr *os.File, args []string, startErr error)
 	}
 }
 
+// recoverPanic preserves the widget contract through a runtime panic.
+// fx surfaces provider/invoker panics as start errors, but a goroutine
+// panic later in the picker session (a bug in update.go or render.go,
+// or a third-party panic from x/ansi / uniseg) would otherwise let the
+// process crash with no stdout output — `BUFFER=$(...)` then resolves
+// to empty and the user's typed `$LBUFFER` is gone. Top-level recover
+// echoes argv back to stdout so BUFFER survives even on the crash
+// path. The crash itself is reported to stderr (invisible to `$(...)`)
+// and process exits 0 so the substitution doesn't propagate failure.
+func recoverPanic(stdout, stderr *os.File, args []string) {
+	if r := recover(); r != nil {
+		handlePanicRecovery(stdout, stderr, args, r)
+		os.Exit(0)
+	}
+}
+
+// handlePanicRecovery is the os.Exit-free body of recoverPanic so tests
+// can exercise the recovery flow without terminating the test process.
+func handlePanicRecovery(stdout, stderr *os.File, args []string, r any) {
+	fmt.Fprintln(stderr, "zsh-history-enquirer: panic recovered:", r)
+	fmt.Fprintln(stderr, "zsh-history-enquirer: stack:")
+	_, _ = stderr.Write(debugStack())
+	recoverStartFailure(stdout, stderr, args, fmt.Errorf("panic: %v", r))
+}
+
+// debugStack returns the runtime stack of the current goroutine in a
+// format suitable for stderr logging. Wrapped so tests can stub.
+//
+//nolint:gochecknoglobals // intentional swap point for tests.
+var debugStack = runtimeStack
+
+func runtimeStack() []byte {
+	const stackBufSize = 64 * 1024
+	buf := make([]byte, stackBufSize)
+	n := runtime.Stack(buf, false)
+	return buf[:n]
+}
+
 func main() {
+	defer recoverPanic(os.Stdout, os.Stderr, os.Args[1:])
 	// Fast path: a bare `--version` doesn't need a TTY at all. Detect
 	// it before fx.New so we don't open /dev/tty in environments where
 	// it isn't usable (CI runners, scripts piped from a non-tty

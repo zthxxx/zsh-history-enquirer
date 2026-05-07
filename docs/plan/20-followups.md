@@ -50,6 +50,17 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — A goroutine panic during the picker session would
+  let the process crash with no stdout, so `BUFFER=$(...)` resolved
+  to empty and the user's typed `$LBUFFER` was destroyed. Added
+  `recoverPanic` as a top-level `defer` in `main()`; on panic it
+  prints the panic value + stack to stderr (invisible to
+  `BUFFER=$(...)` capture) and echoes argv back to stdout so the
+  widget contract holds even when something blows up. The recovery
+  body is split into `handlePanicRecovery` (no `os.Exit`) for
+  testability; 3 unit tests pin the buffer-preserved, no-args, and
+  stack-helper paths.
+
 * **2026-05-07** — Mid-pick SIGWINCH used to leave stale wrap rows
   visible until the user typed another keystroke. Most terminals
   reflow wrapped lines on resize, so the previous frame's row
