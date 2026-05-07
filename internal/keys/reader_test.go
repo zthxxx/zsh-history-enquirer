@@ -378,4 +378,9 @@ func TestRecoverGoroutinePanic_WritesAndContinues(t *testing.T) {
 // Defensive compile-time check: the unix package must export the
 // poll constants we depend on. A future Go-x-sys reshuffle that
 // removes these would otherwise break us at runtime.
-var _ = unix.POLLIN
+var (
+	_ = unix.POLLIN
+	_ = unix.POLLHUP
+	_ = unix.POLLERR
+	_ = unix.POLLNVAL
+)

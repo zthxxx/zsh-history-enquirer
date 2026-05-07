@@ -180,7 +180,23 @@ func (r *Reader) Events(ctx context.Context) <-chan Event {
 				}
 				return
 			}
-			if nready == 0 || pfd[0].Revents&unix.POLLIN == 0 {
+			if nready == 0 {
+				continue
+			}
+			// POLLHUP / POLLERR / POLLNVAL signal the underlying fd
+			// can no longer deliver input — terminal hangup, ssh
+			// disconnect, or a kernel-level error. Without an exit
+			// branch the loop spins: poll returns these flags every
+			// iteration without POLLIN, so we'd burn CPU until ctx
+			// cancellation rescues us. SIGHUP from a controlling-tty
+			// hangup normally trips the signal.NotifyContext path
+			// first; this check is defense-in-depth for the cases
+			// where it doesn't (POLLNVAL on a closed fd, POLLERR on
+			// a low-level driver fault).
+			if pfd[0].Revents&(unix.POLLHUP|unix.POLLERR|unix.POLLNVAL) != 0 {
+				return
+			}
+			if pfd[0].Revents&unix.POLLIN == 0 {
 				continue
 			}
 

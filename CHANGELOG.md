@@ -383,6 +383,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   Ctrl-R. Refactored the BUFFER-preservation echo into an
   `echoArgvAndExit()` helper and wired the `result.error` branch
   to call it after a stderr diagnostic.
+- **`unix.Poll` returning POLLHUP/POLLERR/POLLNVAL without POLLIN
+  could spin the read loop.** When the controlling tty hangs up or
+  the fd encounters a driver-level error, poll signals the failure
+  every iteration but our previous check `Revents & POLLIN == 0`
+  treated it as "no data, retry" — burning CPU until `ctx`
+  cancellation rescued the loop. The SIGHUP path normally lands
+  first via `signal.NotifyContext`, but defense-in-depth: the
+  reader now exits on any of POLLHUP/POLLERR/POLLNVAL so a
+  `POLLNVAL` from a closed fd or a `POLLERR` from a hardware fault
+  shuts the picker down deterministically. Compile-time checks for
+  all four constants pinned in reader_test.go.
 - **Panics in the parallel cursor-probe + history-load goroutines
   also crashed the process.** Same defense as the keys reader: each
   spawned goroutine in `fetchInitialState` now defers a recover that
