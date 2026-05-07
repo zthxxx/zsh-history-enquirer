@@ -854,3 +854,24 @@ companion was resolved in the
   close is the signal that the reader goroutine has fully
   exited, so subsequent cleanup is safe. 5/5 repeated runs pass
   the race detector cleanly. Resolved in this iteration's commit.
+
+* **2026-05-07** — The same race that the previous iteration fixed
+  in the SIGWINCH test exists in production. After `runEventLoop`
+  returns, Run's deferred `cancel()` fires and Run returns to
+  invokeRun, then fx OnStop runs `TTY.Close()` — all within tens
+  of microseconds. Meanwhile the reader goroutine (cancel-aware
+  but bounded by its 100 ms `pollInterval`) might still be in the
+  WINCH branch calling `r.tty.Size()`. `Size()` reads `t.file.Fd()`;
+  if the cleanup sequence happens to land between the write to
+  `t.file.Sysfd = -1` (inside `t.file.Close()`) and the assignment
+  `t.file = nil`, the read races with the field write. Production
+  usually survives via EBADF on the closed fd; a nil `t.file` mid-
+  `Fd()` would nil-panic. Fix: in `internal/app/run.go`, after
+  `runEventLoop` returns, explicitly call `cancel()` and drain the
+  events channel until close. The channel close is the only signal
+  for "reader goroutine has fully exited" — bounded by the
+  pollInterval (100 ms) plus any in-flight emit. By the time Run's
+  deferred TTY-cleanup (LeaveRaw, BracketedPasteOff, debug close)
+  and the eventual fx OnStop's TTY.Close run, the reader has
+  stopped touching `t.file`. Verified by the full `task test:unit`
+  race-detector pass. Resolved in this iteration's commit.

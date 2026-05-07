@@ -101,7 +101,25 @@ func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, st
 	defer cancel()
 	events := reader.Events(loopCtx)
 
-	return runEventLoop(ctx, t, model, events, preEvents, debugW)
+	result, err := runEventLoop(ctx, t, model, events, preEvents, debugW)
+
+	// Explicitly cancel the reader's context and drain its events
+	// channel until the channel closes. The close is the only signal
+	// we have for "reader goroutine has fully exited"; without this
+	// drain the deferred TTY cleanup (LeaveRaw + the eventual fx
+	// OnStop's TTY.Close) races with the reader's WINCH branch
+	// calling t.tty.Size() — the race detector caught the same
+	// pattern in the SIGWINCH test (commit 9abe59f) and the same
+	// hazard exists here. Production usually survives the race via
+	// EBADF on the closed fd, but t.file = nil mid-Fd() would
+	// nil-panic. The drain is bounded by the reader's pollInterval
+	// (100 ms) plus any in-flight emit, so user-visible cost is
+	// imperceptible.
+	cancel()
+	for range events {
+	}
+
+	return result, err
 }
 
 // PrintResult writes the chosen line to stdout exactly once. Bytes
