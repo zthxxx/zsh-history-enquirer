@@ -50,6 +50,19 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — `handleProbeFallback` dropped the bytes the cursor
+  probe had already consumed when `parseDSRResponse` returned a
+  malformed-parse error. parseDSR's error paths populate `leftover`
+  with the full input string, but the fallback only honored
+  `TimeoutError.Leftover` and let other errors fall through with an
+  empty leftover — so a user pressing Ctrl-R then immediately typing
+  an arrow key (the buffer reads `\x1b[A\x1b[12;5R`, parseDSR anchors
+  on the first `\x1b[`, parse fails) silently lost the keypress. Fix
+  reads cur.leftover as the default fallback path; the user's
+  `\x1b[A` round-trips through reader.Prefeed and surfaces as a
+  KeyUp event the picker can handle. Two unit tests pin the empty
+  and the malformed-parse arms.
+
 * **2026-05-07** — `renderBody`'s `sanitizedCache` slice was sized to
   `len(m.Filter)` even though the loop breaks at `limit >= MaxLimit`
   (15 by default). At HISTSIZE=100k with a wide filter (no input
