@@ -51,6 +51,21 @@ itself.)
 
 ## Addressed
 
+* **2026-05-07** — moveDown's wrap-aware fix had an edge case: when
+  MaxLimit (not heightLimit) was the binding cap on the visible
+  window, my walk could let `keepCount` reach `m.Limit`, producing
+  `shiftCount=0` and no rotation. renderBody would then re-cap at
+  MaxLimit and clamp `m.Idx` back — the same "lost keypress"
+  symptom the multi-line aware path was trying to avoid, just on
+  a different branch. **Addressed in pending commit**: bound
+  `keepCount` by `MaxLimit-1` (target takes 1 slot) so the
+  MaxLimit-bounded branch always produces `shiftCount >= 1`. With
+  this cap, `shiftCount=0` is now impossible in any normal flow,
+  so the early-return for it is removed — `rotateDown(0)` is a
+  no-op anyway. New regression test
+  `TestModel_DownAdvancesPastMaxLimitWhenHeightLimitIsLoose` pins
+  the case directly.
+
 * **2026-05-07** — ↑/↓ wrap-around at the edges of a fully-visible
   filter scrambled the displayed order. When `len(Filter) <= m.Limit`
   (e.g. user filtered to 2-3 entries), pressing ↓ at the bottom did

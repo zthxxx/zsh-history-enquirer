@@ -260,11 +260,25 @@ func (m *Model) moveDown() {
 	heightLimit := choiceHeightLimit(m.Height, inputExtra)
 	target := m.Filter[m.Limit]
 	targetRows := WrappedRowCount(sanitizeChoiceForRender(target), m.Width)
-	// Walk from the bottom of the current visible window backward,
-	// keeping as many old visible entries as fit alongside the target.
+	// keepCount = old visible entries to retain alongside the target,
+	// bounded by both:
+	//   - heightLimit (rendered rows must fit the terminal), and
+	//   - MaxLimit-1 (the cap on visible entries; target takes 1 slot).
+	// Without the MaxLimit-1 bound, a loose heightLimit would let the
+	// walk fill keepCount up to m.Limit, producing shiftCount=0 and
+	// no rotation. renderBody would then re-cap at MaxLimit and clamp
+	// m.Idx back — the same "lost keypress" the heightLimit branch is
+	// trying to avoid.
+	maxKeep := m.MaxLimit - 1
+	if maxKeep < 0 {
+		maxKeep = 0
+	}
 	keepCount := 0
 	total := targetRows
 	for i := m.Limit - 1; i >= 0; i-- {
+		if keepCount >= maxKeep {
+			break
+		}
 		rows := WrappedRowCount(sanitizeChoiceForRender(m.Filter[i]), m.Width)
 		if total+rows > heightLimit {
 			break
@@ -273,13 +287,6 @@ func (m *Model) moveDown() {
 		keepCount++
 	}
 	shiftCount := m.Limit - keepCount
-	if shiftCount < 1 {
-		// All visible entries fit alongside target; just advance focus
-		// onto the target without rotation. renderBody will expand the
-		// limit on the next pass.
-		m.Idx = m.Limit
-		return
-	}
 	m.rotateDown(shiftCount)
 	// Target now lives at index keepCount in the rotated filter (the
 	// shiftCount head entries moved to the back; the remaining

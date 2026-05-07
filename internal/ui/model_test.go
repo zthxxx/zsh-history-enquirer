@@ -1056,49 +1056,34 @@ func TestModel_DownAdvancesOntoTallerThanWindowEntry(t *testing.T) {
 		m.Focused())
 }
 
-// TestModel_DownExpandsWindowWithoutEvictionWhenTargetFits — pins
-// the shiftCount==0 branch: when the next entry fits alongside
-// every currently-visible entry within heightLimit, moveDown does
-// not rotate and just bumps m.Idx. renderBody's next pass expands
-// the limit to include the target naturally.
-func TestModel_DownExpandsWindowWithoutEvictionWhenTargetFits(t *testing.T) {
+// TestModel_DownAdvancesPastMaxLimitWhenHeightLimitIsLoose pins the
+// MaxLimit-bounded branch: heightLimit is loose enough to allow
+// every visible entry alongside target, but MaxLimit caps the
+// rendered window. moveDown must still rotate by enough that target
+// reaches the visible bottom — without the MaxLimit-1 cap on
+// keepCount, the picker would clamp Idx back onto the previous
+// bottom (the "lost keypress" bug class repeated in a different
+// branch).
+func TestModel_DownAdvancesPastMaxLimitWhenHeightLimitIsLoose(t *testing.T) {
 	t.Parallel()
-	choices := []string{"a-1", "a-2", "a-3", "a-4", "a-5", "a-6", "a-7"}
-	// Height=12 → heightLimit=9. All 7 entries fit if rendered together.
-	// MaxLimit defaults high enough that the entire 7-entry list is
-	// visible after expansion. Initial render limits to MaxLimit but
-	// all 7 single-line entries fit.
-	m := NewModel("", choices, 12, 80, 1, 1, DefaultMaxLimit)
+	choices := []string{"a-1", "a-2", "a-3", "a-4", "a-5"}
+	// MaxLimit=4 (caps visible at 4); Height=20 → heightLimit=17 (loose).
+	m := NewModel("", choices, 20, 80, 1, 1, 4)
 	m.Render(RenderOptions{})
-	require.Equal(t, 7, m.Limit, "all 7 must fit initially")
+	require.Equal(t, 4, m.Limit)
+	require.Equal(t, "a-1", m.Focused())
 
-	// Walk to the last visible entry without rotation.
-	for range 6 {
+	// Walk to a-4 (Idx=3).
+	for range 3 {
 		m.Update(keys.KeyEvent{Key: keys.KeyDown})
 	}
-	require.Equal(t, "a-7", m.Focused())
+	require.Equal(t, "a-4", m.Focused())
 
-	// Pressing ↓ at the last visible when the entire filter is already
-	// in view goes through the wrap branch (len <= Limit), which is
-	// unrelated to the shiftCount path. Force the multi-line branch
-	// instead by rendering with a smaller MaxLimit so len > Limit.
-	m2 := NewModel("", choices, 12, 80, 1, 1, 4) // MaxLimit=4
-	m2.Render(RenderOptions{})
-	require.Equal(t, 4, m2.Limit, "MaxLimit caps the visible window")
-
-	// Walk to bottom (Idx=3, focus a-4).
-	for range 3 {
-		m2.Update(keys.KeyEvent{Key: keys.KeyDown})
-	}
-	require.Equal(t, "a-4", m2.Focused())
-
-	// ↓: target is a-5 (1 row), heightLimit=9, all four visible
-	// (a-1..a-4) plus target = 5 rows, fits. shiftCount=0. moveDown
-	// just sets m.Idx to m.Limit; render expands to limit=5
-	// (capped by MaxLimit=4? no, MaxLimit=4 caps, so limit stays 4
-	// and Idx clamps. Let's check).
-	prevFilter := slices.Clone(m2.Filter)
-	m2.Update(keys.KeyEvent{Key: keys.KeyDown})
-	require.Equal(t, prevFilter, m2.Filter,
-		"shiftCount==0 path must not rotate Filter")
+	// ↓ at MaxLimit-bounded bottom — must advance to a-5 even though
+	// heightLimit alone would allow keepCount = m.Limit = 4.
+	m.Update(keys.KeyEvent{Key: keys.KeyDown})
+	m.Render(RenderOptions{PrevSize: m.Limit})
+	require.Equalf(t, "a-5", m.Focused(),
+		"after ↓ at MaxLimit-bounded bottom, focus must advance to a-5; got %q",
+		m.Focused())
 }
