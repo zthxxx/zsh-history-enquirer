@@ -15,6 +15,22 @@ go.sum  text linguist-generated
 *.zsh   text eol=lf linguist-language=Shell
 *.sh    text eol=lf linguist-language=Shell
 
+# The npm shim ships to every consumer's machine via
+# zsh-history-enquirer's package; CRLF in cli.js would be noise in
+# diffs and (very rarely) trip a node version that's strict about
+# shebang line endings. Lock to LF.
+*.js    text eol=lf
+
+# expect scripts run inside the e2e docker image; the shebang line
+# must be LF for the shell that invokes them to find env-style paths.
+*.exp   text eol=lf
+
+# Taskfile / lefthook YAMLs must stay LF — task and lefthook both
+# shell out to `sh`, and CRLF in a recipe surfaces as syntax errors
+# when the heredoc is fed to bash on the runner.
+*.yaml  text eol=lf
+*.yml   text eol=lf
+
 # Generated files.
 docs/**/*.png                  filter=lfs diff=lfs merge=lfs -text
 images/**                      filter=lfs diff=lfs merge=lfs -text
