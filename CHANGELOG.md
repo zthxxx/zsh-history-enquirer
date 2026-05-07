@@ -33,7 +33,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - Static-linkage assertion in `scripts/build-all.sh` and CI's
   `build` job — Linux builds that accidentally pull in CGO fail
   loudly.
-- 24 e2e scenarios in Docker (debian + alpine, two libcs) covering:
+- 25 e2e scenarios in Docker (debian + alpine, two libcs) covering:
   basic pick, multi-line scroll, cancel-preserves-input, multi-word
   search, bracketed paste, PageUp/Down, Home/End, LBUFFER prefilter,
   multi-line submit + run, multi-line render-and-cancel, multi-line
@@ -42,9 +42,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   in-picker input editing, flag-shaped LBUFFER, Ctrl-W word delete,
   Alt+Backspace word delete, input-row wrap editing, paste with
   embedded control bytes, F1/F2 silent-swallow (no cancel on
-  unbound SS3 keys), and the multi-line + per-line-wrap submit
+  unbound SS3 keys), the multi-line + per-line-wrap submit
   composite (多行换行交互) which exercises multi-line render +
-  per-line wrap math + dynamic limit math in one pipeline.
+  per-line wrap math + dynamic limit math in one pipeline, and the
+  multi-line scroll-down-no-stick boundary which proves ↓ at the
+  visible bottom advances focus onto a multi-line entry instead of
+  clamping back to a sibling.
 - Go-native fuzz target on `keys.Parser.Feed` — pinned via the
   test corpus, run for longer windows via
   `go test -fuzz=FuzzParser_NoPanicOnArbitraryBytes`.
@@ -94,6 +97,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   (`strings.Contains`); only the visual emphasis was incomplete.
   Now every match is collected and the merge step folds the
   overlapping spans into one continuous SGR-wrapped run.
+- **Pressing ↓ at the bottom of the visible window onto a multi-
+  line entry no longer "loses" the keypress.** The legacy moveDown
+  rotated the filter by 1 unconditionally; when the next entry was
+  multi-line and didn't fit alongside the current visible head,
+  `renderBody`'s dynamic limit shrunk and clamped `m.Idx` back to
+  the same logical entry — the user pressed ↓ but focus didn't
+  move. moveDown is now wrap-aware: it walks the visible window
+  from the bottom backward, accumulates row counts alongside the
+  target entry's wrapped rows, evicts the leftover head entries
+  from the front, and pins `m.Idx` so the target lands exactly at
+  the new visible bottom on the next render. Three regression
+  tests + e2e scenario 25 (`25-multiline-scroll-down-no-stick`)
+  pin the user-facing behavior on both glibc and musl.
 - **F1-F4 (and other unrecognized SS3 / aborted CSI sequences) no
   longer cancel the picker.** On most modern terminals F1-F4 emit
   `\eOP`, `\eOQ`, `\eOR`, `\eOS` — single-shift-three sequences the

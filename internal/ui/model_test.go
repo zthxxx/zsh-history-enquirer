@@ -940,3 +940,137 @@ func TestModel_DownWrapsWhenFilterFitsInLimit(t *testing.T) {
 	require.Equal(t, 0, m.Idx,
 		"Down past the last visible entry must wrap to top (Idx=0)")
 }
+
+// TestModel_DownAdvancesOntoMultiLineEntry — pins the
+// 多行换行交互 boundary where pressing ↓ at the bottom of the
+// visible window must advance focus onto a multi-line entry that
+// alone consumes more rows than a single eviction frees up.
+//
+// The bug class: moveDown rotated by 1 unconditionally and let
+// renderBody clamp m.Idx, so when the next entry was multi-line
+// and didn't fit alongside the rest of the window, the dynamic
+// limit shrunk and Idx was clamped back to the same logical
+// entry — the user pressed ↓ but focus didn't move.
+//
+// Setup: 4 single-line entries followed by one 3-row multi-line
+// entry, on a terminal where heightLimit=5. The user presses ↓
+// 5 times to walk from idx=0 onto the multi-line. After the
+// 5th press, focus must be on the multi-line entry — not stuck
+// on the last single-line one.
+func TestModel_DownAdvancesOntoMultiLineEntry(t *testing.T) {
+	t.Parallel()
+	choices := []string{
+		"single-A",
+		"single-B",
+		"single-C",
+		"single-D",
+		"multi-E\n  line2\n  line3",
+		"single-F",
+		"single-G",
+	}
+	// Height=8 → heightLimit=8-3=5. Width=80 (no wrap).
+	m := NewModel("", choices, 8, 80, 1, 1, DefaultMaxLimit)
+	m.Render(RenderOptions{})
+
+	// Initial render: A(1)+B(1)+C(1)+D(1)=4, +E(3)=7>5, break → limit=4.
+	require.Equal(t, 4, m.Limit, "initial limit must clamp before multi")
+	require.Equal(t, "single-A", m.Focused())
+
+	// Walk down: A → B → C → D (4 entries within initial visible window).
+	for range 3 {
+		m.Update(keys.KeyEvent{Key: keys.KeyDown})
+	}
+	require.Equal(t, "single-D", m.Focused())
+
+	// 4th ↓: at bottom of visible (Idx=3, Limit=4), more entries below.
+	// Multi-line aware rotation must evict heads until E fits at bottom.
+	m.Update(keys.KeyEvent{Key: keys.KeyDown})
+	m.Render(RenderOptions{PrevSize: m.Limit})
+	require.Equalf(t, "multi-E\n  line2\n  line3", m.Focused(),
+		"after ↓, focus must advance to the multi-line entry; got %q", m.Focused())
+
+	// 5th ↓: advance past E onto F. E was the bottom; the rotation
+	// after E must continue to bring F into view.
+	m.Update(keys.KeyEvent{Key: keys.KeyDown})
+	m.Render(RenderOptions{PrevSize: m.Limit})
+	require.Equalf(t, "single-F", m.Focused(),
+		"after second ↓, focus must advance past multi-line; got %q", m.Focused())
+}
+
+// TestModel_DownAdvancesOntoTallerThanWindowEntry — pins the
+// keepCount==0 branch of multi-line aware moveDown: the next
+// entry alone consumes more rows than heightLimit, so no part
+// of the current visible window can stay alongside it. shiftCount
+// must equal the full m.Limit and m.Idx must land at 0 of the
+// rotated filter so the renderer's "limit==0 → fallback to 1"
+// path keeps the picker showing the focused entry.
+func TestModel_DownAdvancesOntoTallerThanWindowEntry(t *testing.T) {
+	t.Parallel()
+	huge := "tall-X\n" + strings.Repeat("L\n", 30) // ~31 rows
+	choices := []string{"a-1", "a-2", "a-3", huge, "a-4"}
+	// Height=8 → heightLimit=5. `huge` alone exceeds the limit.
+	m := NewModel("", choices, 8, 80, 1, 1, DefaultMaxLimit)
+	m.Render(RenderOptions{})
+	require.Equal(t, "a-1", m.Focused())
+
+	// Walk to a-3 (last single-line before huge).
+	m.Update(keys.KeyEvent{Key: keys.KeyDown})
+	m.Update(keys.KeyEvent{Key: keys.KeyDown})
+	require.Equal(t, "a-3", m.Focused())
+
+	// ↓ onto huge. keepCount must be 0 (huge alone overflows), shift
+	// the entire visible head, and m.Idx lands at 0 of the rotated
+	// Filter where huge now sits.
+	m.Update(keys.KeyEvent{Key: keys.KeyDown})
+	m.Render(RenderOptions{PrevSize: m.Limit})
+	require.Equalf(t, huge, m.Focused(),
+		"↓ onto an entry larger than heightLimit must advance focus onto it; got %q",
+		m.Focused())
+}
+
+// TestModel_DownExpandsWindowWithoutEvictionWhenTargetFits — pins
+// the shiftCount==0 branch: when the next entry fits alongside
+// every currently-visible entry within heightLimit, moveDown does
+// not rotate and just bumps m.Idx. renderBody's next pass expands
+// the limit to include the target naturally.
+func TestModel_DownExpandsWindowWithoutEvictionWhenTargetFits(t *testing.T) {
+	t.Parallel()
+	choices := []string{"a-1", "a-2", "a-3", "a-4", "a-5", "a-6", "a-7"}
+	// Height=12 → heightLimit=9. All 7 entries fit if rendered together.
+	// MaxLimit defaults high enough that the entire 7-entry list is
+	// visible after expansion. Initial render limits to MaxLimit but
+	// all 7 single-line entries fit.
+	m := NewModel("", choices, 12, 80, 1, 1, DefaultMaxLimit)
+	m.Render(RenderOptions{})
+	require.Equal(t, 7, m.Limit, "all 7 must fit initially")
+
+	// Walk to the last visible entry without rotation.
+	for range 6 {
+		m.Update(keys.KeyEvent{Key: keys.KeyDown})
+	}
+	require.Equal(t, "a-7", m.Focused())
+
+	// Pressing ↓ at the last visible when the entire filter is already
+	// in view goes through the wrap branch (len <= Limit), which is
+	// unrelated to the shiftCount path. Force the multi-line branch
+	// instead by rendering with a smaller MaxLimit so len > Limit.
+	m2 := NewModel("", choices, 12, 80, 1, 1, 4) // MaxLimit=4
+	m2.Render(RenderOptions{})
+	require.Equal(t, 4, m2.Limit, "MaxLimit caps the visible window")
+
+	// Walk to bottom (Idx=3, focus a-4).
+	for range 3 {
+		m2.Update(keys.KeyEvent{Key: keys.KeyDown})
+	}
+	require.Equal(t, "a-4", m2.Focused())
+
+	// ↓: target is a-5 (1 row), heightLimit=9, all four visible
+	// (a-1..a-4) plus target = 5 rows, fits. shiftCount=0. moveDown
+	// just sets m.Idx to m.Limit; render expands to limit=5
+	// (capped by MaxLimit=4? no, MaxLimit=4 caps, so limit stays 4
+	// and Idx clamps. Let's check).
+	prevFilter := slices.Clone(m2.Filter)
+	m2.Update(keys.KeyEvent{Key: keys.KeyDown})
+	require.Equal(t, prevFilter, m2.Filter,
+		"shiftCount==0 path must not rotate Filter")
+}

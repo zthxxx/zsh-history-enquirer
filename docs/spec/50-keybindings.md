@@ -32,19 +32,35 @@ keystroke; that's the legacy bug we are not re-introducing.
 
 When the selection is on the last visible row and the next match is
 multi-line, scrolling down by 1 may evict more than one current visible
-row in order to make space. The eviction loop:
+row in order to make space. The picker walks the visible list from the
+bottom backward, accumulating wrapped row counts alongside the target
+entry's rows, and keeps as many tail entries as fit in the
+`terminal.height - 3 - inputExtra` budget. The leftover head entries
+are rotated to the back; focus lands on the target.
 
 ```
-nextRows := wrapped_row_count(visible[idx+1])
-totalRows := sum(wrapped_row_count(v) for v in visible) + nextRows
-while totalRows >= terminal.height - 3:
-    totalRows -= wrapped_row_count(visible.shift())
-    rotate-down once
-    idx -= 1
+budget := terminal.height - 3 - inputExtra
+target := matches[m.Limit]                  # entry just below visible
+total  := wrapped_row_count(target)
+keep   := 0
+for i := m.Limit - 1; i >= 0; i--:
+    rows := wrapped_row_count(visible[i])
+    if total + rows > budget: break
+    total += rows
+    keep++
+shift := m.Limit - keep
+if shift == 0:
+    m.Idx = m.Limit          # render expands the limit on next pass
+else:
+    rotate-down by shift
+    m.Idx = keep             # target now sits at this index
 ```
 
-Without this, scrolling onto a long heredoc would push the picker off
-the bottom of the terminal.
+Without this, scrolling onto a long heredoc either pushes the picker
+off the bottom of the terminal (if the dynamic limit isn't enforced)
+or, worse, gets stuck — `renderBody` shrinks the limit and clamps
+`m.Idx` back to the same logical entry, so the user observes a "lost"
+keypress.
 
 ## Cancel / no-match-submit invariants
 

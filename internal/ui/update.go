@@ -236,7 +236,42 @@ func (m *Model) moveDown() {
 		return
 	}
 	// At the bottom of the visible window with more entries below.
-	m.rotateDown(1)
+	// 多行换行交互: rotating by a fixed 1 lets renderBody's dynamic
+	// limit shrink under our feet whenever the next entry is multi-
+	// line — Idx then clamps back to the same visible row and the
+	// user observes a "lost" keypress. Evict from the head until the
+	// target entry (Filter[m.Limit]) fits at the bottom of the new
+	// visible window, mirroring scrollToEnd's wrap-aware budget.
+	inputExtra := InputExtraRows(m.InitCol, CellWidth(m.Input), m.Width)
+	heightLimit := choiceHeightLimit(m.Height, inputExtra)
+	target := m.Filter[m.Limit]
+	targetRows := WrappedRowCount(sanitizeChoiceForRender(target), m.Width)
+	// Walk from the bottom of the current visible window backward,
+	// keeping as many old visible entries as fit alongside the target.
+	keepCount := 0
+	total := targetRows
+	for i := m.Limit - 1; i >= 0; i-- {
+		rows := WrappedRowCount(sanitizeChoiceForRender(m.Filter[i]), m.Width)
+		if total+rows > heightLimit {
+			break
+		}
+		total += rows
+		keepCount++
+	}
+	shiftCount := m.Limit - keepCount
+	if shiftCount < 1 {
+		// All visible entries fit alongside target; just advance focus
+		// onto the target without rotation. renderBody will expand the
+		// limit on the next pass.
+		m.Idx = m.Limit
+		return
+	}
+	m.rotateDown(shiftCount)
+	// Target now lives at index keepCount in the rotated filter (the
+	// shiftCount head entries moved to the back; the remaining
+	// keepCount tail entries shifted left to indices 0..keepCount-1,
+	// and target follows them at index keepCount).
+	m.Idx = keepCount
 }
 
 // scrollToEnd places the *last* filtered entry at the bottom of the

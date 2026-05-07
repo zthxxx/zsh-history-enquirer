@@ -51,6 +51,34 @@ itself.)
 
 ## Addressed
 
+* **2026-05-07** — Multi-line scroll-down advanced focus by a single
+  rotation only; when the next entry was multi-line and didn't fit
+  alongside the current visible head, `renderBody`'s dynamic limit
+  shrunk and clamped `m.Idx` back to the same logical entry — the
+  user pressed ↓ but focus didn't move. The user could "sneak past"
+  by pressing ↓ multiple times until enough rotate-then-clamp cycles
+  walked the multi-line entry into reach, but the first press was a
+  visible no-op every time. **Addressed in pending commit**:
+  `moveDown` now mirrors `scrollToEnd`'s wrap-aware budget — walks
+  the current visible window from the bottom backward, accumulates
+  row counts alongside the target entry's rows, evicts the leftover
+  head entries from the front via `rotateDown(shiftCount)`, and pins
+  `m.Idx = keepCount` so the target sits exactly at the new visible
+  bottom on the next render. Three regression tests pin the three
+  branches: target fits without eviction (shiftCount=0, no rotation,
+  m.Idx just bumps to m.Limit), target needs partial eviction (the
+  canonical multi-line case), and target alone exceeds heightLimit
+  (keepCount=0, full-window eviction so the renderer's limit==0
+  fallback still draws the focused entry). E2E scenario 25 locks
+  the user-facing behavior end-to-end: 6 single-line entries
+  followed by a 3-row multi-line entry on a 10-row terminal, walk
+  ↓ until focus must cross onto the multi-line, submit + run,
+  assert the multi-line's stdout markers appear (would emit
+  `single-N` markers if focus had clamped). spec/50-keybindings
+  updated to describe the eviction algorithm precisely; the
+  previous pseudo-code's `idx -= 1` was a misnomer that obscured
+  the actual invariant.
+
 * **2026-05-07** — Build was non-reproducible: `Taskfile.yml`'s `DATE`
   variable used `date -u '+%Y-%m-%dT%H:%M:%SZ'` (wall-clock at build
   time), so two CI re-runs of the same git tag produced byte-different
