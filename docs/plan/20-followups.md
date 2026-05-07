@@ -43,10 +43,25 @@ Each entry must include:
   only matters for tests. How to apply: don't try to fix it for
   expect — the renderer's correctness is verified at the model layer.
 
-(One open item — the docker pty's DSR limitation. Intrinsic to the
-test harness, not a code bug. The earlier narrow-terminal-wrap
-companion was resolved in the
-\`test(e2e): + narrow-terminal-wrap scenario\` commit.)
+* **2026-05-07** — `parseDSRResponse` anchors on the FIRST `\x1b[` and
+  fails when the user types an arrow / Home / End in the probe window
+  (the buffer reads `\x1b[A\x1b[12;5R`; the first CSI body is
+  unparseable). The bytes are now preserved end-to-end via the
+  malformed-parse-leftover round-trip (commit `a244f2f`), but the
+  picker still renders at the col=1 fallback instead of inline at the
+  prompt column. A scan-forward parser that walks every `\x1b[`
+  candidate and prefers the first valid `<digits>;<digits>R` body
+  would let the probe succeed in this scenario and render inline as
+  if the user had not raced the probe. Why open: the bytes-preserved
+  fix already closed the bug-class (no input is lost); the inline-
+  rendering improvement is a polish item with non-trivial parser
+  changes that warrant a focused review with malformed-input fuzz
+  coverage. Estimated effort: ~30 LOC change to parseDSRResponse,
+  ~50 LOC of regression tests, plus a fuzz target so we catch any
+  scan-forward edge case (paste-start prefix, embedded OSC, …).
+
+(Two open items — docker pty DSR limitation (test-harness only) and
+the scan-forward DSR parser polish above.)
 
 ## Addressed
 
