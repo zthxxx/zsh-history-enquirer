@@ -597,7 +597,7 @@ func TestModel_NewModel_ZeroMaxLimitDefaults(t *testing.T) {
 // `m.InitCol + m.Cursor` as a CSI column number, which is a cell
 // count. The same bug applied with rune-count: off by 1 per CJK
 // glyph, off by 1 per emoji. Now the cursor goes through
-// ui.CellWidth (East Asian Width-aware via mattn/go-runewidth) so
+// ui.CellWidth (East Asian Width-aware via rivo/uniseg) so
 // the value is exact for every script the Unicode tables cover.
 //
 // Fixtures cover ASCII (1 cell/rune), accented Latin (1), CJK

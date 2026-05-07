@@ -156,13 +156,15 @@ func InputExtraRows(initCol, cellsTotal, cols int) int {
 //     than under-estimating: we draw one fewer match instead of
 //     overflowing).
 //
-// We count *cells* via runewidth (mattn/go-runewidth). East Asian
-// wide glyphs (CJK, fullwidth punctuation, emoji) consume 2 cells
-// per rune; combining marks 0; everything else 1. `\t` advances to
-// the next 8-cell tabstop relative to the line's starting column,
-// matching standard terminal behaviour — the previous form
-// (`CellWidth(line)`) treated `\t` as 0 cells and silently
-// undercounted lines with literal tabs.
+// We count *cells* via uniseg (rivo/uniseg, the same library
+// CellWidth wraps). East Asian wide glyphs (CJK, fullwidth
+// punctuation, emoji) consume 2 cells per cluster; combining marks
+// merge into the preceding cluster; everything else 1. `\t` advances
+// to the next 8-cell tabstop relative to the line's starting column,
+// matching standard terminal behaviour — uniseg (like every other
+// width library) treats `\t` as 0 cells, so the explicit tabstop
+// math here is what keeps wrap rows accurate when a history entry
+// contains a literal tab.
 func WrappedRowCount(text string, cols int) int {
 	if cols <= 0 {
 		return 1
