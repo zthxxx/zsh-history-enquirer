@@ -75,8 +75,18 @@ if (!bin) {
   // widget contract is "stdout must reproduce the input on any
   // failure path"; without this echo, a missing platform binary
   // silently eats the user's keystrokes.
-  if (process.argv.length > 2) {
-    process.stdout.write(process.argv.slice(2).join(' ') + '\n');
+  //
+  // The widget invokes us as `cli.js -- "$LBUFFER"` (the `--`
+  // protects $LBUFFER strings that look like flags from triggering
+  // the binary's --version / --help fast-path). We must strip a
+  // leading `--` here too, otherwise `BUFFER=$(...)` lands as
+  // `-- $LBUFFER` instead of the user's actual typed text.
+  let argv = process.argv.slice(2);
+  if (argv[0] === '--') {
+    argv = argv.slice(1);
+  }
+  if (argv.length > 0) {
+    process.stdout.write(argv.join(' ') + '\n');
   }
 
   // Exit 0 so `BUFFER=$(...)` doesn't abort. The plugin file's

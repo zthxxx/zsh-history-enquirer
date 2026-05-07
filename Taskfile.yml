@@ -261,6 +261,14 @@ tasks:
         [ "$FALLBACK_OUT" = "git log --pretty=fuller" ] \
           || (echo "::error::missing-binary fallback did not echo argv (got: $FALLBACK_OUT)" && exit 1)
 
+        # Same path but with the widget-mode `--` separator. The
+        # plugin invokes the shim as `cli.js -- "$LBUFFER"`; the
+        # `--` must be stripped from the echoed output so BUFFER
+        # lands as the typed text, not "-- typed text".
+        WIDGET_OUT=$(node "$SANDBOX/umbrella/bin/cli.js" -- "git log --pretty=fuller")
+        [ "$WIDGET_OUT" = "git log --pretty=fuller" ] \
+          || (echo "::error::widget-mode fallback did not strip -- separator (got: $WIDGET_OUT)" && exit 1)
+
         echo "==> Smoke 4/4: rendered package.json files are valid JSON"
         # Catches typos in the heredoc-rendered umbrella package.json
         # and in the template-substituted platform packages.

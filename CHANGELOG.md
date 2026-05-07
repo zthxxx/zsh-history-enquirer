@@ -127,6 +127,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `cmd/zsh-history-enquirer/main.go` that reconstructs `cfg.Input`
   via `app.NewConfig` and echoes it back to stdout. Three table
   tests pin the (preserves-input, no-args, malformed-argv) cases.
+- **npm shim's missing-binary fallback echoed back `--` separator.**
+  After the plugin started passing `bin -- "$LBUFFER"`, a fall-through
+  invocation (no platform binary present) ran
+  `argv.slice(2).join(' ')` which produced `-- $LBUFFER` instead of
+  just `$LBUFFER`. `BUFFER=$(...)` then captured `-- typed text`
+  instead of just `typed text`. The shim now strips a leading `--`
+  before echoing. Smoke test 3/4 in `task release:smoke` covers
+  both the direct-invocation form (no `--`) and the widget-mode
+  form (with `--`) so a regression is caught at release time.
 - **Multi-line paste corrupted the picker layout.** The bracketed-
   paste handler appended the payload verbatim to `m.Input`, and the
   renderer wrote `m.Input` straight to the TTY at the captured

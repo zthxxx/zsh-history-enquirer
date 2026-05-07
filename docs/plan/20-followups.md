@@ -25,6 +25,18 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — Cross-cutting bug surfaced by the previous fix:
+  the plugin started passing `bin -- "$LBUFFER"` (to neutralize
+  flag-fast-path collisions), but the npm shim's missing-binary
+  fallback path joined `argv.slice(2)` verbatim, so a missing
+  platform package would echo `-- $LBUFFER` to stdout instead of
+  just `$LBUFFER`. BUFFER would land as `-- typed text`. Fixed
+  `npm/packages/zsh-history-enquirer/bin/cli.js` to strip a leading
+  `--` from `argv` before joining. Updated `task release:smoke`
+  step 3/4 to test BOTH the direct-invocation shape (no `--`) and
+  the widget-mode shape (with `--`); both must produce the user's
+  typed text on stdout.
+
 * **2026-05-07** — Bracketed-paste of multi-line text scribbled
   across the terminal. The picker's input row was rendered verbatim,
   so a `\r` in the paste payload carriage-returned into the prompt
