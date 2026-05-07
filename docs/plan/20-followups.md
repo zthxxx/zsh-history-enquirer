@@ -588,3 +588,17 @@ companion was resolved in the
   `TestHandleProbeFallback_NonASCIIUsesCellWidth`. Spec/40,
   design/50, e2e scenario 13 comments all updated to match.
   Resolved in this iteration's commit.
+
+* **2026-05-07** — `splitNonEmptyLines` (in internal/history)
+  trimmed only trailing `\n` from the file body, not embedded
+  `\r\n`. A $HISTFILE saved on Windows or by a misconfigured
+  editor would leave a trailing `\r` on every entry. When the
+  picker rendered such an entry, the `\r` carriage-returned the
+  cursor back to col 1 mid-frame and the next entry's pointer
+  overwrote the previous entry's last byte — a visibly scrambled
+  picker body. Fix: strip a trailing `\r` from each post-split
+  line. Embedded `\r` (legitimate in some commands) is preserved.
+  Pinned by `TestFixtureLoader_CRLFStripsCarriageReturn` (CRLF
+  in, no \r out) and `TestFixtureLoader_LFOnlyUnchanged` (the
+  symmetric guard — embedded `\r` mid-line stays put). Resolved
+  in this iteration's commit.

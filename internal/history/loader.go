@@ -144,7 +144,19 @@ func splitNonEmptyLines(s string) []string {
 	if s == "" {
 		return nil
 	}
-	return strings.Split(s, "\n")
+	parts := strings.Split(s, "\n")
+	// Strip a trailing '\r' from each line so a CRLF-terminated
+	// $HISTFILE (e.g. one imported from Windows or written by a
+	// misconfigured editor) does not leave carriage-returns in the
+	// rendered choices. Without this strip, the picker would
+	// carriage-return mid-render and visibly scramble the frame —
+	// each entry's last byte would overwrite the start of the next.
+	for i, p := range parts {
+		if p != "" && p[len(p)-1] == '\r' {
+			parts[i] = p[:len(p)-1]
+		}
+	}
+	return parts
 }
 
 // stripExtendedHistoryPrefix removes the optional `: <ts>:<dur>;`

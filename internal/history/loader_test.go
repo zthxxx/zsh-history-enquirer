@@ -40,6 +40,53 @@ func TestFixtureLoader_Empty(t *testing.T) {
 	require.Empty(t, out)
 }
 
+// TestFixtureLoader_CRLFStripsCarriageReturn pins the regression
+// where a $HISTFILE with CRLF line endings (imported from Windows,
+// edited by a misconfigured editor, etc.) left a trailing '\r' on
+// each entry. When the picker rendered such an entry, the '\r'
+// carriage-returned the cursor back to col 1, scrambling the frame
+// — the next entry's pointer would overwrite the previous entry's
+// last byte.
+//
+// We strip trailing '\r' inside splitNonEmptyLines so every loader
+// path (zshLoader, FixtureLoader) gets the fix uniformly.
+func TestFixtureLoader_CRLFStripsCarriageReturn(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "history.txt")
+	content := "git status\r\necho hello\r\nls -la\r\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	out, err := FixtureLoader(path).Load(context.Background())
+	require.NoError(t, err)
+	// Reverse-deduped: most-recent-first.
+	require.Equal(t, []string{"ls -la", "echo hello", "git status"}, out)
+	for _, line := range out {
+		require.NotContainsf(t, line, "\r",
+			"CRLF must be stripped — line %q still has CR", line)
+	}
+}
+
+// TestFixtureLoader_LFOnlyUnchanged is the symmetric guard: a
+// regular LF-only file must not have any bytes stripped that
+// belong to the entry. (We strip trailing '\r' only; an embedded
+// '\r' inside an entry stays put since zsh accepts that as a
+// literal.)
+func TestFixtureLoader_LFOnlyUnchanged(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "history.txt")
+	// Embedded \r in the middle of a line — must NOT be stripped.
+	content := "first\nmiddle \r still\nlast\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	out, err := FixtureLoader(path).Load(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []string{"last", "middle \r still", "first"}, out)
+}
+
 func TestFixtureLoader_MultilineEscape(t *testing.T) {
 	t.Parallel()
 
