@@ -55,3 +55,25 @@ the bottom of the terminal.
 - <kbd>Enter</kbd> on a non-empty match list: write the focused match.
 
 This is the "your typed text is never lost" invariant.
+
+## Unbound keys (silently consumed)
+
+The picker silently ignores keys that aren't in the table above —
+no event reaches the model, the picker stays open, the user keeps
+typing. Examples:
+
+- <kbd>F1</kbd>..<kbd>F4</kbd> emit single-shift-three sequences
+  (`\eOP`, `\eOQ`, `\eOR`, `\eOS`) that we don't bind to actions.
+  An earlier version emitted `Esc + 'O' + body byte` here, so a
+  stray F-key bumped the picker closed via the leading <kbd>Esc</kbd>
+  — hostile UX.
+- Aborted CSI / SS3 preludes from flaky links (`\e[` or `\eO`
+  paused mid-sequence for >50 ms) were similarly mistaken for a
+  deliberate <kbd>Esc</kbd> + body and cancelled the picker.
+- <kbd>←</kbd> / <kbd>→</kbd> / <kbd>Tab</kbd> / <kbd>Delete</kbd>
+  parse cleanly into recognized `KeyEvent`s but have no handler in
+  the model — the picker has no in-input cursor movement and no
+  in-line completion.
+
+The shared rule: an event the model doesn't handle is a no-op, not
+a cancel. Matches every modern fuzzy finder (fzf, peco, percol).
