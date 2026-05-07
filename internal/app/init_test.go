@@ -238,6 +238,70 @@ func TestRunEventLoop_PreEventNonTerminatingThenLive(t *testing.T) {
 		"preEvent rune must have landed in m.Input before the live Enter fired")
 }
 
+// TestRunEventLoop_TrailingFlushFiresAfterBurst pins the trailing-
+// edge throttle: a burst of events typed quickly must arm the
+// trailing flush timer, and after the throttle window elapses the
+// loop must fire one final render(true) so the user sees the
+// settled state of the burst. Without the trailing flush the
+// leading-edge throttle would drop the final frame of every paste
+// or fast-typed word — the user would type "git status" but see
+// "git statu" until the next keystroke broke the throttle.
+//
+// We drive a single non-terminating event and then wait past
+// RenderInterval (72ms) for the trailing flush to fire — the loop
+// stays in the select waiting on either trailingFlush.C, a new
+// event, or ctx.Done. Cancellation kicks the loop out only after
+// the flush has had a chance to run.
+func TestRunEventLoop_TrailingFlushFiresAfterBurst(t *testing.T) {
+	t.Parallel()
+	master, slave, err := pty.Open()
+	require.NoError(t, err)
+	defer master.Close()
+	defer slave.Close()
+
+	require.NoError(t, unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{
+		Row: 24, Col: 80,
+	}))
+	ttyHandle, err := tty.NewFromFile(slave)
+	require.NoError(t, err)
+
+	model := ui.NewModel("", []string{"git status"}, 24, 80, 1, 1, ui.DefaultMaxLimit)
+
+	// Channel for live events. We send a single non-terminating event
+	// and then close the channel after waiting past RenderInterval.
+	// The loop processes the event, arms the trailing flush, then
+	// fires `<-trailingFlush.C` and renders before the channel close
+	// drops it back into the cancel branch.
+	events := make(chan keys.Event, 1)
+	events <- keys.RuneEvent{R: 'g'}
+
+	// Drain master so renders don't block the pty buffer.
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			if _, rerr := master.Read(buf); rerr != nil {
+				return
+			}
+		}
+	}()
+
+	// Hold the channel open for ~3× RenderInterval so the trailing
+	// flush has plenty of time to fire before the close arrives.
+	go func() {
+		time.Sleep(3 * RenderInterval)
+		close(events)
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	result, err := runEventLoop(ctx, ttyHandle, model, events, nil, io.Discard)
+	require.Error(t, err, "channel close without terminator surfaces as 'input closed'")
+	require.NotNil(t, result)
+	require.Equal(t, "g", result.Output,
+		"channel-closed cancel echoes the post-burst Input")
+}
+
 // TestRunEventLoop_EventsChannelClosedWithoutTerminator pins the
 // reader-died branch: when the events channel is closed without ever
 // emitting a terminating event (the reader goroutine exited because
