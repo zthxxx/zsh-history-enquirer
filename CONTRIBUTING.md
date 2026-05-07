@@ -11,7 +11,7 @@ that doesn't make `^R` better is out of scope.
 | --- | --- |
 | `cmd/zsh-history-enquirer/` | Binary entry; fx-bootstrapped main. |
 | `internal/app/` | DI graph + Run() picker loop. |
-| `internal/{history,search,tty,keys,ui,ansi}/` | Layered domain packages. See `.go-arch-lint.yml` for the dependency rules. |
+| `internal/{history,search,tty,keys,ui}/` | Layered domain packages. See `.go-arch-lint.yml` for the dependency rules. (ANSI escape emission delegated to `charmbracelet/x/ansi`; cell-width to `rivo/uniseg` — no in-repo wrapper.) |
 | `pkg/version/` | `-ldflags`-injected build identification. |
 | `plugin/zsh-history-enquirer.plugin.zsh` | The widget file users source from `~/.zshrc`. |
 | `e2e/{debian,alpine}/` | Per-libc Docker images. |
