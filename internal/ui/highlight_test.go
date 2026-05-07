@@ -115,6 +115,76 @@ func TestHighlight_AsciiPathStillHighlights(t *testing.T) {
 		"ASCII still hits the SGR-wrap path despite the Unicode guard")
 }
 
+// TestSanitizeChoiceForRender pins the render-only sanitization
+// of raw control bytes in history entries. A corrupt or
+// malicious $HISTFILE entry could contain ESC bytes (e.g. from a
+// pasted color sequence or a `printf '\x1b...' >> $HISTFILE`
+// programmatic append). Without sanitization, rendering such an
+// entry would let the embedded `\x1b[2J` clear the screen, or
+// `\r` carriage-return mid-frame.
+//
+// Sanitization is render-only — m.Filter[i] keeps the original
+// bytes so SubmitResult re-runs the user's command faithfully.
+func TestSanitizeChoiceForRender(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"plain", "git status", "git status"},
+		{"newline-kept", "echo a\nb", "echo a\nb"},
+		{"tab-kept", "echo\tfoo", "echo\tfoo"},
+		{"esc-replaced", "echo \x1b[31m red", "echo ^[[31m red"},
+		{"cr-replaced", "echo a\rb", "echo a^Mb"},
+		{"bel-replaced", "echo \x07 bell", "echo ^G bell"},
+		{"del-replaced", "echo \x7f", "echo ^?"},
+		{"clear-screen-neutered", "evil \x1b[2J", "evil ^[[2J"},
+		{"multiple-esc", "\x1b[31m\x1b[1m", "^[[31m^[[1m"},
+		{"unicode-untouched", "你好 world", "你好 world"},
+		{"empty", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.want, sanitizeChoiceForRender(tc.in))
+		})
+	}
+}
+
+// TestRender_EntryESCNotPassedThrough is the integration-level
+// guard: even when an entry contains a raw ESC, the rendered
+// frame must not pass it to the terminal.
+func TestRender_EntryESCNotPassedThrough(t *testing.T) {
+	t.Parallel()
+	choices := []string{"echo \x1b[2J malicious"}
+	m := NewModel("", choices, 24, 80, 1, 1, DefaultMaxLimit)
+	frame := m.Render(RenderOptions{})
+	// The body string must NOT contain the literal ESC byte from
+	// the entry. (Our own SGR codes — \x1b[1G cursor moves, etc.
+	// — are present, but those are OUR escapes, not the entry's
+	// raw bytes.) Concretely: "\x1b[2J" must be absent.
+	require.NotContainsf(t, frame.Body, "\x1b[2J",
+		"raw ESC from entry leaked through to terminal: %q", frame.Body)
+	// The caret-notation form should appear instead.
+	require.Contains(t, frame.Body, "^[[2J",
+		"sanitized form must reach the rendered body")
+}
+
+// TestRender_SubmitReturnsUnsanitized — the entry-rendering
+// sanitization must NOT affect the value returned by
+// SubmitResult. The user pressing Enter on an entry containing
+// a raw escape (whatever their reason — they typed it, or they
+// have a corrupted history) must get the ORIGINAL bytes back so
+// re-running the command behaves identically.
+func TestRender_SubmitReturnsUnsanitized(t *testing.T) {
+	t.Parallel()
+	original := "echo \x1b[31m red"
+	m := NewModel("", []string{original}, 24, 80, 1, 1, DefaultMaxLimit)
+	require.Equal(t, original, m.SubmitResult(),
+		"SubmitResult must return the un-sanitized entry bytes")
+}
+
 // TestProperty_Highlight_Idempotent: running highlight twice with the
 // same tokens on the result produces the same bytes — once we have
 // inserted SGR codes around tokens, a second pass would only add new

@@ -127,11 +127,18 @@ func (m *Model) renderBody() (string, int, int) { //nolint:gocritic // unnamed r
 		} else {
 			body.WriteString(pointerUnselected)
 		}
-		// Multi-line entries are written verbatim; the wrap math
-		// above already accounted for newlines and width.
-		// We translate "\n" to "\r\n" so terminals in raw mode advance
-		// to column 0 on each new logical line.
-		highlighted := highlight(m.Filter[i], tokens)
+		// Multi-line entries are written after newline-to-CRLF
+		// translation (terminals in raw mode need explicit CR for
+		// the next line to start at col 0) and after sanitizing
+		// raw control bytes that would otherwise let a corrupted
+		// or malicious HISTFILE disrupt the picker frame — e.g.
+		// a literal ESC byte starting `\x1b[2J` would clear the
+		// screen, a stray `\r` would carriage-return mid-render.
+		// Sanitization is render-only; m.Filter[i] retains the
+		// original bytes so SubmitResult re-runs the command
+		// faithfully.
+		sanitized := sanitizeChoiceForRender(m.Filter[i])
+		highlighted := highlight(sanitized, tokens)
 		body.WriteString(strings.ReplaceAll(highlighted, "\n", "\r\n"))
 		// Belt-and-braces SGR reset after every entry — guards against
 		// a history line containing an unterminated escape sequence
@@ -230,6 +237,52 @@ func highlight(s string, tokens []string) string {
 		cursor = sp.end
 	}
 	b.WriteString(s[cursor:])
+	return b.String()
+}
+
+// sanitizeChoiceForRender replaces raw control bytes in a choice
+// with visible caret-notation placeholders so a corrupt or
+// malicious history entry cannot disrupt the picker frame.
+//
+// Bytes preserved:
+//   - '\t' and '\n' — already handled by the wrap math and the
+//     newline → CRLF translation in renderBody.
+//
+// Bytes replaced:
+//   - 0x1b (ESC) → "^[" — would otherwise let an entry like
+//     `printf '\x1b[2J'` clear the user's screen on render.
+//   - 0x7f (DEL) → "^?".
+//   - Other 0x00..0x1f control bytes → "^X" caret notation.
+//
+// Sanitization is render-only; m.Filter[i] keeps the original
+// bytes so SubmitResult returns the un-sanitized entry verbatim
+// and re-running the picked command behaves the same as if the
+// user had typed it.
+func sanitizeChoiceForRender(s string) string {
+	if !strings.ContainsAny(s,
+		"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0b\x0c\r\x0e\x0f"+
+			"\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b"+
+			"\x1c\x1d\x1e\x1f\x7f") {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := range len(s) {
+		c := s[i]
+		switch {
+		case c == '\t' || c == '\n':
+			b.WriteByte(c)
+		case c == 0x1b:
+			b.WriteString("^[")
+		case c == 0x7f:
+			b.WriteString("^?")
+		case c < 0x20:
+			b.WriteByte('^')
+			b.WriteByte(c + 0x40)
+		default:
+			b.WriteByte(c)
+		}
+	}
 	return b.String()
 }
 

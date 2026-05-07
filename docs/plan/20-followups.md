@@ -616,3 +616,23 @@ companion was resolved in the
   `TestFixtureLoader_EmbeddedBlankLineDropped` and
   `TestFixtureLoader_CRLFOnlyLineDropped`. Resolved in this
   iteration's commit.
+
+* **2026-05-07** — A history entry containing raw control bytes
+  could disrupt the picker frame. Concrete threat: a corrupt
+  `$HISTFILE` (binary bytes spliced in by an editor crash) or a
+  malicious append (`printf '\x1b[2J' >> $HISTFILE`) would let the
+  embedded ESC sequence reach the terminal during render — clearing
+  the screen, repositioning the cursor, or bleeding color into
+  subsequent rows. The same bytes also poisoned the highlight
+  byte-offset math (since SGR escapes inside an entry are not
+  themselves cells). Fix: introduced `sanitizeChoiceForRender` in
+  `internal/ui/render.go` that replaces 0x00-0x1f (except `\t` and
+  `\n`, which the wrap math and CRLF translation already handle)
+  and 0x7f with caret notation (`\x1b` → `^[`, `\r` → `^M`,
+  `\x7f` → `^?`, etc.). Sanitization is render-only — `m.Filter[i]`
+  keeps the original bytes so `SubmitResult` returns the literal
+  command for re-execution. Pinned by `TestSanitizeChoiceForRender`
+  (11 cases including the screen-clear sequence),
+  `TestRender_EntryESCNotPassedThrough` (integration: ESC byte
+  absent from `frame.Body`), and `TestRender_SubmitReturnsUnsanitized`
+  (round-trip preservation). Resolved in this iteration's commit.
