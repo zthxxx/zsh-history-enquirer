@@ -762,3 +762,17 @@ companion was resolved in the
   `TestReader_Events_SignalDoesNotKillLoop` which fires three
   SIGWINCH bursts at the test process and asserts a subsequent
   keystroke still arrives. Resolved in this iteration's commit.
+
+* **2026-05-07** — Same EINTR regression as the reader-loop fix
+  above existed in the DSR cursor probe (`internal/tty/cursor.go`).
+  The poll path already handled EINTR with `continue`, but the
+  read syscall did not — a SIGWINCH that fired during the ~50ms
+  probe window would surface as `(n=0, rerr=EINTR)` and exit
+  with a TimeoutError. The fallback then renders at col=1 instead
+  of inline at the prompt column — a visible degradation for
+  users who happen to resize their terminal while pressing Ctrl-R.
+  The bug is symmetric to the keys-reader EINTR fix; identical
+  remedy: `if rerr == unix.EINTR { continue }`. The deadline
+  check at the top of the loop iteration enforces the original
+  timeout budget so a misbehaving terminal can't loop forever.
+  Resolved in this iteration's commit.

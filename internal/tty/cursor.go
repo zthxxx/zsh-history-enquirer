@@ -111,14 +111,28 @@ func (p *Probe) Cursor(ctx context.Context, timeout time.Duration) (row, col int
 					break
 				}
 			}
-		} else if n == 0 {
-			// EOF or empty read — break to fallback.
+		} else if n == 0 && rerr == nil {
+			// EOF or empty read — break to fallback. Only when rerr
+			// is also nil; an EINTR with n==0 must continue (handled
+			// below).
 			return 0, 0, "", &TimeoutError{
 				Cause:    fmt.Errorf("read /dev/tty: empty read"),
 				Leftover: resp.String(),
 			}
 		}
 		if rerr != nil {
+			// EINTR is recoverable: a signal (typically SIGWINCH if
+			// the user resizes the terminal during the probe window)
+			// interrupted the read between poll returning POLLIN and
+			// the read syscall completing. Falling back on every
+			// resize would force the picker to render at col=1
+			// instead of inline at the prompt — a visible regression
+			// for users who happen to resize while pressing Ctrl-R.
+			// Loop continues; the deadline check at the top of the
+			// iteration enforces the original timeout budget.
+			if rerr == unix.EINTR {
+				continue
+			}
 			return 0, 0, "", &TimeoutError{Cause: rerr, Leftover: resp.String()}
 		}
 	}
