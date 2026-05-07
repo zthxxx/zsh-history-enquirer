@@ -375,6 +375,61 @@ func TestRecoverGoroutinePanic_WritesAndContinues(t *testing.T) {
 			"debugging can find the faulting frame")
 }
 
+// TestReader_Events_MasterCloseExitsLoop pins the POLLHUP / EOF exit
+// branch: when the controlling terminal disappears (the user's ssh
+// session drops, the parent shell hangs up the pty, sshd kills the
+// pipe), the reader goroutine must exit cleanly so the umbrella
+// loop sees `events` close and the picker tears down with the
+// widget contract intact (BUFFER preserved via Canceled=true path).
+//
+// We trigger the scenario by closing the master end of the pty pair
+// while the reader is mid-poll. The slave-side poll gets either
+// POLLHUP (Linux, often) or returns 0 bytes (Darwin, Linux
+// fallback) — both code paths must exit the loop. Without the
+// exit, the loop would spin or block indefinitely; the timeout
+// below catches either failure shape.
+func TestReader_Events_MasterCloseExitsLoop(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("pty unsupported on windows")
+	}
+
+	master, slave, err := pty.Open()
+	require.NoError(t, err)
+	defer func() { _ = slave.Close() }()
+
+	t1, err := tty.NewFromFile(slave)
+	require.NoError(t, err)
+	require.NoError(t, t1.EnterRaw())
+	defer func() { _ = t1.LeaveRaw() }()
+
+	r := NewReader(t1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events := r.Events(ctx)
+
+	// Hang up the pty so the slave's next poll either reports POLLHUP
+	// or returns n=0 (EOF). Either path exits the reader loop.
+	go func() {
+		time.Sleep(30 * time.Millisecond)
+		_ = master.Close()
+	}()
+
+	// The events channel must close within a few poll cycles
+	// (pollInterval is 100ms). 2s is generous.
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case _, ok := <-events:
+			if !ok {
+				return // reader exited cleanly — POLLHUP / EOF detected
+			}
+			// Drain any spurious events emitted before the close.
+		case <-deadline:
+			t.Fatal("events channel did not close within 2s of master.Close — POLLHUP/EOF exit branch broken")
+		}
+	}
+}
+
 // Defensive compile-time check: the unix package must export the
 // poll constants we depend on. A future Go-x-sys reshuffle that
 // removes these would otherwise break us at runtime.
