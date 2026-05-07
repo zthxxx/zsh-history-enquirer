@@ -90,14 +90,29 @@ func (m *Model) renderBody() (string, int, int) { //nolint:gocritic // unnamed r
 		heightLimit = 1
 	}
 
+	// We compute wrap-rows on the SANITIZED text (the version that
+	// will actually be written to the terminal), not the raw entry.
+	// `sanitizeChoiceForRender` replaces control bytes like \x1b /
+	// \x07 / \x7f with caret-notation (`^[`, `^G`, `^?`) — each 2
+	// cells. The raw entry treats those bytes as 0 cells (runewidth
+	// behaviour) and the wrap math would silently undercount, so an
+	// entry like `cmd \x1b[2J` would slip into the visible window
+	// claiming to fit when its actual rendered width forces a wrap.
+	// Net effect: terminal auto-scrolls to fit the wrap, the next
+	// renderPre erases too few rows, stale artefacts remain. Caching
+	// the sanitized text and reusing it in the render loop below
+	// keeps the cost to a single sanitize per visible entry.
 	rows := 0
 	limit := 0
+	sanitizedCache := make([]string, 0, len(m.Filter))
 	for _, choice := range m.Filter {
-		choiceRows := WrappedRowCount(choice, m.Width)
+		s := sanitizeChoiceForRender(choice)
+		choiceRows := WrappedRowCount(s, m.Width)
 		if rows+choiceRows > heightLimit {
 			break
 		}
 		rows += choiceRows
+		sanitizedCache = append(sanitizedCache, s)
 		limit++
 		if limit >= m.MaxLimit {
 			break
@@ -107,6 +122,10 @@ func (m *Model) renderBody() (string, int, int) { //nolint:gocritic // unnamed r
 	if limit == 0 && len(m.Filter) > 0 {
 		// At minimum one row should be drawn even when the list does
 		// not fit the terminal — we cannot help the user otherwise.
+		// The dynamic-limit walk above broke before populating the
+		// cache, so we have to sanitize the first entry now to keep
+		// the cache parallel with `limit`.
+		sanitizedCache = append(sanitizedCache, sanitizeChoiceForRender(m.Filter[0]))
 		limit = 1
 		rows = 1
 	}
@@ -129,16 +148,13 @@ func (m *Model) renderBody() (string, int, int) { //nolint:gocritic // unnamed r
 		}
 		// Multi-line entries are written after newline-to-CRLF
 		// translation (terminals in raw mode need explicit CR for
-		// the next line to start at col 0) and after sanitizing
-		// raw control bytes that would otherwise let a corrupted
-		// or malicious HISTFILE disrupt the picker frame — e.g.
-		// a literal ESC byte starting `\x1b[2J` would clear the
-		// screen, a stray `\r` would carriage-return mid-render.
-		// Sanitization is render-only; m.Filter[i] retains the
-		// original bytes so SubmitResult re-runs the command
-		// faithfully.
-		sanitized := sanitizeChoiceForRender(m.Filter[i])
-		highlighted := highlight(sanitized, tokens)
+		// the next line to start at col 0). Sanitization (raw
+		// control bytes → caret notation) was already done above
+		// during the dynamic-limit walk; reusing the cached value
+		// here guarantees the rendered text and the wrap-row math
+		// agree byte-for-byte. Original m.Filter[i] is untouched
+		// so SubmitResult still re-runs the command faithfully.
+		highlighted := highlight(sanitizedCache[i], tokens)
 		body.WriteString(strings.ReplaceAll(highlighted, "\n", "\r\n"))
 		// Belt-and-braces SGR reset after every entry — guards against
 		// a history line containing an unterminated escape sequence

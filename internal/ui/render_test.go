@@ -152,3 +152,58 @@ func TestRender_NegativeIdxClampedToZero(t *testing.T) {
 	require.Contains(t, frame.Body, pointerSelected+"a",
 		"row 0 must be the focused entry after clamp")
 }
+
+// TestRender_DynamicLimitMatchesSanitizedRender pins that the
+// dynamic-limit walk and the actual render arithmetic agree on
+// row counts even when entries contain control bytes that will
+// be sanitized to caret notation. The earlier WrappedRowCount(raw)
+// path silently undercounted entries with `\x1b` / `\x07` / `\x7f`
+// (runewidth treats them as 0 cells), so an entry that actually
+// rendered as 10 cells could slip into a window the picker thought
+// would only need 6 cells. The renderer now caches the sanitized
+// version of each visible entry and uses it for BOTH the row-count
+// math and the body write — so they agree byte-for-byte.
+func TestRender_DynamicLimitMatchesSanitizedRender(t *testing.T) {
+	t.Parallel()
+	// `cmd \x1b[2J` sanitizes to `cmd ^[[2J` (10 cells incl. pointer
+	// = 12 cells). Plus a one-line `git status` entry (12 cells).
+	// In a 12-col terminal: each entry is exactly 1 wrap row.
+	// In an 8-col terminal: each entry is 2 wrap rows.
+	choices := []string{"cmd \x1b[2J", "git status"}
+	cases := []struct {
+		name      string
+		cols      int
+		height    int
+		wantLimit int
+	}{
+		// 12-col, height=8 → heightLimit=5. Each entry 2 rows
+		// (12/12=1 row + carry... actually 12 cells / 12 cols = 1
+		// row). 2 entries × 1 = 2 rows. Both fit.
+		{"comfortable", 80, 8, 2},
+		// 8-col, height=8 → heightLimit=5. First entry sanitized
+		// is "cmd ^[[2J" = 9 cells, +pointer 2 = 11 cells. ceil(11/8)
+		// = 2 rows. Second entry "git status" = 10 cells +pointer
+		// = 12 cells. ceil(12/8) = 2 rows. Total 4 ≤ 5. Both fit.
+		{"narrow-both-fit", 8, 8, 2},
+		// 8-col, height=5 → heightLimit=2. First entry needs 2 rows
+		// (sanitized). Second entry won't fit. Limit=1.
+		// Pre-fix: raw "cmd \x1b[2J" treated as ~6 cells (+pointer 2
+		// = 8 cells, ceil(8/8) = 1 row). Math thought first entry was
+		// 1 row, second was 2 rows. Total under-estimate.
+		{"narrow-only-first-fits", 8, 5, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			m := NewModel("", choices, tc.height, tc.cols, 1, 1, DefaultMaxLimit)
+			frame := m.Render(RenderOptions{})
+			require.Equalf(t, tc.wantLimit, frame.Limit,
+				"got limit=%d, want %d (cols=%d height=%d)",
+				frame.Limit, tc.wantLimit, tc.cols, tc.height)
+			// Sanity: the sanitized form must be in the body, not
+			// the raw ESC.
+			require.NotContainsf(t, frame.Body, "\x1b[2J",
+				"raw ESC sequence must not reach frame.Body: %q", frame.Body)
+		})
+	}
+}

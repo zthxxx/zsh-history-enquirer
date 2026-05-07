@@ -906,3 +906,26 @@ companion was resolved in the
   tab-on-tabstop-still-advances) and `TestRowCellWidth` (10 cases
   exercising the helper directly). Resolved in this iteration's
   commit.
+
+* **2026-05-07** — `WrappedRowCount` ran on the RAW choice bytes,
+  but the renderer writes the SANITIZED version (`\x1b` → `^[`,
+  `\x07` → `^G`, `\x7f` → `^?`, etc.). The two used the same
+  cell-width math but different inputs, so an entry containing
+  control bytes was sized as if they were 0 cells (runewidth
+  default) when they actually rendered as 2-cell caret-notation
+  pairs. Symmetric to the Tab fix from the previous commit:
+  `cmd \x1b[2J` raw is "6-ish cells" but sanitized is `cmd ^[[2J`
+  (10 cells incl. pointer-prefix). In a narrow terminal where
+  heightLimit is tight, the picker's dynamic-limit walk would
+  count an entry as 1 row when it actually occupied 2 — the
+  terminal auto-scrolled to fit, the next renderPre erased too
+  few rows, and stale artefacts remained until the next full
+  re-render. Fix: `renderBody` now sanitizes each candidate during
+  the dynamic-limit walk and caches the sanitized string, then
+  reuses the cached value for the actual render write. This
+  guarantees the row math and the byte stream agree byte-for-byte
+  on what gets drawn. Pinned by
+  `TestRender_DynamicLimitMatchesSanitizedRender` (3 cases:
+  comfortable / narrow-both-fit / narrow-only-first-fits) plus
+  the existing tab + sanitization tests. Resolved in this
+  iteration's commit.
