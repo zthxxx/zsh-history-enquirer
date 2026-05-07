@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
 
+	"github.com/zthxxx/zsh-history-enquirer/internal/history"
 	"github.com/zthxxx/zsh-history-enquirer/internal/keys"
 	"github.com/zthxxx/zsh-history-enquirer/internal/tty"
 	"github.com/zthxxx/zsh-history-enquirer/internal/ui"
@@ -545,6 +546,36 @@ func TestFetchInitialState_LoaderPanicConvertsToError(t *testing.T) {
 		"err message must surface the recovered panic for debugging")
 	require.Contains(t, hist.err.Error(), "loader blew up",
 		"original panic value must round-trip into the err message")
+}
+
+// TestFetchInitialState_CursorProbePanicConvertsToError pins the
+// twin panic-recovery defense for the cursor-probe goroutine. A nil
+// TTY parameter triggers a nil-pointer deref inside Probe.Cursor's
+// first WriteString call (p.tty.Writer() reaches into a nil
+// receiver); the deferred recover must surface the panic as a
+// cursorResult.err so the parent join doesn't deadlock waiting on
+// the goroutine, and the picker degrades to col=1 fallback.
+//
+// Without this defense the panic would propagate and crash the
+// process — destroying $LBUFFER (BUFFER=$(...) sees empty stdout
+// when the binary panics with no stdout written) and breaking the
+// "every termination path preserves user input" widget contract.
+func TestFetchInitialState_CursorProbePanicConvertsToError(t *testing.T) {
+	t.Parallel()
+
+	// Use a non-panicking loader so we isolate the cursor-probe arm.
+	loader := history.FixtureLoader(filepath.Join(t.TempDir(), "non-existent"))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	// nil TTY forces NewProbe(nil).Cursor(...) to nil-deref inside
+	// the goroutine; the deferred recover catches it.
+	cur, _ := fetchInitialState(ctx, nil, loader, io.Discard)
+
+	require.Error(t, cur.err, "panic must be reported as the cursor probe's err")
+	require.Contains(t, cur.err.Error(), "cursor probe panic",
+		"err message must surface the recovered panic for debugging")
 }
 
 // TestDebugEvent_DiscardIsNoOp pins the io.Discard / nil short-
