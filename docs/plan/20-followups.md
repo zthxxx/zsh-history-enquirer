@@ -711,3 +711,36 @@ companion was resolved in the
   users with corrupt `$HISTFILE` content might trip it on the
   live path too if zsh ever decides to surface such lines
   through `fc -ln`. Resolved in this iteration's commit.
+
+* **2026-05-07** — DSR cursor probe silently swallowed user input
+  typed during the probe window. Concrete user-visible regression:
+  on a real terminal the picker invokes a `\x1b[6n` query and reads
+  the response in the same loop. If the user is fast — `^R git`
+  pressed in quick succession — the bytes `g`, `i`, `t`, ` ` arrive
+  at the TTY ahead of the response. The probe loop reads them all,
+  sees the `R` from the response, exits — and `parseDSRResponse`
+  used `strings.Index(s, "[")` for the start anchor and silently
+  threw away anything before the `[`. The picker then opened with
+  empty input. Users would see the picker arrive late with the
+  first 1–4 keystrokes missing; common enough that fast typists
+  hit it almost every Ctrl-R session. Two related sub-bugs in the
+  same code: a typed `[` before the response broke the parser
+  (start landed on the typed bracket), and a typed `R` before the
+  response prematurely exited the read loop. Fix:
+  - Anchor on `\x1b[` instead of `[` so a typed `[` becomes
+    leftover instead of corrupting the parse.
+  - Loop break condition tightened to `\x1b[<...>R`, so a typed `R`
+    is also leftover instead of an early-exit trigger.
+  - `Probe.Cursor` signature extended to `(row, col, leftover, err)`
+    so the success path surfaces non-DSR bytes the same way the
+    timeout path already did via `TimeoutError.Leftover`.
+  - `cursorResult` gains a `leftover` field; `handleProbeFallback`
+    propagates it on the success path; the existing fallback for
+    timeout/error paths is unchanged.
+  Pinned by `TestParseDSRResponse_PreservesUserTypedPrefix`,
+  `TestParseDSRResponse_PreservesPostResponseBytes`,
+  `TestParseDSRResponse_TypedBracketIsLeftover`,
+  `TestProbeCursor_SuccessLeftoverPreserved` (PTY-driven
+  integration), `TestProbeCursor_StrayRBeforeResponse`, and
+  `TestHandleProbeFallback_NilErrPropagatesLeftover`. Resolved
+  in this iteration's commit.

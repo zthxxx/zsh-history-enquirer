@@ -14,8 +14,16 @@ import (
 // cursorResult is the inner channel payload from the parallel DSR
 // probe goroutine. Defined as a package-level type so init.go and
 // run.go can share it without one importing the other.
+//
+// The leftover field carries any non-DSR bytes the probe consumed
+// alongside the response — typically the user's first keystrokes
+// after Ctrl-R that arrived before the picker had finished probing.
+// On the fast path (probe succeeded with a clean buffer) this is
+// empty; otherwise the caller re-feeds these bytes to the keystream
+// parser via Reader.Prefeed so no input is lost.
 type cursorResult struct {
 	row, col int
+	leftover string
 	err      error
 }
 
@@ -39,8 +47,8 @@ func fetchInitialState(
 
 	go func() {
 		probe := tty.NewProbe(t)
-		row, col, err := probe.Cursor(ctx, CursorTimeout)
-		cursorCh <- cursorResult{row, col, err}
+		row, col, leftover, err := probe.Cursor(ctx, CursorTimeout)
+		cursorCh <- cursorResult{row: row, col: col, leftover: leftover, err: err}
 	}()
 	go func() {
 		lines, err := loader.Load(ctx)
@@ -70,16 +78,25 @@ func readGeometry(t *tty.TTY) (rows, cols int, err error) {
 
 // handleProbeFallback applies the cursor-probe error fallback in
 // place. Returns any leftover bytes the probe consumed so the
-// caller can replay them through the keystream parser.
+// caller can replay them through the keystream parser. Both code
+// paths produce leftover:
 //
-// The fallback assumes the prompt starts at column 1 with the input
-// filling the first inputCells cells; the cursor sits one cell past
-// the last input cell. ui.CellWidth gives the precise cell count
-// (East Asian Width-aware) so non-ASCII LBUFFER no longer mis-aligns
-// the picker against the actual cursor position.
+//   - Success: the user typed something before / after the DSR
+//     response and the probe parsed the response cleanly. Leftover
+//     comes from cur.leftover, populated by Probe.Cursor's success
+//     return.
+//   - Failure: the probe timed out or hit a malformed response.
+//     Leftover comes from TimeoutError.Leftover.
+//
+// The fallback (when err != nil) assumes the prompt starts at
+// column 1 with the input filling the first inputCells cells; the
+// cursor sits one cell past the last input cell. ui.CellWidth gives
+// the precise cell count (East Asian Width-aware) so non-ASCII
+// LBUFFER no longer mis-aligns the picker against the actual cursor
+// position.
 func handleProbeFallback(cur *cursorResult, cfg *Config, stderr io.Writer) string {
 	if cur.err == nil {
-		return ""
+		return cur.leftover
 	}
 	var leftover string
 	var te *tty.TimeoutError

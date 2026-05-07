@@ -115,6 +115,33 @@ func TestHandleProbeFallback_NilErrIsNoOp(t *testing.T) {
 	}
 }
 
+// TestHandleProbeFallback_NilErrPropagatesLeftover pins the
+// success-with-leftover path: when the user typed something during
+// the DSR probe window and the probe parsed cleanly anyway,
+// cur.leftover holds those bytes and handleProbeFallback must
+// surface them so Reader.Prefeed sees them. Without this, fast-
+// typing users pressing `^R git` would lose every keystroke that
+// landed before the picker's first render — a UX regression that's
+// invisible to the user (they see no error; they just see the
+// picker open with their first chars missing).
+func TestHandleProbeFallback_NilErrPropagatesLeftover(t *testing.T) {
+	t.Parallel()
+	cfg := &Config{Input: ""}
+	cur := cursorResult{row: 3, col: 4, leftover: "git ", err: nil}
+	var stderr bytes.Buffer
+	leftover := handleProbeFallback(&cur, cfg, &stderr)
+	if leftover != "git " {
+		t.Fatalf("leftover = %q, want %q (probe-success leftover must propagate)",
+			leftover, "git ")
+	}
+	if cur.row != 3 || cur.col != 4 {
+		t.Fatalf("success path must NOT mutate row/col: row=%d col=%d", cur.row, cur.col)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr should be empty for nil err, got %q", stderr.String())
+	}
+}
+
 func TestHandleProbeFallback_TimeoutErrorReturnsLeftover(t *testing.T) {
 	t.Parallel()
 	cfg := &Config{Input: "abc"}

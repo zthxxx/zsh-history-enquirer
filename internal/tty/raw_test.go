@@ -76,10 +76,11 @@ func TestProbeCursor_RoundTrip(t *testing.T) {
 	}()
 
 	probe := NewProbe(tt)
-	row, col, err := probe.Cursor(context.Background(), 500*time.Millisecond)
+	row, col, leftover, err := probe.Cursor(context.Background(), 500*time.Millisecond)
 	require.NoError(t, err)
 	require.Equal(t, 7, row)
 	require.Equal(t, 42, col)
+	require.Empty(t, leftover, "clean response → no leftover")
 
 	require.NoError(t, <-done)
 }
@@ -99,13 +100,14 @@ func TestProbeCursor_TimeoutNoResponse(t *testing.T) {
 	require.NoError(t, err)
 
 	probe := NewProbe(tt)
-	_, _, err = probe.Cursor(context.Background(), 50*time.Millisecond)
+	_, _, leftover, err := probe.Cursor(context.Background(), 50*time.Millisecond)
 
 	var te *TimeoutError
 	require.ErrorAs(t, err, &te,
 		"silent terminal must surface as *TimeoutError")
 	require.Empty(t, te.Leftover,
 		"no bytes consumed → leftover must be empty")
+	require.Empty(t, leftover, "timeout path returns leftover via TimeoutError, not function value")
 }
 
 // TestProbeCursor_TimeoutPreservesLeftover pins the pre-render
@@ -135,11 +137,72 @@ func TestProbeCursor_TimeoutPreservesLeftover(t *testing.T) {
 	}()
 
 	probe := NewProbe(tt)
-	_, _, err = probe.Cursor(context.Background(), 100*time.Millisecond)
+	_, _, _, err = probe.Cursor(context.Background(), 100*time.Millisecond)
 
 	var te *TimeoutError
 	require.ErrorAs(t, err, &te,
 		"silent terminal must surface as *TimeoutError")
 	require.Contains(t, te.Leftover, "git ",
 		"bytes consumed before timeout must round-trip via Leftover")
+}
+
+// TestProbeCursor_SuccessLeftoverPreserved is the symmetric guard
+// for the SUCCESS path: even when the DSR response arrives normally,
+// any user-typed bytes that came in alongside it must round-trip via
+// the function-level leftover return value. Without this, a fast-
+// typing user pressing `^R git` loses every keystroke that lands
+// before the picker's first render.
+func TestProbeCursor_SuccessLeftoverPreserved(t *testing.T) {
+	t.Parallel()
+
+	master, slave := withPty(t)
+	tt, err := rawFromFile(slave)
+	require.NoError(t, err)
+
+	go func() {
+		buf := make([]byte, 64)
+		_ = master.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		_, _ = master.Read(buf) // drain the DSR query
+		// User has been typing while the probe was in flight.
+		// Their keystrokes hit the master end first, so the slave
+		// reads them ahead of the DSR response.
+		_, _ = io.WriteString(master, "git \x1b[7;42R")
+	}()
+
+	probe := NewProbe(tt)
+	row, col, leftover, err := probe.Cursor(context.Background(), 500*time.Millisecond)
+	require.NoError(t, err)
+	require.Equal(t, 7, row)
+	require.Equal(t, 42, col)
+	require.Equal(t, "git ", leftover,
+		"user-typed bytes that arrived during probe must round-trip via the leftover return")
+}
+
+// TestProbeCursor_StrayRBeforeResponse — a user who typed an `R`
+// before the response (perhaps via key macro or `^R R...`) must not
+// short-circuit the probe loop. The loop must keep reading until it
+// has the full `\x1b[<...>R` sequence.
+func TestProbeCursor_StrayRBeforeResponse(t *testing.T) {
+	t.Parallel()
+
+	master, slave := withPty(t)
+	tt, err := rawFromFile(slave)
+	require.NoError(t, err)
+
+	go func() {
+		buf := make([]byte, 64)
+		_ = master.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		_, _ = master.Read(buf) // drain DSR query
+		// Send a stray R first, then the actual response.
+		_, _ = io.WriteString(master, "R")
+		time.Sleep(5 * time.Millisecond)
+		_, _ = io.WriteString(master, "\x1b[7;42R")
+	}()
+
+	probe := NewProbe(tt)
+	row, col, leftover, err := probe.Cursor(context.Background(), 500*time.Millisecond)
+	require.NoError(t, err)
+	require.Equal(t, 7, row)
+	require.Equal(t, 42, col)
+	require.Equal(t, "R", leftover, "stray R must be preserved as leftover")
 }
