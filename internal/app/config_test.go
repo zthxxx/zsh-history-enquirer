@@ -124,6 +124,30 @@ func TestPrintHelp_MatchesNewConfigFlags(t *testing.T) {
 	}
 }
 
+// TestPrintHelp_MentionsEnvVars locks the "Environment:" section
+// of the help output. Help lists three env vars users may want
+// to set; if any is removed without updating PrintHelp, this test
+// fails. The list mirrors the README's Power-user notes.
+func TestPrintHelp_MentionsEnvVars(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	PrintHelp(&buf)
+	out := buf.String()
+
+	for _, want := range []string{
+		"Environment:",
+		"HISTFILE",
+		"NO_COLOR",
+		"ZHE_DEBUG",
+		"no-color.org",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("PrintHelp output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 // TestPrintHelp_GoesToWriter verifies PrintHelp respects its writer
 // argument — this matters because main.go routes it to os.Stdout
 // for the --help fast-path. A regression that hardcodes os.Stderr

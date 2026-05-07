@@ -49,6 +49,13 @@ func PrintHelp(out io.Writer) {
 	fs.Bool("version", false, "print version and exit")
 	fmt.Fprintf(out, "Usage: %s [flags] [initial input...]\n", fs.Name())
 	fs.PrintDefaults()
+	// Document environment variables so users discover them without
+	// spelunking the README. Drift caught by
+	// TestPrintHelp_MentionsEnvVars.
+	fmt.Fprintln(out, "\nEnvironment:")
+	fmt.Fprintln(out, "  HISTFILE   path to the zsh history file (overridden by --histfile)")
+	fmt.Fprintln(out, "  NO_COLOR   any non-empty value disables token highlighting (no-color.org)")
+	fmt.Fprintln(out, "  ZHE_DEBUG  path to a file for diagnostic logs (best-effort, never required)")
 }
 
 // NewConfig parses os.Args into a Config and returns it. Errors are
