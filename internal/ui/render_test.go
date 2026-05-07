@@ -153,6 +153,33 @@ func TestRender_NegativeIdxClampedToZero(t *testing.T) {
 		"row 0 must be the focused entry after clamp")
 }
 
+// TestRender_IdxBeyondLimitClampedToLast pins the `m.Idx >= limit`
+// branch of renderBody's defensive clamp. The hazard: navigation
+// in update.go reads m.Limit set by the previous render. If the
+// throttle delays a render after a typing burst, the filter shrinks
+// without m.Limit shrinking with it. Update can then advance Idx
+// past the new visible window. The next render must catch this and
+// land focus on the last visible row rather than off-screen.
+func TestRender_IdxBeyondLimitClampedToLast(t *testing.T) {
+	t.Parallel()
+
+	m := NewModel("", []string{"a", "b", "c"}, 15, 80, 1, 1, DefaultMaxLimit)
+	// Pretend a previous PageDown computed against a stale m.Limit
+	// of 10 advanced Idx beyond the actual visible window of 3.
+	m.Idx = 99
+	frame := m.Render(RenderOptions{})
+
+	require.Equal(t, 2, m.Idx, "Idx beyond limit must clamp to limit-1")
+	// Row 2 (last visible) must be the focused row.
+	require.Contains(t, frame.Body, pointerSelected+"c",
+		"focus must land on the last visible entry after clamp")
+	// Rows 0 and 1 must not be focused.
+	require.Contains(t, frame.Body, pointerUnselected+"a",
+		"row 0 must be unselected after clamp")
+	require.Contains(t, frame.Body, pointerUnselected+"b",
+		"row 1 must be unselected after clamp")
+}
+
 // TestRender_LongInputWraps locks down the wrap-aware Frame contract
 // for inputs that overflow the terminal width.
 //
