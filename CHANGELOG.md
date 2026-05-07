@@ -89,18 +89,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   (`strings.Contains`); only the visual emphasis was incomplete.
   Now every match is collected and the merge step folds the
   overlapping spans into one continuous SGR-wrapped run.
-- **F1-F4 (and other unrecognized SS3 sequences) no longer cancel
-  the picker.** On most modern terminals F1-F4 emit `\eOP`, `\eOQ`,
-  `\eOR`, `\eOS` — single-shift-three sequences the picker doesn't
-  bind to any action. Earlier code emitted Esc + 'O' + body byte for
-  unrecognized SS3, so a stray F-key keypress fired `KeyEsc` and
-  silently cancelled the picker (the widget contract preserved
-  `$LBUFFER` on cancel, so no input was lost — but bumping the
-  picker closed for an unrelated keystroke is hostile UX). The
-  feedSS3 default branch and the FlushEsc stateSS3 arm now both
-  swallow silently; the picker stays open for the user to keep
-  typing. Behavior matches every other modern fuzzy finder (fzf,
-  peco, percol).
+- **F1-F4 (and other unrecognized SS3 / aborted CSI sequences) no
+  longer cancel the picker.** On most modern terminals F1-F4 emit
+  `\eOP`, `\eOQ`, `\eOR`, `\eOS` — single-shift-three sequences the
+  picker doesn't bind to any action. Earlier code emitted Esc + 'O'
+  + body byte for unrecognized SS3, so a stray F-key keypress fired
+  `KeyEsc` and silently cancelled the picker (the widget contract
+  preserved `$LBUFFER` on cancel, so no input was lost — but bumping
+  the picker closed for an unrelated keystroke is hostile UX). The
+  symmetric flaky-link case for arrow keys / PgUp / PgDn (`\e[A`
+  arriving split, the 50ms ESC-flush firing on the prelude) had the
+  same problem on stateCSI's flush. Both `feedSS3` default and the
+  `FlushEsc` arms for `stateSS3` and `stateCSI` now swallow
+  silently; the picker stays open for the user to keep typing.
+  Behavior matches every other modern fuzzy finder (fzf, peco,
+  percol).
 - **User-arrow-before-DSR-probe race**: pressing
   <kbd>Ctrl</kbd>+<kbd>R</kbd> and immediately tapping an arrow / Home
   / End used to leave the picker rendered at the col=1 fallback

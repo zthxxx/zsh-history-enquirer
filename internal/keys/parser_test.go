@@ -222,46 +222,47 @@ func TestParser_FlushEsc_DuringSS3Pending(t *testing.T) {
 		"parser must return to stateNormal after the silent flush")
 }
 
-// TestParser_FlushEsc_DuringCSIPending — the same hazard as the SS3
-// case but for CSI: the terminal emitted `\e[` and then stopped (a
-// flaky link, a kill mid-sequence, or a programmatic input that
-// paused). Without the flush branch, the parser would stay in
-// stateCSI forever — and worse, every subsequent typed letter would
-// be SILENTLY EATEN by the CSI accumulator (any byte in 0x40..0x7e
-// terminates the sequence as an unrecognized one and is discarded).
-// The flush emits Esc + '[' so the user's intent (cancel the picker)
-// is honored when the terminal misbehaves.
+// TestParser_FlushEsc_DuringCSIPending — symmetric with the SS3
+// case: the terminal emitted `\e[` and then stopped (flaky link,
+// kill mid-sequence, paused programmatic input). Earlier code
+// emitted Esc + '[' on flush, which surfaced KeyEsc and canceled
+// the picker on every split arrow keypress — the same hostile UX
+// the SS3 fix addresses. The flush now resets state silently so
+// the picker stays open; if the body byte ever arrives it parses
+// as a raw rune via feedNormal, and the parser doesn't sit stuck
+// in stateCSI silently eating subsequent input.
+//
+// We assert state reset via a follow-on keystroke to prove the
+// parser advanced past the prelude.
 func TestParser_FlushEsc_DuringCSIPending(t *testing.T) {
 	t.Parallel()
 
 	p := NewParser()
 	require.Empty(t, feedAll(p, "\x1b["), "no events emitted yet")
-	got := p.FlushEsc()
-	require.Equal(t, []Event{
-		KeyEvent{Key: KeyEsc},
-		RuneEvent{R: '['},
-	}, got)
-	require.Equal(t, stateNormal, p.state, "parser must return to normal after flush")
+	require.Empty(t, p.FlushEsc(),
+		"aborted CSI prelude must flush silently — no spurious Esc/cancel")
+	require.Equal(t, stateNormal, p.state,
+		"parser must return to stateNormal after the silent flush")
+	require.Equal(t, []Event{RuneEvent{R: 'a'}}, feedAll(p, "a"),
+		"follow-on keystroke must parse as a plain rune — proves the flush released the CSI accumulator")
 }
 
 // TestParser_FlushEsc_DuringCSIWithParams — when the CSI accumulator
 // has buffered some param bytes (e.g. `\e[12` paused before the
-// terminator), the flush emits Esc + '[' + each param byte as a
-// rune. Preserves the user's typed input rather than silently
-// discarding the digits.
+// terminator), the flush still drops everything silently: the
+// param-byte case is exactly the same shape as the bare-prelude
+// case for our purposes — neither produces a useful keypress, and
+// emitting them as rune events is exactly what introduced the
+// cancel-on-split-arrow regression.
 func TestParser_FlushEsc_DuringCSIWithParams(t *testing.T) {
 	t.Parallel()
 
 	p := NewParser()
 	require.Empty(t, feedAll(p, "\x1b[12"), "no events emitted yet")
-	got := p.FlushEsc()
-	require.Equal(t, []Event{
-		KeyEvent{Key: KeyEsc},
-		RuneEvent{R: '['},
-		RuneEvent{R: '1'},
-		RuneEvent{R: '2'},
-	}, got)
+	require.Empty(t, p.FlushEsc(),
+		"aborted CSI prelude with params must also flush silently")
 	require.Equal(t, stateNormal, p.state)
+	require.Empty(t, p.buf, "buffer must reset on flush so subsequent CSI parses fresh")
 }
 
 // TestParser_AltBackspaceMapsToCtrlW pins the Mac/iTerm/xterm meta

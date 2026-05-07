@@ -95,26 +95,23 @@ func (p *Parser) FlushEsc() []Event {
 		p.state = stateNormal
 		return nil
 	case stateCSI:
-		// Snapshot p.buf BEFORE clearing it — same defensive pattern
-		// as the SS3 branch. Param bytes (digits, ';', '?') are all
-		// printable ASCII; multi-byte UTF-8 cannot reach here because
-		// the CSI accumulator only sees bytes that haven't yet hit
-		// the 0x40..0x7e terminator range.
-		bufBytes := append([]byte{}, p.buf...)
+		// Aborted CSI prelude — terminal sent `\e[` (with optional
+		// param bytes) and then nothing for >50ms. The realistic
+		// cause is the same as for SS3: a flaky link splitting a
+		// real CSI sequence (an arrow key, PgUp/PgDn, Home/End)
+		// across reads. Earlier code emitted `Esc + '[' + param
+		// bytes` here, and the leading `KeyEsc` canceled the
+		// picker on every split arrow keypress. We now reset state
+		// and swallow silently — symmetric with the SS3 branch.
+		// The picker stays open; if the body byte ever arrives, it
+		// parses as a raw rune via feedNormal (a stray letter in
+		// the search beats kicking the user out of the picker on a
+		// 50ms timing transient). The deliberate-Esc-then-bracket
+		// case is implausible (no realistic input flow types those
+		// bytes deliberately in this picker).
 		p.state = stateNormal
 		p.buf = p.buf[:0]
-		out := []Event{KeyEvent{Key: KeyEsc}, RuneEvent{R: '['}}
-		for _, b := range bufBytes {
-			if b >= 0x20 && b < 0x7f {
-				out = append(out, RuneEvent{R: rune(b)})
-			}
-			// Non-printable bytes inside the CSI buffer are dropped:
-			// they cannot be interpreted as part of a real CSI (the
-			// accumulator would have stopped on them) and re-emitting
-			// them as raw runes would risk re-injecting control
-			// characters into the input row.
-		}
-		return out
+		return nil
 	default:
 		return nil
 	}

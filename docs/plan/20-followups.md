@@ -61,11 +61,16 @@ itself.)
   hostile UX (every other modern fuzzy finder silently ignores
   unknown keys). Both the synchronous arm (`feedSS3` default) and
   the timing arm (`FlushEsc` on `stateSS3`) now reset state and
-  swallow silently. Four tests pin the new contract: the unknown-
-  byte case, F1-F4 each individually, the flush-during-pending case
+  swallow silently. Tests pin the new contract: the unknown-byte
+  case, F1-F4 each individually, the flush-during-pending case
   (asserting state reset via a follow-on keystroke), and the
   reader-level integration that watches the follow-on keystroke
-  parse as a plain rune rather than the SS3 body byte.
+  parse as a plain rune rather than the SS3 body byte. The
+  symmetric `FlushEsc` arm on `stateCSI` had the same hostile
+  behaviour for split arrow / PgUp / PgDn / Home / End on flaky
+  links — also now swallows silently with the same rationale; the
+  two existing CSI flush tests updated to assert silent flush +
+  state-reset semantics.
 
 * **2026-05-07** — Highlight loop missed self-overlapping search
   tokens. `highlight()` advanced `offset = end` after each match so a
