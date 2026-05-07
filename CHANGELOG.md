@@ -127,6 +127,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `cmd/zsh-history-enquirer/main.go` that reconstructs `cfg.Input`
   via `app.NewConfig` and echoes it back to stdout. Three table
   tests pin the (preserves-input, no-args, malformed-argv) cases.
+- **Multi-line paste corrupted the picker layout.** The bracketed-
+  paste handler appended the payload verbatim to `m.Input`, and the
+  renderer wrote `m.Input` straight to the TTY at the captured
+  prompt column. A `\r` in the payload would carriage-return into
+  the prompt prefix; a `\n` would push the picker rendering down by
+  one row, leaving stale cells; a `\t` would jump to the next
+  tabstop. None are useful as filter input. Added
+  `sanitizeInputRune` / `sanitizeInputString` that map `\n` / `\r` /
+  `\t` to space — the token separator so multi-word AND-search
+  still treats `git\nlog` as `git log`. Five regression cases pin
+  the paste path; one pins the per-keystroke path.
 - **`Backspace` corrupted multi-byte UTF-8 input.** Backspace was
   doing `m.Input = m.Input[:len(m.Input)-1]` — slicing one BYTE off
   the end. For ASCII this works because every char is 1 byte. For

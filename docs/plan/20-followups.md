@@ -25,6 +25,17 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — Bracketed-paste of multi-line text scribbled
+  across the terminal. The picker's input row was rendered verbatim,
+  so a `\r` in the paste payload carriage-returned into the prompt
+  prefix and a `\n` pushed the picker rendering down. Useless as
+  filter input either way. Added `sanitizeInputRune` /
+  `sanitizeInputString` in `internal/ui/update.go` that translate
+  `\n` / `\r` / `\t` to space at both the per-keystroke and paste
+  entry points. Six regression cases. Token-boundary semantics
+  preserved because space is the same separator
+  `search.Tokenize` already splits on.
+
 * **2026-05-07** — Two input-editing gaps surfaced under critical
   scrutiny:
   - **Backspace deleted one BYTE, not one rune.** For ASCII this is

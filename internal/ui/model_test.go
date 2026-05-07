@@ -121,6 +121,49 @@ func TestModel_CtrlUClearsInput(t *testing.T) {
 	require.Empty(t, m.Input)
 }
 
+// TestModel_PasteSanitizesNewlinesToSpaces pins the regression
+// where a multi-line paste payload would scribble across the
+// terminal. Pasted control bytes are useless as filter input, so
+// we map \n / \r / \t to space (preserving the token boundary)
+// before they ever land in m.Input.
+func TestModel_PasteSanitizesNewlinesToSpaces(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"newline-to-space", "git\nlog", "git log"},
+		{"crlf-each-to-space", "git\r\nlog", "git  log"},
+		{"tab-to-space", "git\tlog", "git log"},
+		{"plain-passthrough", "git log", "git log"},
+		{"multiline-block", "line1\nline2\nline3", "line1 line2 line3"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			m := newTestModel("")
+			m.Update(keys.PasteEvent{Payload: tc.in})
+			require.Equal(t, tc.want, m.Input)
+		})
+	}
+}
+
+// TestModel_TypingNewlineGetsSanitized — same protection on the
+// per-rune typing path. Hard to type \n directly (Enter is bound
+// to Submit), but a custom keymap or a misconfigured terminal
+// could deliver one.
+func TestModel_TypingNewlineGetsSanitized(t *testing.T) {
+	t.Parallel()
+	m := newTestModel("")
+	m.Update(keys.RuneEvent{R: '\n'})
+	require.Equal(t, " ", m.Input)
+	m.Update(keys.RuneEvent{R: '\t'})
+	require.Equal(t, "  ", m.Input)
+	m.Update(keys.RuneEvent{R: 'g'})
+	require.Equal(t, "  g", m.Input)
+}
+
 // TestModel_CtrlPCtrlNAreUpDownAliases pins the Ctrl-P / Ctrl-N
 // alias behaviour: zsh's emacs keymap binds these to
 // up-line-or-history / down-line-or-history. Power users press

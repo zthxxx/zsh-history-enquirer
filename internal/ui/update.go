@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"unicode/utf8"
 
 	"github.com/zthxxx/zsh-history-enquirer/internal/keys"
@@ -28,15 +29,47 @@ func (m *Model) Update(ev keys.Event) (terminate bool) {
 }
 
 func (m *Model) appendRune(r rune) {
-	m.Input += string(r)
+	// Translate control runes to spaces — the input row is rendered
+	// verbatim, so a stray \r would carriage-return into the prompt
+	// prefix, a \n would push the picker down a row, and a \t would
+	// jump to the next tabstop. None are useful in a search filter.
+	m.Input += string(sanitizeInputRune(r))
 	m.Cursor = len(m.Input)
 	m.recomputeFilter()
 }
 
 func (m *Model) appendString(s string) {
-	m.Input += s
+	// Same sanitization as appendRune, applied to the whole paste
+	// payload. Bracketed paste of multi-line text would otherwise
+	// scribble across the terminal.
+	m.Input += sanitizeInputString(s)
 	m.Cursor = len(m.Input)
 	m.recomputeFilter()
+}
+
+// sanitizeInputRune maps newline / carriage-return / tab to space
+// and leaves every other rune unchanged. The picker has nothing
+// useful to do with the control characters in a single-line filter
+// box, and rendering them verbatim corrupts the terminal layout.
+func sanitizeInputRune(r rune) rune {
+	switch r {
+	case '\n', '\r', '\t':
+		return ' '
+	}
+	return r
+}
+
+// sanitizeInputString applies sanitizeInputRune across an entire
+// string. Used by paste handling.
+func sanitizeInputString(s string) string {
+	if !strings.ContainsAny(s, "\n\r\t") {
+		return s
+	}
+	out := make([]rune, 0, len(s))
+	for _, r := range s {
+		out = append(out, sanitizeInputRune(r))
+	}
+	return string(out)
 }
 
 //nolint:gocyclo // straightforward dispatch; each branch is one line
