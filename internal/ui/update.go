@@ -34,7 +34,7 @@ func (m *Model) appendRune(r rune) {
 	// prefix, a \n would push the picker down a row, and a \t would
 	// jump to the next tabstop. None are useful in a search filter.
 	m.Input += string(sanitizeInputRune(r))
-	m.Cursor = len(m.Input)
+	m.Cursor = utf8.RuneCountInString(m.Input)
 	m.recomputeFilter()
 }
 
@@ -43,7 +43,7 @@ func (m *Model) appendString(s string) {
 	// payload. Bracketed paste of multi-line text would otherwise
 	// scribble across the terminal.
 	m.Input += sanitizeInputString(s)
-	m.Cursor = len(m.Input)
+	m.Cursor = utf8.RuneCountInString(m.Input)
 	m.recomputeFilter()
 }
 
@@ -85,7 +85,7 @@ func (m *Model) applyKey(k keys.Key) (terminate bool) {
 			// valid even when the user types `你<bs>` or `🚀<bs>`.
 			_, size := utf8.DecodeLastRuneInString(m.Input)
 			m.Input = m.Input[:len(m.Input)-size]
-			m.Cursor = len(m.Input)
+			m.Cursor = utf8.RuneCountInString(m.Input)
 			m.recomputeFilter()
 		}
 		return false
@@ -99,7 +99,7 @@ func (m *Model) applyKey(k keys.Key) (terminate bool) {
 		// the run of non-whitespace before it. Matches zsh's default
 		// `backward-kill-word` and shell users' muscle memory.
 		m.Input = deleteLastWord(m.Input)
-		m.Cursor = len(m.Input)
+		m.Cursor = utf8.RuneCountInString(m.Input)
 		m.recomputeFilter()
 		return false
 	case keys.KeyEnter:

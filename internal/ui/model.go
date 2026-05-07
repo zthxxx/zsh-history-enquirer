@@ -2,6 +2,7 @@ package ui
 
 import (
 	"slices"
+	"unicode/utf8"
 
 	"github.com/zthxxx/zsh-history-enquirer/internal/search"
 )
@@ -27,8 +28,18 @@ type Model struct {
 	Limit   int      // dynamic, capped at MaxLimit
 
 	// Input.
-	Input  string // typed input
-	Cursor int    // 0-based caret offset within Input
+	Input string // typed input
+	// Cursor is the display-width offset of the caret from the start
+	// of Input, expressed in terminal cells. It is what the renderer
+	// adds to InitCol to position the cursor on the input row.
+	//
+	// We approximate cell-width as rune-count via utf8.RuneCountInString:
+	// correct for ASCII, Latin-extended, Greek, Cyrillic, Hebrew, Arabic
+	// (1 cell per rune); off by ~1 cell per CJK glyph since the East
+	// Asian Width tables are not yet wired in. Bytes (the previous
+	// implementation) were wrong for ALL non-ASCII input — sometimes by
+	// 1.5–3× the visible width — and visibly mis-positioned the caret.
+	Cursor int
 
 	// Configuration.
 	MaxLimit int // typically DefaultMaxLimit
@@ -52,7 +63,7 @@ func NewModel(input string, choices []string, rows, cols, initRow, initCol, maxL
 		Height:   rows,
 		Choices:  choices,
 		Input:    input,
-		Cursor:   len(input),
+		Cursor:   utf8.RuneCountInString(input),
 		MaxLimit: maxLimit,
 	}
 	m.recomputeFilter()

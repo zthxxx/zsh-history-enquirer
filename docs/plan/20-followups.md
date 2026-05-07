@@ -532,3 +532,24 @@ companion was resolved in the
   with four scenarios (stray continuation, lone 0xff, valid-emoji
   + stray + ascii, incomplete 4-byte lead). Resolved in this
   iteration's commit.
+
+* **2026-05-07** — `len(cfg.Input)` was used for cell-count math in
+  three places (`computeInitCol` argument, `handleProbeFallback`
+  fallback col, `clampCursor` reset col) plus `m.Cursor` in the
+  ui model. `len()` returns bytes; the cursor / column arithmetic
+  needs cells. For ASCII the two are identical, but every accented
+  Latin / Greek / Cyrillic / Hebrew / Arabic / CJK / emoji char
+  consumed 2-4 bytes for 1 cell of display, so the picker drew at
+  the wrong column whenever LBUFFER had any non-ASCII content —
+  visibly mis-aligning against the prompt and parking the caret in
+  empty space after the input row. Fixed by switching all four
+  call sites (and `m.Cursor` updates in update.go) to
+  `utf8.RuneCountInString`. CJK is still off by ~1 cell per glyph
+  (East Asian Width not yet wired in) but at least error in the
+  small-undershoot direction rather than the large-overshoot
+  direction. Pinned by `TestModel_Cursor_IsRuneCountNotByteCount`
+  (six fixtures: ASCII, accented Latin, CJK, emoji, mixed, empty)
+  and the new `TestClampCursor_NonASCIIUsesRuneCount` /
+  `TestHandleProbeFallback_NonASCIIUsesRuneCount`. Spec/40 updated
+  to clarify the cell-vs-byte semantic. Resolved in this
+  iteration's commit.

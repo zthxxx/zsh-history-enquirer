@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"time"
+	"unicode/utf8"
 
 	"github.com/zthxxx/zsh-history-enquirer/internal/ansi"
 	"github.com/zthxxx/zsh-history-enquirer/internal/history"
@@ -85,7 +86,12 @@ func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, st
 	debugProbe(debugW, cur, probeLeftover, rows, cols)
 	clampCursor(&cur, cfg, rows, cols)
 
-	initCol := computeInitCol(cur.col, len(cfg.Input), cols)
+	// Use rune-count (cell approximation) rather than byte-count so the
+	// initCol arithmetic survives non-ASCII LBUFFER text. For CJK input
+	// the rune-count under-counts by ~1 cell per glyph (East Asian Width
+	// not yet wired in); accepting that residual is still much better
+	// than the previous bytes-based path which over-counted by 2-3×.
+	initCol := computeInitCol(cur.col, utf8.RuneCountInString(cfg.Input), cols)
 	model := ui.NewModel(cfg.Input, hist.lines, rows, cols, cur.row, initCol, cfg.MaxLimit)
 
 	reader := keys.NewReader(t)

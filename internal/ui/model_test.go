@@ -472,6 +472,54 @@ func TestModel_NewModel_ZeroMaxLimitDefaults(t *testing.T) {
 		"negative maxLimit must also default")
 }
 
+// TestModel_Cursor_IsRuneCountNotByteCount pins the regression
+// where m.Cursor stored len(m.Input) — the byte length — but the
+// renderer used `m.InitCol + m.Cursor` as a CSI column number,
+// which is a cell count. For non-ASCII input every byte beyond the
+// rune count would push the caret one column too far right; the
+// user saw the cursor floating in empty space after their typed
+// "café" or "你好".
+//
+// We approximate cells by runes (correct for Latin-extended /
+// Greek / Cyrillic / Hebrew / Arabic; off by ~1 cell per CJK glyph).
+// The fix is documented on the Cursor field; this test pins the
+// approximation so a future refactor that re-introduces byte-count
+// would surface immediately.
+func TestModel_Cursor_IsRuneCountNotByteCount(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		input string
+		want  int
+	}{
+		{"ascii", "git", 3},
+		{"accented-latin", "café", 4}, // 5 bytes, 4 runes
+		{"chinese", "你好", 2},          // 6 bytes, 2 runes
+		{"emoji", "🚀ship", 5},         // 8 bytes, 5 runes
+		{"mixed", "git café 你好", 11},  // 14 bytes, 11 runes
+		{"empty", "", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Initial cursor (set by NewModel).
+			m := NewModel(tc.input, []string{}, 24, 80, 1, 1, DefaultMaxLimit)
+			require.Equalf(t, tc.want, m.Cursor,
+				"NewModel(%q): Cursor must be rune-count, got %d", tc.input, m.Cursor)
+
+			// Cursor after a typed-rune update.
+			m2 := NewModel("", []string{}, 24, 80, 1, 1, DefaultMaxLimit)
+			for _, r := range tc.input {
+				m2.Update(keys.RuneEvent{R: r})
+			}
+			require.Equalf(t, tc.want, m2.Cursor,
+				"after typing %q rune-by-rune: Cursor must be rune-count, got %d",
+				tc.input, m2.Cursor)
+		})
+	}
+}
+
 // TestModel_UpDecrementsFromMidWindow exercises the moveUp branch
 // where Idx > 0 — the simple decrement case. Previous tests
 // covered the at-top rotate path and the empty-filter early-return

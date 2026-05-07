@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"unicode/utf8"
 
 	"github.com/zthxxx/zsh-history-enquirer/internal/history"
 	"github.com/zthxxx/zsh-history-enquirer/internal/tty"
@@ -70,6 +71,14 @@ func readGeometry(t *tty.TTY) (rows, cols int, err error) {
 // handleProbeFallback applies the cursor-probe error fallback in
 // place. Returns any leftover bytes the probe consumed so the
 // caller can replay them through the keystream parser.
+//
+// The fallback assumes the prompt starts at column 1 with the input
+// filling the first inputCells cells; the cursor sits one cell past
+// the last input cell. We approximate cell-count via rune-count
+// (correct for ASCII / Latin / Cyrillic / Greek; off by ~1 cell per
+// CJK glyph). Using bytes here would over-count input width by
+// 1.5–3× for non-ASCII, sending the picker to draw out past the
+// terminal edge.
 func handleProbeFallback(cur *cursorResult, cfg *Config, stderr io.Writer) string {
 	if cur.err == nil {
 		return ""
@@ -81,16 +90,17 @@ func handleProbeFallback(cur *cursorResult, cfg *Config, stderr io.Writer) strin
 	}
 	_, _ = fmt.Fprintf(stderr, "warning: DSR cursor probe failed: %v (using col=1 fallback)\n", cur.err)
 	cur.row = 1
-	cur.col = len(cfg.Input) + 1
+	cur.col = utf8.RuneCountInString(cfg.Input) + 1
 	return leftover
 }
 
 // clampCursor enforces the cur.{row,col} into the terminal bounds.
 // Defends against bytes that happened to match the DSR shape but
-// were never a real response.
+// were never a real response. Same rune-count approximation as
+// handleProbeFallback; see that doc for the cell-vs-rune trade-off.
 func clampCursor(cur *cursorResult, cfg *Config, rows, cols int) {
 	if cur.col < 1 || cur.col > cols {
-		cur.col = len(cfg.Input) + 1
+		cur.col = utf8.RuneCountInString(cfg.Input) + 1
 	}
 	if cur.row < 1 || cur.row > rows {
 		cur.row = 1

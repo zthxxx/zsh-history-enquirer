@@ -13,8 +13,12 @@ To achieve this:
    `\e[6n` to `/dev/tty`.
 2. The terminal replies with `\e[<row>;<col>R`.
 3. The binary parses that, computes
-   `initCol = current_col - len(initial_input) - 1` (`-1` because
-   DSR positions are 1-indexed and we treat them 0-indexed internally).
+   `initCol = current_col - cells(initial_input)`. We approximate
+   `cells()` with `utf8.RuneCountInString` — exact for ASCII, Latin
+   extended, Greek, Cyrillic, Hebrew, Arabic; off by ~1 cell per
+   CJK glyph because the East Asian Width tables are not yet wired
+   in. Bytes (the previous form) were wrong for ALL non-ASCII input
+   by 1.5–3× and visibly mis-aligned the picker against the prompt.
 4. All subsequent draws and erases use `initCol` as the leftmost column
    they may touch.
 

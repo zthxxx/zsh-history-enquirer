@@ -67,6 +67,40 @@ func TestClampCursor_InBoundsUnchanged(t *testing.T) {
 	}
 }
 
+// TestClampCursor_NonASCIIUsesRuneCount pins the regression where the
+// fallback computed `cur.col = len(cfg.Input) + 1` in bytes. For an
+// LBUFFER like "café" (5 bytes, 4 runes), the byte-based fallback
+// would return col=6 — past where the cursor actually sits — and the
+// picker would mis-align its first frame against the prompt. The
+// rune-count approximation matches the cell-count of the input for
+// ASCII, Latin-extended, Greek, Cyrillic, Hebrew, Arabic; off by ~1
+// per CJK glyph.
+func TestClampCursor_NonASCIIUsesRuneCount(t *testing.T) {
+	t.Parallel()
+	cfg := &Config{Input: "café"}
+	cur := cursorResult{row: 9999, col: 9999}
+	clampCursor(&cur, cfg, 24, 80)
+	// 4 runes + 1 = 5, not 5 bytes + 1 = 6.
+	if cur.col != 5 {
+		t.Fatalf("col = %d, want 5 (rune-count + 1, not byte-count)", cur.col)
+	}
+}
+
+// TestHandleProbeFallback_NonASCIIUsesRuneCount mirrors the fix on
+// the probe-failure path. Same reasoning as the clampCursor
+// regression test.
+func TestHandleProbeFallback_NonASCIIUsesRuneCount(t *testing.T) {
+	t.Parallel()
+	var stderr bytes.Buffer
+	cfg := &Config{Input: "你好"}
+	cur := cursorResult{err: &tty.TimeoutError{Cause: errors.New("silent")}}
+	_ = handleProbeFallback(&cur, cfg, &stderr)
+	// 2 runes + 1 = 3, not 6 bytes + 1 = 7.
+	if cur.col != 3 {
+		t.Fatalf("col = %d, want 3 (rune-count + 1, not byte-count)", cur.col)
+	}
+}
+
 func TestHandleProbeFallback_NilErrIsNoOp(t *testing.T) {
 	t.Parallel()
 	cfg := &Config{Input: "x"}
