@@ -156,7 +156,20 @@ func (m *Model) renderBody(inputExtra int) (string, int, int) { //nolint:gocriti
 	// keeps the cost to a single sanitize per visible entry.
 	rows := 0
 	limit := 0
-	sanitizedCache := make([]string, 0, len(m.Filter))
+	// Cap the cache to MaxLimit (15 by default), not len(m.Filter):
+	// the loop breaks at `limit >= m.MaxLimit`, so the cache never
+	// stores more than MaxLimit entries. Sizing the backing array to
+	// the filter length wastes ~160 KB per render at HISTSIZE=100k
+	// when filters are still wide (e.g. before the user has typed
+	// enough tokens to narrow the matches), churning the GC for no
+	// gain — Render runs on every keystroke (modulo throttle). Using
+	// min so a tiny filter (say 3 matches against a wide MaxLimit)
+	// still allocates only what it needs.
+	cacheCap := m.MaxLimit
+	if cacheCap > len(m.Filter) {
+		cacheCap = len(m.Filter)
+	}
+	sanitizedCache := make([]string, 0, cacheCap)
 	for _, choice := range m.Filter {
 		s := sanitizeChoiceForRender(choice)
 		choiceRows := WrappedRowCount(s, m.Width)

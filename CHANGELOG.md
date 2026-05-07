@@ -467,6 +467,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   reader arms its 50ms flush timer for stateCSI alongside
   stateEsc / stateSS3.
 
+### Performance
+
+- **`renderBody`'s sanitized-text cache no longer over-allocates by
+  filter length.** The cache is bounded by `MaxLimit` (15 by default),
+  but the backing-array `make` was sized to `len(m.Filter)` — so at
+  HISTSIZE=100k with a wide filter, every render allocated ~160 KB
+  for a slice that ever held 15 strings. Now `min(MaxLimit, len(m.Filter))`.
+  Bench: `BenchmarkRender/N=100000` 173 KB/op → 10 KB/op (16× smaller),
+  ~50 µs/op → ~45 µs/op. Render runs every keystroke (modulo
+  throttle), so the GC pressure shows up under sustained typing.
+
 ### Internal — replace hand-rolled libs with community standards
 
 - **`internal/ansi` deleted; consumers now use `charmbracelet/x/ansi`
