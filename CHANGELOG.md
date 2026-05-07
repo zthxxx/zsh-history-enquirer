@@ -331,6 +331,78 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   typed text. Narrowed to `argv.length === 3 && argv[2] === ...`,
   matching the discipline used on the Go side. Three node:test
   scenarios pin it.
+- **Raw control bytes in history entries could disrupt the picker
+  frame.** A corrupt or maliciously-appended `$HISTFILE` entry
+  containing e.g. `\x1b[2J` (clear-screen) would let the embedded
+  ESC reach the terminal during render. Added
+  `sanitizeChoiceForRender` in the renderer that replaces 0x00–0x1f
+  (except `\t` / `\n`) and 0x7f with caret notation. Sanitization
+  is render-only — `m.Filter[i]` keeps the original bytes so
+  `SubmitResult` returns the literal command for re-execution.
+- **`sanitizeInputRune` only filtered `\n` / `\r` / `\t`.**
+  Bracketed-paste payloads deliberately preserve embedded control
+  bytes (so `\x03` doesn't fire CtrlC inside a paste), so a
+  clipboard with `\x1b[2J` would land in `m.Input` verbatim and
+  the renderer would let the ESC clear the screen mid-frame.
+  Extended the sanitizer to map every C0 byte (0x00–0x1f) and
+  0x7f to space — matching the long-standing `\n` / `\r` / `\t`
+  behaviour.
+- **`NewModel(input, ...)` stored argv directly into `m.Input`.**
+  Third entry-point sealed: a power user who pressed Ctrl-V Ctrl-[
+  to insert a literal ESC into LBUFFER before Ctrl-R, or a hostile
+  clipboard auto-pasted before invocation, would hand the picker
+  a `cfg.Input` carrying raw control bytes. NewModel now runs
+  input through `sanitizeInputString` before storing it.
+- **Extended-history entries with empty commands surfaced as
+  blank picker rows.** `: 1700000001:0;` (no command after the
+  semicolon) survived `splitNonEmptyLines` (the line itself is
+  non-empty), then `stripExtendedHistoryPrefix` reduced it to "".
+  `fixtureLoader.Load` now drops post-strip empties symmetrically.
+- **DSR cursor probe silently swallowed user input typed during
+  the probe window.** Fast typists pressing `^R git` lost the first
+  1–4 keystrokes. The probe loop's `parseDSRResponse` anchored on
+  the first `[`, throwing away any prefix bytes. Fix: anchor on
+  `\x1b[`, tighten the loop break condition to `\x1b[<...>R`, and
+  extend `Probe.Cursor`'s signature to return leftover bytes on
+  the success path (the timeout path already used
+  `TimeoutError.Leftover`).
+- **Reader's main event loop exited on EINTR from `unix.Read`.**
+  The poll path was already EINTR-resilient, but the read syscall
+  itself can return EINTR when a signal arrives between poll
+  returning POLLIN and the read syscall completing — most commonly
+  SIGWINCH from a mid-Ctrl-R terminal resize. `if rerr != nil ||
+  n == 0 { return }` then closed the events channel and tore down
+  the picker on every resize. Branched the rerr check so EINTR
+  becomes `continue`. The same fix applied symmetrically to the
+  cursor probe.
+- **npm shim silently blanked BUFFER when `spawnSync` failed.**
+  When `result.error` is set (the child could not be spawned at
+  all — ENOENT, EACCES, ETXTBSY, stale symlink, lost +x bit), the
+  shim exited 0 with no stdout. `BUFFER=$(cli.js -- "$LBUFFER")`
+  then landed as empty, destroying the user's typed text on every
+  Ctrl-R. Refactored the BUFFER-preservation echo into an
+  `echoArgvAndExit()` helper and wired the `result.error` branch
+  to call it after a stderr diagnostic.
+- **Parser's `stateCSI` could get stuck.** A flaky terminal
+  sending `\e[` and stopping (a kill mid-sequence, programmatic
+  input that paused, or a very real network glitch over ssh)
+  left the parser in stateCSI forever. Worse, every subsequent
+  typed byte was silently consumed by the CSI accumulator: any
+  byte in 0x40..0x7e terminates the sequence as unrecognized
+  and is dropped. `FlushEsc` now resolves stateCSI by emitting
+  `Esc + '[' + each accumulated parameter byte as a Rune`; the
+  reader arms its 50ms flush timer for stateCSI alongside
+  stateEsc / stateSS3.
+
+### Distribution / release process
+
+- **`scripts/release/build-npm.sh --publish` is now idempotent.**
+  A transient npm registry hiccup mid-publish previously left the
+  registry in a half-released state (some platform packages
+  published, umbrella missing) — the retry then tripped on
+  EPUBLISHCONFLICT for the already-published versions. Added a
+  `publish_if_new` helper that calls `npm view <pkg>@<ver> version`
+  first and skips if the exact-version is already on the registry.
 
 ### Added (ergonomics + correctness)
 
