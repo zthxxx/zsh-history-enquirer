@@ -80,6 +80,11 @@ prompt buffer where you can still edit it before hitting
   for fast skimming.
 - **Bracketed paste works correctly** — pasting a keyword from your
   clipboard doesn't trigger spurious key handlers.
+- **CJK and emoji-aware.** Display-width math goes through Unicode's
+  East Asian Width tables (`mattn/go-runewidth`), so CJK ideographs
+  and emoji each take their actual 2 cells in cursor / wrap math —
+  the picker aligns correctly against the prompt for `cd 我的文档`,
+  `echo café`, `git commit -m "🚀 ship"`, etc.
 - **Cancel *and* submitting a no-match preserve input.** Whatever
   you typed in the search box lands back in your shell prompt either
   way, never retyped.
