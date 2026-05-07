@@ -383,6 +383,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   Ctrl-R. Refactored the BUFFER-preservation echo into an
   `echoArgvAndExit()` helper and wired the `result.error` branch
   to call it after a stderr diagnostic.
+- **A panic in the keys reader goroutine still crashed the process.**
+  The top-level `defer recoverPanic` in `main()` only catches panics
+  on the main goroutine; a panic inside `Reader.Events`'s read loop
+  would terminate the process before reaching the recover. Added a
+  dedicated `recoverGoroutinePanic` deferred at the top of the reader
+  goroutine; on panic it logs to `PanicWriter` (stderr by default)
+  and returns normally — the deferred `close(out)` then signals the
+  main loop to exit cleanly with `Canceled=true`, which echoes
+  `m.Input` so BUFFER survives. 1 regression test pins the recovery.
 - **A goroutine panic during the picker session would blank `BUFFER`.**
   The existing `recoverStartFailure` only fires when fx.App.Start
   errors before invokeRun runs — a runtime panic later in the picker

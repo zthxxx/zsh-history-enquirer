@@ -2,6 +2,8 @@ package keys
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"time"
@@ -10,6 +12,29 @@ import (
 
 	"github.com/zthxxx/zsh-history-enquirer/internal/tty"
 )
+
+// PanicWriter is the destination for panic-recovery diagnostics in the
+// reader goroutine. Defaults to os.Stderr; tests can redirect.
+//
+//nolint:gochecknoglobals // intentional swap point.
+var PanicWriter io.Writer = os.Stderr
+
+// recoverGoroutinePanic is the deferred recover for the reader's hot
+// loop. A parser bug or third-party crash would otherwise terminate
+// the whole process and destroy $LBUFFER (BUFFER=$(...) captures
+// stdout — no stdout means an empty buffer for the user). Closing the
+// events channel from the deferred close above signals the main loop
+// to exit cleanly with Canceled=true; the loop then echoes m.Input
+// back to stdout, preserving the widget contract. The panic itself is
+// reported to PanicWriter (stderr by default — invisible to the
+// command substitution).
+func recoverGoroutinePanic() {
+	if rec := recover(); rec != nil {
+		_, _ = io.WriteString(PanicWriter,
+			"zsh-history-enquirer: keys reader panic recovered: ")
+		_, _ = fmt.Fprintln(PanicWriter, rec)
+	}
+}
 
 // Reader streams events from a TTY plus terminal-resize signals.
 type Reader struct {
@@ -61,6 +86,16 @@ func (r *Reader) Events(ctx context.Context) <-chan Event {
 	go func() {
 		defer close(out)
 		defer signal.Stop(winch)
+		// Panic recovery: a parser bug or third-party crash inside
+		// this hot loop would otherwise terminate the whole process,
+		// destroying $LBUFFER (BUFFER=$(...) captures only stdout —
+		// no stdout means an empty buffer for the user). Closing
+		// `out` from the deferred close above signals the main loop
+		// to exit cleanly with Canceled=true; the loop then echoes
+		// m.Input back to stdout, preserving the widget contract.
+		// The panic itself is reported to stderr (invisible to the
+		// command substitution).
+		defer recoverGoroutinePanic()
 
 		fd := int(r.tty.File().Fd())
 

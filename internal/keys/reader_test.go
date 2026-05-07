@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -342,6 +343,33 @@ func TestReader_Events_SignalDoesNotKillLoop(t *testing.T) {
 			t.Fatal("reader goroutine did not exit within 2s of cancel — race window still open")
 		}
 	}
+}
+
+// TestRecoverGoroutinePanic_WritesAndContinues exercises the reader's
+// deferred recover. A parser-side panic must not crash the process —
+// instead it gets logged to PanicWriter and the function returns
+// normally so the goroutine's deferred close(out) signals the
+// consumer to exit. We verify the recovery executed and the panic
+// value reached the writer.
+func TestRecoverGoroutinePanic_WritesAndContinues(t *testing.T) {
+	var buf strings.Builder
+	saved := PanicWriter
+	t.Cleanup(func() { PanicWriter = saved })
+	PanicWriter = &buf
+
+	// Run a function that panics inside a deferred recover. If
+	// recoverGoroutinePanic does its job, the function returns
+	// normally and we can read the buffer.
+	func() {
+		defer recoverGoroutinePanic()
+		panic("simulated parser blow-up")
+	}()
+
+	out := buf.String()
+	require.Contains(t, out, "panic recovered",
+		"recovery message must surface to the diagnostic writer")
+	require.Contains(t, out, "simulated parser blow-up",
+		"panic value must be included in the diagnostic")
 }
 
 // Defensive compile-time check: the unix package must export the

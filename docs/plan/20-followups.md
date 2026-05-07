@@ -50,6 +50,16 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — A panic inside the keys reader goroutine bypassed
+  the top-level `recoverPanic` (which only catches the main
+  goroutine) and crashed the process. Added a dedicated
+  `recoverGoroutinePanic` deferred at the top of the reader's hot
+  loop; on panic it logs to a swappable `PanicWriter` (stderr by
+  default) and returns normally so the deferred `close(out)` signals
+  the main loop to exit cleanly with `Canceled=true` — which echoes
+  `m.Input` to stdout, preserving the widget contract. One unit test
+  pins the swap point + diagnostic format.
+
 * **2026-05-07** — A goroutine panic during the picker session would
   let the process crash with no stdout, so `BUFFER=$(...)` resolved
   to empty and the user's typed `$LBUFFER` was destroyed. Added
