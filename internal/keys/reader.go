@@ -150,9 +150,21 @@ func (r *Reader) Events(ctx context.Context) <-chan Event {
 					return
 				}
 			}
-			if rerr != nil || n == 0 {
-				// EOF / fd closed / unrecoverable error; exit so the
-				// caller observes the channel close.
+			if rerr != nil {
+				// EINTR is recoverable: a signal (typically SIGWINCH from
+				// the user resizing the terminal) interrupted the read
+				// between poll returning POLLIN and the Read syscall
+				// completing. The next iteration drains SIGWINCH and
+				// re-polls; killing the picker on every resize would be
+				// a hostile UX. Other errors are genuinely unrecoverable.
+				if rerr == unix.EINTR {
+					continue
+				}
+				return
+			}
+			if n == 0 {
+				// EOF / fd closed; exit so the caller observes the
+				// channel close.
 				return
 			}
 		}

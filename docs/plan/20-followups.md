@@ -744,3 +744,21 @@ companion was resolved in the
   integration), `TestProbeCursor_StrayRBeforeResponse`, and
   `TestHandleProbeFallback_NilErrPropagatesLeftover`. Resolved
   in this iteration's commit.
+
+* **2026-05-07** — Reader's main event loop exited on EINTR from
+  the `unix.Read` syscall. The poll above was already EINTR-aware
+  (`if perr == unix.EINTR { continue }`), but the read syscall
+  itself can ALSO return EINTR — specifically when a signal
+  arrives between poll returning POLLIN and the read syscall
+  completing. SIGWINCH (terminal resize) is the realistic trigger:
+  the user grabs the terminal corner and drags, the kernel sends
+  SIGWINCH to our process, and the active read returns
+  (n=0, err=EINTR). The code's `if rerr != nil || n == 0 { return }`
+  branch then closed the events channel and tore the picker down —
+  every terminal resize during an active picker session would
+  silently kill the picker. Fix: branch the rerr check so EINTR
+  becomes a `continue` (next iteration drains SIGWINCH and emits
+  a ResizeEvent) and other errors stay as exits. Pinned by
+  `TestReader_Events_SignalDoesNotKillLoop` which fires three
+  SIGWINCH bursts at the test process and asserts a subsequent
+  keystroke still arrives. Resolved in this iteration's commit.

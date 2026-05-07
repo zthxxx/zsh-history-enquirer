@@ -257,6 +257,69 @@ func TestReader_Events_SS3FlushTimerDelivers(t *testing.T) {
 	require.Equal(t, RuneEvent{R: 'O'}, got[1])
 }
 
+// TestReader_Events_SignalDoesNotKillLoop pins the EINTR-resilience
+// of the read syscall. SIGWINCH (sent here directly to the test
+// process) interrupts both poll() and read() syscalls. The reader
+// already handled EINTR on poll, but read() also returns EINTR when
+// a signal arrives between poll's POLLIN and the read completing.
+// Without continue-on-EINTR-from-read, every terminal resize would
+// close the events channel and tear the picker down. This test
+// fires SIGWINCH repeatedly while typing, asserting both the
+// resize event AND a subsequent keystroke arrive.
+func TestReader_Events_SignalDoesNotKillLoop(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("pty unsupported on windows")
+	}
+
+	master, slave, err := pty.Open()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = master.Close()
+		_ = slave.Close()
+	})
+
+	t1, err := tty.NewFromFile(slave)
+	require.NoError(t, err)
+	require.NoError(t, t1.EnterRaw())
+	t.Cleanup(func() { _ = t1.LeaveRaw() })
+
+	r := NewReader(t1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events := r.Events(ctx)
+
+	// Drive: fire SIGWINCH a few times while a stream of keystrokes
+	// trickles in. We don't strictly assert on the resize events
+	// (some kernels coalesce them); the assertion that matters is
+	// that the keystrokes still arrive after the signals.
+	go func() {
+		time.Sleep(30 * time.Millisecond)
+		for range 3 {
+			_ = unix.Kill(unix.Getpid(), unix.SIGWINCH)
+			time.Sleep(10 * time.Millisecond)
+		}
+		_, _ = io.WriteString(master, "x")
+	}()
+
+	// Drain until we see the 'x' rune. If the loop died, we'll time
+	// out on the channel close instead.
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("events channel closed unexpectedly — EINTR likely tore down the loop")
+			}
+			if re, isRune := ev.(RuneEvent); isRune && re.R == 'x' {
+				return // success: keystroke after SIGWINCH bursts
+			}
+			// Other events (resize) are fine; ignore and keep draining.
+		case <-deadline:
+			t.Fatal("did not receive 'x' keystroke within 2s after SIGWINCH bursts")
+		}
+	}
+}
+
 // Defensive compile-time check: the unix package must export the
 // poll constants we depend on. A future Go-x-sys reshuffle that
 // removes these would otherwise break us at runtime.
