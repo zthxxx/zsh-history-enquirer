@@ -1,12 +1,23 @@
 package ui
 
 import (
+	"os"
 	"slices"
 	"strings"
 
 	"github.com/zthxxx/zsh-history-enquirer/internal/ansi"
 	"github.com/zthxxx/zsh-history-enquirer/internal/search"
 )
+
+// noColor reports whether the user has opted out of color output via
+// the standard NO_COLOR env var (https://no-color.org). Any non-empty
+// value disables ANSI color escapes — only token highlighting in our
+// case; the picker has no other color output to suppress.
+//
+// Function (not const) so tests can stub via `t.Setenv("NO_COLOR", ...)`.
+func noColor() bool {
+	return os.Getenv("NO_COLOR") != ""
+}
 
 // Highlight ANSI codes used to mark matched tokens inside a rendered
 // choice. Bold cyan is distinguishable on every common terminal theme
@@ -124,8 +135,12 @@ func (m *Model) renderBody() (string, int, int) { //nolint:gocritic // unnamed r
 		body.WriteString(strings.ReplaceAll(highlighted, "\n", "\r\n"))
 		// Belt-and-braces SGR reset after every entry — guards against
 		// a history line containing an unterminated escape sequence
-		// that would otherwise bleed colour into the next row.
-		body.WriteString(highlightOff)
+		// that would otherwise bleed colour into the next row. Skipped
+		// under NO_COLOR — the user has signalled they don't want our
+		// SGR bytes hitting the stream at all.
+		if !noColor() {
+			body.WriteString(highlightOff)
+		}
 	}
 
 	if limit == 0 {
@@ -147,6 +162,12 @@ func (m *Model) renderBody() (string, int, int) { //nolint:gocritic // unnamed r
 // defensive against direct callers.
 func highlight(s string, tokens []string) string {
 	if len(tokens) == 0 || s == "" {
+		return s
+	}
+	// NO_COLOR opt-out: emit no SGR escapes. Match-detection is
+	// orthogonal — search.AndFilter still applies; only the visual
+	// highlight is suppressed. Conforms to the no-color.org convention.
+	if noColor() {
 		return s
 	}
 

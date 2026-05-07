@@ -51,6 +51,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   - `internal/ui/highlight` — payload preservation under SGR strip.
   - `internal/keys/parser` — chunk-boundary invariance for the FSM.
 - `.go-arch-lint.yml` — package layering enforced in CI.
+- `NO_COLOR=1` opt-out for accessibility / non-color terminals.
+  Conforms to the [no-color.org](https://no-color.org) convention:
+  any non-empty value of `$NO_COLOR` suppresses ALL SGR escapes
+  the picker would otherwise emit (the bold-cyan token highlight
+  + the per-entry SGR reset). Search and filtering are unaffected;
+  only the visual markup is removed.
 - <kbd>Ctrl</kbd>+<kbd>W</kbd> deletes the previous word — matches
   zsh's default `backward-kill-word` keymap. Rune-aware so CJK /
   emoji words delete atomically.

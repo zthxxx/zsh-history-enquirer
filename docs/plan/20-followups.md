@@ -25,6 +25,13 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — Added `NO_COLOR` opt-out per the
+  [no-color.org](https://no-color.org) convention. Setting any
+  non-empty value suppresses both the bold-cyan token highlight
+  AND the per-entry SGR reset. Search / filter behavior unchanged.
+  Two regression tests pin the on/off toggling. Documented in
+  README, README.zh-CN, and design/50-ui.md.
+
 * **2026-05-07** — Modifier-key arrow / Home / End / PgUp / PgDn /
   Delete sequences were silently swallowed. xterm encodes them as
   `\e[1;<modifier><letter>` (arrows + Home/End) or

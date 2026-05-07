@@ -139,6 +139,9 @@ echo 'source '"$PWD"'/plugin/zsh-history-enquirer.plugin.zsh' >> ~/.zshrc
 | <kbd>Enter</kbd> | 把选中条目回填到 prompt（仍可编辑，再按一次 <kbd>Enter</kbd> 才执行） |
 | <kbd>Esc</kbd> / <kbd>Ctrl+C</kbd> | 取消，保留已输入的关键词 |
 
+设置 `NO_COLOR=1` 可关闭 token 高亮（遵循 [no-color.org](https://no-color.org)
+约定）；过滤逻辑不受影响，只去掉 bold-cyan 的 SGR 渲染。
+
 ## 跟 fzf / peco / percol 的差异
 
 `fzf` 作为通用 picker 很强，但当历史搜索用的话有几个不舒服的点：

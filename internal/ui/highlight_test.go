@@ -83,6 +83,29 @@ func TestHighlight_UnicodeFoldChangesByteLength(t *testing.T) {
 	}
 }
 
+// TestHighlight_NoColorSuppressesSGR pins the NO_COLOR opt-out
+// (https://no-color.org). When the env var is set to any non-empty
+// value, the highlighter must return the input string unmodified —
+// no `\x1b[1;36m` / `\x1b[0m` bytes. Match detection itself is
+// orthogonal (search.AndFilter still works); only the visual
+// markup is suppressed.
+func TestHighlight_NoColorSuppressesSGR(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	got := highlight("git status", []string{"git"})
+	require.Equal(t, "git status", got,
+		"NO_COLOR set → highlighter must emit no SGR escapes")
+}
+
+// TestHighlight_EmptyNoColorStillHighlights — only NON-EMPTY values
+// of NO_COLOR opt out (per the spec). NO_COLOR="" is the same as
+// unset and color should still be emitted.
+func TestHighlight_EmptyNoColorStillHighlights(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	got := highlight("git status", []string{"git"})
+	require.Equal(t, "\x1b[1;36mgit\x1b[0m status", got,
+		"NO_COLOR empty → behaves like unset; SGR still emitted")
+}
+
 // TestHighlight_AsciiPathStillHighlights — make sure the Unicode
 // fallback didn't accidentally break the common-case ASCII path.
 func TestHighlight_AsciiPathStillHighlights(t *testing.T) {

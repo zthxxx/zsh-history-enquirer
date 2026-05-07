@@ -204,6 +204,11 @@ The other flags are most useful for debugging and for the e2e harness.
 - **oh-my-zsh users** must source the plugin file from
   `$(npm root -g)/zsh-history-enquirer/plugin/...`; oh-my-zsh's
   `plugins=(...)` array does not auto-discover npm-installed plugins.
+- **`NO_COLOR=1`** suppresses the bold-cyan token highlight (and
+  the per-entry SGR reset) so the picker emits plain text only.
+  Honors the [no-color.org](https://no-color.org) convention.
+  Search / filtering / multi-word matching are unaffected — only
+  the visual highlight is removed.
 
 ## Implementation
 
