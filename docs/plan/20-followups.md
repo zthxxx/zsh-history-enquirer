@@ -50,6 +50,18 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — `renderBody`'s `sanitizedCache` slice was sized to
+  `len(m.Filter)` even though the loop breaks at `limit >= MaxLimit`
+  (15 by default). At HISTSIZE=100k with a wide filter (no input
+  yet), the backing array allocated ~160 KB per render for a slice
+  that ever held 15 strings. Render runs every keystroke (modulo
+  the 72 ms throttle), so the GC pressure showed up under sustained
+  typing. Capped to `min(MaxLimit, len(m.Filter))`. Bench:
+  `BenchmarkRender/N=100000` 173 KB/op → 10 KB/op (16× smaller),
+  ~50 µs/op → ~45 µs/op. Found by inspecting the bench output —
+  100k entries shouldn't allocate proportional to the input when
+  the visible window is fixed-size.
+
 * **2026-05-07** — A panic inside the keys reader goroutine bypassed
   the top-level `recoverPanic` (which only catches the main
   goroutine) and crashed the process. Added a dedicated
