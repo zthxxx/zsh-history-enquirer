@@ -36,6 +36,15 @@ pre-commit:
       # the contributor happens to have bun locally.
       run: command -v bun >/dev/null && bun markdownlint-cli2 {staged_files} || npx --yes markdownlint-cli2 {staged_files}
     test-unit:
+      # Only fires when Go sources / module deps change. Doc-only
+      # commits (CHANGELOG, README, spec/design tweaks) skip the
+      # 5-second race-detector test loop entirely. CI still runs the
+      # full suite on every push, so this only loosens the local
+      # pre-commit ergonomics, not the verification surface.
+      glob:
+        - "*.go"
+        - "go.mod"
+        - "go.sum"
       run: task test:unit
 
 commit-msg:

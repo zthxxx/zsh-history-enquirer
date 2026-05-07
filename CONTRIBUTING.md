@@ -130,7 +130,10 @@ rest:
 
 `v*-rc.N` / `v*-alpha.N` / `v*-beta.N` are released as GitHub
 pre-releases and skip the homebrew-tap bump (Homebrew users only
-see stable versions).
+see stable versions). On npm they publish under the `next` dist-tag
+(stable tags use `latest`), so a pre-release never replaces the
+default `npm install zsh-history-enquirer` resolution. Early
+adopters opt in via `npm install zsh-history-enquirer@next`.
 
 ## Reporting bugs
 
