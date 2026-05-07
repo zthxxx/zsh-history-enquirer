@@ -29,16 +29,19 @@ type Model struct {
 	// Input.
 	Input string // typed input
 	// Cursor is the display-width offset of the caret from the start
-	// of Input, expressed in terminal cells. It is what the renderer
-	// adds to InitCol to position the cursor on the input row.
+	// of Input, expressed in terminal cells. It feeds the rune-walking
+	// `InputCursorPosition` helper that turns it into a (row, col) on
+	// the wrapped input row.
 	//
-	// Cell-width via CellWidth (mattn/go-runewidth): exact for
-	// every script the Unicode East Asian Width tables cover —
-	// ASCII, Latin-extended, Greek, Cyrillic, Hebrew, Arabic, CJK,
-	// emoji, fullwidth punctuation. Bytes were wrong for all
-	// non-ASCII input (over-counting by 2-3×); rune-count was off
-	// for CJK and emoji (under-counting by 1 cell each). CellWidth
-	// is the fix.
+	// Cell-width via CellWidth (rivo/uniseg): exact for every script
+	// the Unicode East Asian Width tables cover — ASCII, Latin-
+	// extended, Greek, Cyrillic, Hebrew, Arabic, CJK, emoji, fullwidth
+	// punctuation — AND for grapheme clusters (decomposed accented
+	// letters like e+combining-acute, emoji ZWJ family pictographs,
+	// flag-cluster pairs). Bytes were wrong for all non-ASCII input
+	// (over-counting by 2-3×); rune-count was off for CJK and emoji
+	// (under-counting by 1 cell each); per-rune width via runewidth
+	// double-counted decomposed clusters. CellWidth is the fix.
 	Cursor int
 
 	// Configuration.
