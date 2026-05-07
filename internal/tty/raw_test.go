@@ -83,3 +83,63 @@ func TestProbeCursor_RoundTrip(t *testing.T) {
 
 	require.NoError(t, <-done)
 }
+
+// TestProbeCursor_TimeoutNoResponse pins the silent-terminal path:
+// some emulators (dumb terminals, sshd with `-T`, broken serial
+// consoles) ignore DSR queries entirely. The probe must surface a
+// *TimeoutError after the deadline rather than blocking forever or
+// returning a malformed response. Without the typed error, the
+// caller (handleProbeFallback) can't distinguish timeout from
+// other read failures and pick the right fallback.
+func TestProbeCursor_TimeoutNoResponse(t *testing.T) {
+	t.Parallel()
+
+	_, slave := withPty(t)
+	tt, err := rawFromFile(slave)
+	require.NoError(t, err)
+
+	probe := NewProbe(tt)
+	_, _, err = probe.Cursor(context.Background(), 50*time.Millisecond)
+
+	var te *TimeoutError
+	require.ErrorAs(t, err, &te,
+		"silent terminal must surface as *TimeoutError")
+	require.Empty(t, te.Leftover,
+		"no bytes consumed → leftover must be empty")
+}
+
+// TestProbeCursor_TimeoutPreservesLeftover pins the pre-render
+// keystroke replay path: if the user types something while the
+// probe is still waiting for a DSR response that never arrives,
+// those bytes must be returned via TimeoutError.Leftover so the
+// caller can re-feed them through the keystream parser. Without
+// this, fast-typing users on slow / silent terminals would lose
+// keystrokes between picker open and the first render.
+func TestProbeCursor_TimeoutPreservesLeftover(t *testing.T) {
+	t.Parallel()
+
+	master, slave := withPty(t)
+	tt, err := rawFromFile(slave)
+	require.NoError(t, err)
+
+	// Drain master (so the DSR query doesn't fill the pty buffer
+	// and back-pressure the probe's WriteString) AND inject some
+	// non-DSR bytes that the probe will collect as leftover.
+	go func() {
+		buf := make([]byte, 64)
+		_ = master.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		_, _ = master.Read(buf) // drain DSR query
+		// Wait briefly so the probe is now in its read loop.
+		time.Sleep(10 * time.Millisecond)
+		_, _ = io.WriteString(master, "git ")
+	}()
+
+	probe := NewProbe(tt)
+	_, _, err = probe.Cursor(context.Background(), 100*time.Millisecond)
+
+	var te *TimeoutError
+	require.ErrorAs(t, err, &te,
+		"silent terminal must surface as *TimeoutError")
+	require.Contains(t, te.Leftover, "git ",
+		"bytes consumed before timeout must round-trip via Leftover")
+}
