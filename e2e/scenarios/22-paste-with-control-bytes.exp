@@ -1,0 +1,53 @@
+#!/usr/bin/env expect
+# 22-paste-with-control-bytes.exp
+#
+# Bracketed-paste payloads must be treated as opaque text, not as a
+# stream of keypresses. The unit tests cover this at the parser layer
+# (TestParser_BracketedPaste_PreservesControlBytes); this scenario
+# pins the same invariant end-to-end through a real zsh + the binary
+# so a future refactor of the keys/update boundary cannot silently
+# regress it.
+#
+# Concretely: paste a payload containing the byte 0x03 (Ctrl-C raw)
+# embedded in surrounding text. If the paste-mode were broken, the
+# 0x03 would arrive as a KeyCtrlC event and cancel the picker
+# *before* the trailing text appended; we'd never see the trailing
+# substring on screen and the picker would have already exited.
+# With the contract intact, the whole payload sanitizes through
+# (control bytes → spaces) and the picker keeps running with the
+# typed text in its filter row.
+
+set timeout 12
+log_user 1
+
+spawn -noecho zsh -il
+expect_after timeout {
+  puts stderr "TIMEOUT in 22-paste-with-control-bytes"
+  exit 1
+}
+
+expect "% "
+sleep 0.5
+
+send -- "\x12"
+sleep 1.2
+
+# Paste payload: "git" + 0x03 (raw Ctrl-C byte) + "log".
+# After sanitization the input row should contain "git log" (with
+# the 0x03 collapsed to a space). The picker must NOT have exited:
+# we then assert that the seeded multi-token entry "git log
+# --pretty=fuller --date=iso -n 1" is on screen, which can only be
+# true if the picker is still rendering AND the filter is "git log".
+send -- "\x1b\[200~git\x03log\x1b\[201~"
+sleep 0.8
+
+expect "fuller"
+sleep 0.3
+
+# Cancel cleanly so the surrounding shell stays sane.
+send -- "\x1b"
+sleep 0.5
+send -- "\x15"
+sleep 0.2
+send -- "exit\r"
+expect eof
