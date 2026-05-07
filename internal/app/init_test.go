@@ -13,11 +13,65 @@ import (
 
 	"github.com/creack/pty"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 
 	"github.com/zthxxx/zsh-history-enquirer/internal/keys"
 	"github.com/zthxxx/zsh-history-enquirer/internal/tty"
 	"github.com/zthxxx/zsh-history-enquirer/internal/ui"
 )
+
+// TestReadGeometry_ReportsExplicitWinsize pins the happy-path
+// case: when TIOCGWINSZ returns positive rows/cols, readGeometry
+// surfaces them verbatim. Uses pty + IoctlSetWinsize so the test
+// is independent of the host terminal.
+func TestReadGeometry_ReportsExplicitWinsize(t *testing.T) {
+	t.Parallel()
+	master, slave, err := pty.Open()
+	require.NoError(t, err)
+	defer master.Close()
+	defer slave.Close()
+
+	require.NoError(t, unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{
+		Row: 30, Col: 100,
+	}), "TIOCSWINSZ must succeed on the pty slave")
+
+	ttyHandle, err := tty.NewFromFile(slave)
+	require.NoError(t, err)
+
+	rows, cols, err := readGeometry(ttyHandle)
+	require.NoError(t, err)
+	require.Equal(t, 30, rows)
+	require.Equal(t, 100, cols)
+}
+
+// TestReadGeometry_FallsBackOnZeroSize pins the docker-pty fallback:
+// some pty configurations (notably docker's pty without an explicit
+// SIGWINCH driver) report rows=0, cols=0 from TIOCGWINSZ. Without
+// the fallback, the picker would draw against a 0×0 budget and
+// produce a degenerate frame. readGeometry promotes those to 24×80
+// so the picker still has a usable canvas.
+func TestReadGeometry_FallsBackOnZeroSize(t *testing.T) {
+	t.Parallel()
+	master, slave, err := pty.Open()
+	require.NoError(t, err)
+	defer master.Close()
+	defer slave.Close()
+
+	// Explicitly clear the winsize. Some pty implementations leave
+	// row/col uninitialized at Open time; setting both to zero pins
+	// the test to the fallback path regardless.
+	require.NoError(t, unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{
+		Row: 0, Col: 0,
+	}))
+
+	ttyHandle, err := tty.NewFromFile(slave)
+	require.NoError(t, err)
+
+	rows, cols, err := readGeometry(ttyHandle)
+	require.NoError(t, err)
+	require.Equal(t, 24, rows, "rows<=0 must fall back to 24")
+	require.Equal(t, 80, cols, "cols<=0 must fall back to 80")
+}
 
 func TestComputeInitCol_Normal(t *testing.T) {
 	t.Parallel()
