@@ -58,37 +58,55 @@ func rowCellWidth(line string, startCol int) int {
 	return col
 }
 
-// InputCursorPosition reports the (row, col) where the visual cursor
-// sits after `cellsBefore` cells of input have been written, given an
-// input row that started at 1-indexed column `initCol` of a `cols`-wide
-// terminal. Row is the 0-indexed offset from the input row; col is the
-// 1-indexed terminal column matching ANSI's CSI G escape.
+// InputCursorPosition walks `input` rune-by-rune (up to `cellsBefore`
+// cells via runewidth) and returns the (row, col) where the visual
+// cursor rests on a `cols`-wide terminal whose input row started at
+// 1-indexed column `initCol`. Row is the 0-indexed offset from the
+// input row; col is the 1-indexed terminal column matching ANSI's
+// CSI G escape.
 //
-// The convention is "cursor sits one cell to the right of the last
-// typed char, on the row that last char actually landed on" — matching
-// readline / fish / vim. When the last char exactly fills the row
-// (cursor would be at col cols+1) we clamp to col cols, the deferred-
-// wrap state every common terminal renders. Without the clamp the
-// renderer would jump the visible caret to col 1 of the next row even
-// though no character has wrapped yet, surprising the user mid-type.
-func InputCursorPosition(initCol, cellsBefore, cols int) (row, col int) {
+// We rune-walk rather than use a closed-form division because of two
+// terminal quirks no cell-only formula handles correctly:
+//
+//  1. Wide-char-over-wrap-boundary. A 2-cell CJK glyph at col `cols`
+//     has only 1 free cell — every common terminal soft-wraps the
+//     entire glyph to the next row. A division-based formula assumes
+//     contiguous cell packing and miscounts cursor col by 1 cell for
+//     such inputs (a pasted CJK suffix on a long ASCII filter).
+//  2. Deferred wrap. After writing exactly `cols` cells starting at
+//     col 1, the cursor sits at "col cols+1" but renders at the last
+//     visible cell. We clamp to col `cols` so subsequent CursorToCol
+//     escapes don't get clipped silently by the terminal.
+//
+// `\t` and `\n` never appear in m.Input (sanitized at append time —
+// see `sanitizeInputRune`), so we don't handle them. Combining marks
+// and zero-width joiners (RuneWidth==0) are treated as no-op cell
+// movements, matching how runewidth measures string width.
+func InputCursorPosition(initCol int, input string, cellsBefore, cols int) (row, col int) {
 	if cols <= 0 {
 		return 0, initCol
 	}
-	if cellsBefore <= 0 {
-		return 0, initCol
+	cur := initCol
+	consumed := 0
+	for _, r := range input {
+		if consumed >= cellsBefore {
+			break
+		}
+		w := runewidth.RuneWidth(r)
+		if w == 0 {
+			continue
+		}
+		if cur+w-1 > cols {
+			row++
+			cur = 1
+		}
+		cur += w
+		consumed += w
 	}
-	lastCharFlat := initCol + cellsBefore - 1
-	if lastCharFlat < 1 {
-		return 0, 1
+	if cur > cols {
+		cur = cols
 	}
-	row = (lastCharFlat - 1) / cols
-	colInRow := ((lastCharFlat - 1) % cols) + 1
-	col = colInRow + 1
-	if col > cols {
-		col = cols
-	}
-	return row, col
+	return row, cur
 }
 
 // InputExtraRows reports how many wrap rows below the input start row

@@ -115,46 +115,61 @@ func TestRowCellWidth(t *testing.T) {
 
 // TestInputCursorPosition pins the wrap arithmetic the renderer uses
 // to land the caret on the right (row, col) when input overflows the
-// terminal width. The function maps (initCol, cellsBefore, cols) to
-// (rowOffset, col1Indexed) — each case below is hand-traced against
-// xterm/iTerm wrap behaviour.
+// terminal width. The walker simulates wrap rune-by-rune so wide
+// glyphs that straddle a wrap boundary (a CJK suffix on a long ASCII
+// filter) still position the caret correctly — a closed-form division
+// over cells gets these off by 1 col. Hand-traced against xterm/iTerm.
 func TestInputCursorPosition(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name        string
 		initCol     int
+		input       string
 		cellsBefore int
 		cols        int
 		wantRow     int
 		wantCol     int
 	}{
-		{"empty-input-on-row-N", 5, 0, 80, 0, 5},
-		{"single-cell-no-wrap", 5, 1, 80, 0, 6},
-		{"end-of-row-no-wrap", 5, 15, 20, 0, 20},
+		{"empty-input-on-row-N", 5, "", 0, 80, 0, 5},
+		{"single-cell-no-wrap", 5, "x", 1, 80, 0, 6},
+		{"end-of-row-no-wrap", 5, strings.Repeat("x", 15), 15, 20, 0, 20},
 		// Deferred wrap: 16 x's from col 5 land cells at cols 5-20.
 		// Cursor would be at col 21 (one past last); clamp to col 20.
-		{"deferred-wrap-clamps-to-last-col", 5, 16, 20, 0, 20},
+		{"deferred-wrap-clamps-to-last-col", 5, strings.Repeat("x", 16), 16, 20, 0, 20},
 		// 17th x triggers actual wrap to row N+1 col 1; cursor at col 2.
-		{"one-cell-into-wrap-row", 5, 17, 20, 1, 2},
-		{"thirty-cells-from-col-5", 5, 30, 20, 1, 15},
+		{"one-cell-into-wrap-row", 5, strings.Repeat("x", 17), 17, 20, 1, 2},
+		{"thirty-cells-from-col-5", 5, strings.Repeat("x", 30), 30, 20, 1, 15},
 		// 36 cells: row N has 16, row N+1 has 20 (deferred again at end).
-		{"row-2-deferred-wrap", 5, 36, 20, 1, 20},
+		{"row-2-deferred-wrap", 5, strings.Repeat("x", 36), 36, 20, 1, 20},
 		// 37 cells: actual wrap to row N+2 col 1.
-		{"row-2-with-overflow", 5, 37, 20, 2, 2},
-		{"zero-cols-degrades-gracefully", 5, 10, 0, 0, 5},
-		{"col-1-prompt-edge", 1, 20, 20, 0, 20},
+		{"row-2-with-overflow", 5, strings.Repeat("x", 37), 37, 20, 2, 2},
+		{"zero-cols-degrades-gracefully", 5, strings.Repeat("x", 10), 10, 0, 0, 5},
+		{"col-1-prompt-edge", 1, strings.Repeat("x", 20), 20, 20, 0, 20},
 		// 21 cells from col 1: 20 fill row N (deferred), 21st on row N+1
 		// col 1, cursor right after at col 2.
-		{"col-1-just-past-edge", 1, 21, 20, 1, 2},
+		{"col-1-just-past-edge", 1, strings.Repeat("x", 21), 21, 20, 1, 2},
+		// CJK glyph at the wrap boundary: 38 x's fill cols 2-39 on a
+		// 40-col terminal at initCol=2. Col 40 has 1 cell free but 你
+		// needs 2 — terminal soft-wraps the entire glyph to row N+1
+		// cols 1-2; cursor lands at col 3. A cell-only formula returns
+		// col 2 (off by one).
+		{"wide-char-straddles-wrap", 2, strings.Repeat("x", 38) + "你", 40, 40, 1, 3},
+		// CJK in middle (cursor still at end-of-input): same shape as
+		// above but with two CJK glyphs, both wrapping cleanly.
+		{"two-wide-chars-after-wrap", 2, strings.Repeat("x", 38) + "你好", 42, 40, 1, 5},
+		// Cursor mid-input — only the first 5 cells consumed.
+		{"cursor-mid-input", 5, strings.Repeat("x", 30), 5, 20, 0, 10},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			row, col := InputCursorPosition(tc.initCol, tc.cellsBefore, tc.cols)
+			row, col := InputCursorPosition(tc.initCol, tc.input, tc.cellsBefore, tc.cols)
 			require.Equalf(t, tc.wantRow, row,
-				"row mismatch for initCol=%d cells=%d cols=%d", tc.initCol, tc.cellsBefore, tc.cols)
+				"row mismatch for initCol=%d input=%q cells=%d cols=%d",
+				tc.initCol, tc.input, tc.cellsBefore, tc.cols)
 			require.Equalf(t, tc.wantCol, col,
-				"col mismatch for initCol=%d cells=%d cols=%d", tc.initCol, tc.cellsBefore, tc.cols)
+				"col mismatch for initCol=%d input=%q cells=%d cols=%d",
+				tc.initCol, tc.input, tc.cellsBefore, tc.cols)
 		})
 	}
 }

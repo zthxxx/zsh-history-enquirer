@@ -83,11 +83,19 @@ func (m *Model) Render(opts RenderOptions) Frame {
 	// Compute input geometry once — the wrap math is consumed by all
 	// three render stages (Body reserves choice space, Pre walks up
 	// from the previous cursor row, Post lands the caret on the right
-	// wrap row).
+	// wrap row). m.Cursor is a cell count maintained by update.go's
+	// edit ops; pass it through to the rune-walking formula so wide
+	// glyphs that straddle a wrap boundary land the caret correctly.
 	inputCells := CellWidth(m.Input)
-	cursorCells := CellWidth(m.Input[:clampCursor(m.Cursor, len(m.Input))])
+	cursorCells := m.Cursor
+	if cursorCells < 0 {
+		cursorCells = 0
+	}
+	if cursorCells > inputCells {
+		cursorCells = inputCells
+	}
 	inputExtra := InputExtraRows(m.InitCol, inputCells, m.Width)
-	cursorRow, cursorCol := InputCursorPosition(m.InitCol, cursorCells, m.Width)
+	cursorRow, cursorCol := InputCursorPosition(m.InitCol, m.Input, cursorCells, m.Width)
 
 	body, choiceRows, limit := m.renderBody(inputExtra)
 	size := inputExtra + choiceRows
@@ -95,19 +103,6 @@ func (m *Model) Render(opts RenderOptions) Frame {
 	post := m.renderPost(size, cursorRow, cursorCol)
 	m.Limit = limit
 	return Frame{Pre: pre, Body: body, Post: post, Size: size, Limit: limit, CursorRow: cursorRow}
-}
-
-// clampCursor guards against a model whose Cursor was mutated past the
-// input length (defensive: an upstream bug or a buggy edit op should
-// not crash the renderer).
-func clampCursor(cur, length int) int {
-	if cur < 0 {
-		return 0
-	}
-	if cur > length {
-		return length
-	}
-	return cur
 }
 
 // choiceHeightLimit returns the row budget the dynamic-limit walk has
