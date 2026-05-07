@@ -667,7 +667,7 @@ func TestHandleError_NonNilStillReturnsZero(t *testing.T) {
 }
 
 // TestHandleError_ContextCanceledIsSilent pins the ctx.Err() branch:
-// a parent-cancelled run (Ctrl-C upstream of the picker, e.g. the
+// a parent-canceled run (Ctrl-C upstream of the picker, e.g. the
 // surrounding shell sent SIGINT to the whole pipeline) is a "user
 // asked to stop" signal — not an error worth printing. The widget
 // contract still expects exit 0, but stderr must stay empty so the
@@ -688,7 +688,7 @@ func TestHandleError_ContextCanceledIsSilent(t *testing.T) {
 // TestHandleError_WrappedContextCanceledIsSilent — errors.Is unwraps
 // through fmt.Errorf("%w", …) wrappers, so a runEventLoop layer that
 // returns `fmt.Errorf("loop: %w", context.Canceled)` must still take
-// the silent branch. Pins the unwrap behaviour explicitly so a
+// the silent branch. Pins the unwrap behavior explicitly so a
 // future refactor can't switch the check to `==` without breaking
 // this contract.
 func TestHandleError_WrappedContextCanceledIsSilent(t *testing.T) {
