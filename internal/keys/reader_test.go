@@ -214,16 +214,23 @@ func TestReader_Events_EscFlushTimerDelivers(t *testing.T) {
 	require.Equal(t, KeyEvent{Key: KeyEsc}, got[0])
 }
 
-// TestReader_Events_SS3FlushTimerDelivers exercises the same flush
-// path for an aborted SS3 prelude. A terminal that emits `\eO` and
-// then nothing (rare but possible on flaky links and embedded
-// firmware emulators) used to leave the picker frozen with the
-// parser stuck in stateSS3 — the reader did not arm the flush
-// timer for that state, so FlushEsc was never called and the user
-// saw no key feedback until some unrelated byte unstuck the
-// sequence. The fix wires stateSS3 into the same arm-flush branch
-// as stateEsc; this test pins it.
-func TestReader_Events_SS3FlushTimerDelivers(t *testing.T) {
+// TestReader_Events_SS3FlushTimerResetsState exercises the timer
+// arm path for an aborted SS3 prelude. A terminal that emits `\eO`
+// and then nothing (rare but possible on flaky links and embedded
+// firmware emulators) used to leave the parser stuck in stateSS3,
+// blocking ALL subsequent input until a key code byte arrived.
+// The reader now arms the flush timer when entering stateSS3, the
+// 50ms tick fires Parser.FlushEsc, and the parser resets to
+// stateNormal — silently, since unrecognized SS3 sequences are
+// no-ops in this picker (an aborted F-key prelude must not cancel
+// the picker).
+//
+// We assert on the side-effect: a follow-on keystroke arriving
+// AFTER the flush window must parse as itself. If the reader had
+// failed to arm the timer, the parser would still be in stateSS3
+// and the keystroke would be consumed as the SS3 body byte (e.g.
+// 'A' would emit KeyUp instead of RuneEvent{'A'}).
+func TestReader_Events_SS3FlushTimerResetsState(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("pty unsupported on windows")
 	}
@@ -248,14 +255,20 @@ func TestReader_Events_SS3FlushTimerDelivers(t *testing.T) {
 	go func() {
 		time.Sleep(20 * time.Millisecond)
 		_, _ = io.WriteString(master, "\x1bO")
+		// Wait past the 50ms flush window plus the reader's 100ms poll
+		// before the follow-on keystroke. If the flush armed correctly,
+		// the parser's already back in stateNormal by the time 'A'
+		// lands and we get RuneEvent{'A'} — not KeyUp (which is what
+		// `\eOA` together would produce).
+		time.Sleep(200 * time.Millisecond)
+		_, _ = io.WriteString(master, "A")
 	}()
 
-	// FlushEsc on a stale SS3 emits Esc + 'O' rune. Both must arrive
-	// within the same window the bare-Esc path uses.
-	got := drainEvents(events, 2, 1*time.Second)
-	require.Len(t, got, 2, "stalled SS3 must flush within ~150ms")
-	require.Equal(t, KeyEvent{Key: KeyEsc}, got[0])
-	require.Equal(t, RuneEvent{R: 'O'}, got[1])
+	got := drainEvents(events, 1, 1*time.Second)
+	require.Len(t, got, 1,
+		"flush must reset state so the follow-on keystroke parses as itself")
+	require.Equal(t, RuneEvent{R: 'A'}, got[0],
+		"follow-on 'A' must parse as a plain rune — proves stateSS3 was flushed")
 }
 
 // TestReader_Events_SignalDoesNotKillLoop pins the EINTR-resilience

@@ -80,8 +80,20 @@ func (p *Parser) FlushEsc() []Event {
 		p.state = stateNormal
 		return []Event{KeyEvent{Key: KeyEsc}}
 	case stateSS3:
+		// Aborted SS3 prelude — terminal sent `\eO` and then nothing
+		// for >50ms. The most common cause is a flaky link splitting
+		// an F-key sequence (`\eOP` for F1 etc.) across reads. Earlier
+		// code emitted Esc + 'O' here, which surfaced KeyEsc and
+		// canceled the picker on every split F-key — same hostile
+		// UX feedSS3 used to have for complete sequences. Now we
+		// reset state and swallow silently so the picker stays open;
+		// the trailing key byte (if it ever arrives) parses as a
+		// raw rune via feedNormal — possibly typing a stray letter
+		// into the search, but the picker survives. That's
+		// strictly better than booting the user out of the picker
+		// on a timing artifact.
 		p.state = stateNormal
-		return []Event{KeyEvent{Key: KeyEsc}, RuneEvent{R: 'O'}}
+		return nil
 	case stateCSI:
 		// Snapshot p.buf BEFORE clearing it — same defensive pattern
 		// as the SS3 branch. Param bytes (digits, ';', '?') are all
@@ -254,13 +266,20 @@ func (p *Parser) feedSS3(b byte, out []Event) []Event {
 	case 'F':
 		return append(out, KeyEvent{Key: KeyEnd})
 	default:
-		// Unrecognized SS3 — best-effort fallback so we don't swallow
-		// the bytes silently. Emits Esc + 'O' + byte. The picker will
-		// cancel on Esc; that's the same behavior as before SS3
-		// support was wired in, so it is at most a no-op regression
-		// for sequences we never claimed to handle.
-		out = append(out, KeyEvent{Key: KeyEsc}, RuneEvent{R: 'O'})
-		return p.feedNormal(b, out)
+		// Unrecognized SS3 — most commonly F1 (`\eOP`), F2 (`\eOQ`),
+		// F3 (`\eOR`), F4 (`\eOS`). Earlier code emitted `Esc + 'O' +
+		// byte` here so an accidental F1 canceled the picker and
+		// dumped the user back to the prompt. The widget contract
+		// preserves $LBUFFER on cancel so no input was lost, but the
+		// picker getting kicked open just because the user fat-
+		// fingered F1 is a hostile UX. We now silently consume the
+		// sequence and stay in the picker — matches every modern
+		// fuzzy-finder (fzf, peco, percol) and means F-key bumps no
+		// longer surprise the user. Other unrecognized SS3 bodies
+		// (custom keymaps, exotic terminals) get the same treatment;
+		// there's no key in our keybinding spec that uses them.
+		_ = b
+		return out
 	}
 }
 

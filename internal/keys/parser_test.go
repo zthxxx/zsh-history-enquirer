@@ -144,36 +144,82 @@ func TestParser_SS3ArrowKeys(t *testing.T) {
 	}, got)
 }
 
-// TestParser_SS3UnknownByteFallsBackSafely ensures an unrecognized
-// SS3 sequence (`\eOX`) doesn't get swallowed silently — we emit
-// Esc + 'O' + 'X' so the user at least sees something happen
-// (matches pre-SS3-fix behavior for those bytes).
-func TestParser_SS3UnknownByteFallsBackSafely(t *testing.T) {
+// TestParser_SS3UnknownByteSwallowedSilently pins the user-friendly
+// behavior for unrecognized SS3 sequences (most commonly F1-F4 on
+// modern terminals: \eOP, \eOQ, \eOR, \eOS). An earlier version
+// emitted Esc + 'O' + byte here, which fired KeyEsc and silently
+// canceled the picker the moment the user fat-fingered an F-key.
+// The widget contract preserved $LBUFFER on cancel so no input was
+// lost, but bumping the picker closed for an unrelated keystroke is
+// a hostile UX — every other fuzzy finder (fzf, peco, percol)
+// silently ignores keys it doesn't recognize.
+func TestParser_SS3UnknownByteSwallowedSilently(t *testing.T) {
 	t.Parallel()
 
 	p := NewParser()
-	got := feedAll(p, "\x1bOX")
-	require.Equal(t, []Event{
-		KeyEvent{Key: KeyEsc},
-		RuneEvent{R: 'O'},
-		RuneEvent{R: 'X'},
-	}, got)
+	// \eOX is an arbitrary unrecognized SS3 (not one of A/B/C/D/H/F).
+	require.Empty(t, feedAll(p, "\x1bOX"),
+		"unrecognized SS3 must not surface as events")
+
+	// After the SS3 is consumed, normal typing must still parse.
+	require.Equal(t, []Event{RuneEvent{R: 'g'}}, feedAll(p, "g"),
+		"parser must return to stateNormal after swallowing SS3")
+}
+
+// TestParser_SS3FunctionKeysNoCancel pins the F1-F4 case explicitly:
+// these are the keys most likely to bump the picker by accident, and
+// the user expects each to be a no-op rather than a cancel. Pins
+// each of \eOP / \eOQ / \eOR / \eOS individually so a future
+// regression that re-introduces the cancel-on-F-key behavior fails
+// loudly with the offending key in the test name.
+func TestParser_SS3FunctionKeysNoCancel(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		seq  string
+	}{
+		{"F1", "\x1bOP"},
+		{"F2", "\x1bOQ"},
+		{"F3", "\x1bOR"},
+		{"F4", "\x1bOS"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			p := NewParser()
+			require.Empty(t, feedAll(p, tc.seq),
+				"%s (%q) must be silently consumed — picker must stay open",
+				tc.name, tc.seq)
+		})
+	}
 }
 
 // TestParser_FlushEsc_DuringSS3Pending releases an unfinished SS3
 // prelude (the user's terminal emitted `\eO` then nothing for >50ms).
-// Before this fix it would have remained in stateSS3 indefinitely,
-// blocking ALL subsequent input until a key code byte arrived.
+// Earlier code emitted Esc + 'O' here, which surfaced KeyEsc and
+// canceled the picker on every flaky-link F-key split. Now the
+// flush silently consumes the prelude — the picker stays open, the
+// state machine resets, and the trailing key byte (if it eventually
+// arrives) parses as whatever feedNormal makes of it. Strictly
+// better UX than dumping the user out of the picker on a 50ms
+// transient.
+//
+// We still verify the state machine resets to stateNormal so a
+// follow-on key parses correctly — that was the original bug this
+// flush path was added to fix.
 func TestParser_FlushEsc_DuringSS3Pending(t *testing.T) {
 	t.Parallel()
 
 	p := NewParser()
 	require.Empty(t, feedAll(p, "\x1bO"), "no events emitted yet")
-	got := p.FlushEsc()
-	require.Equal(t, []Event{
-		KeyEvent{Key: KeyEsc},
-		RuneEvent{R: 'O'},
-	}, got)
+	require.Empty(t, p.FlushEsc(),
+		"aborted SS3 prelude must flush silently — no spurious Esc/cancel")
+
+	// State machine must have reset so a fresh keystroke parses as
+	// itself (not as a continuation of the dropped SS3).
+	require.Equal(t, []Event{RuneEvent{R: 'a'}}, feedAll(p, "a"),
+		"parser must return to stateNormal after the silent flush")
 }
 
 // TestParser_FlushEsc_DuringCSIPending — the same hazard as the SS3
