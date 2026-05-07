@@ -25,6 +25,67 @@ func TestWrappedRowCount_MultiLine(t *testing.T) {
 	require.Equal(t, 3, WrappedRowCount("a\nb\nc", 80))
 }
 
+// TestWrappedRowCount_MultiLineWithLineWrap pins the hardest case
+// the user explicitly emphasized — multi-line entries where the
+// logical lines themselves wrap. Each logical line has its own
+// startCol (PointerWidth on the first, 0 on continuation), so the
+// total row count is the sum of per-line ceil(width / cols), not
+// a flat ceil over the joined string.
+//
+// Without this test, a regression that flattens the per-line
+// reasoning (e.g. "split on \n then join with spaces and ceil")
+// would silently return the wrong count for the real fixture
+// shapes — `command-6 \\n - line 1 \\n - line 2 ...` from the e2e
+// seed, which is the canonical multi-line + wrap stress case.
+func TestWrappedRowCount_MultiLineWithLineWrap(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		text string
+		cols int
+		want int
+	}{
+		{
+			// First line: pointer (2) + 18 chars = 20 cells → 1 row at cols=20.
+			// Second line: 0 + 25 chars = 25 cells → ceil(25/20) = 2 rows.
+			// Third line: 0 + 5 chars = 5 cells → 1 row.
+			// Total: 4 rows.
+			"first-fits-second-wraps-third-fits",
+			strings.Repeat("a", 18) + "\n" + strings.Repeat("b", 25) + "\nshort",
+			20,
+			4,
+		},
+		{
+			// First line: pointer (2) + 25 chars = 27 cells → ceil(27/20) = 2.
+			// Second line: 0 + 30 chars = 30 cells → ceil(30/20) = 2.
+			// Total: 4 rows. Both lines wrap.
+			"both-lines-wrap",
+			strings.Repeat("x", 25) + "\n" + strings.Repeat("y", 30),
+			20,
+			4,
+		},
+		{
+			// First line: pointer (2) + 8 chars = 10 cells → 1 row.
+			// Second (empty): counts as 1 row.
+			// Third line: 0 + 22 chars = 22 cells → ceil(22/20) = 2.
+			// Total: 4 rows. Empty middle line + tail wrap.
+			"empty-middle-line-then-wrap",
+			"abcdefgh\n\n" + strings.Repeat("z", 22),
+			20,
+			4,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := WrappedRowCount(tc.text, tc.cols)
+			require.Equalf(t, tc.want, got,
+				"text=%q cols=%d → got %d rows, want %d",
+				tc.text, tc.cols, got, tc.want)
+		})
+	}
+}
+
 func TestWrappedRowCount_EmptyLineCountsAsOne(t *testing.T) {
 	t.Parallel()
 	require.Equal(t, 3, WrappedRowCount("\n\n", 80))
