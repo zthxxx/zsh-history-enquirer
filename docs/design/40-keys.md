@@ -94,24 +94,42 @@ Boundary conditions to test:
 The 50 ms `flushTimer` in `keys.Reader` calls `Parser.FlushEsc`
 whenever the parser is parked in any of `stateEsc` / `stateSS3` /
 `stateCSI` and no follow-up bytes have arrived. Each prelude has a
-distinct flush translation so the user's intent (typically Esc =
-cancel) is preserved instead of the picker freezing forever:
+distinct flush behaviour:
 
-| Parked state | Bytes consumed | Flush emits                                       |
-| ------------ | -------------- | ------------------------------------------------- |
-| `stateEsc`   | `\e`           | `KeyEsc`                                          |
-| `stateSS3`   | `\eO`          | `KeyEsc`, `RuneEvent('O')`                        |
-| `stateCSI`   | `\e[<params?>` | `KeyEsc`, `RuneEvent('[')`, params as runes       |
+| Parked state | Bytes consumed | Flush emits                                |
+| ------------ | -------------- | ------------------------------------------ |
+| `stateEsc`   | `\e`           | `KeyEsc` (the user pressed Esc to cancel). |
+| `stateSS3`   | `\eO`          | nothing — silently consumed.               |
+| `stateCSI`   | `\e[<params?>` | nothing — silently consumed.               |
 
-Without this, a flaky terminal or programmatic input that paused
-mid-sequence (e.g. `\e[` and stop) would leave the parser stuck —
-and worse for `stateCSI`, every subsequent typed byte in
+The `stateEsc` arm preserves the user's likely intent (cancel the
+picker). The `stateSS3` and `stateCSI` arms silently consume the
+prelude because the realistic cause of those preludes pausing
+mid-sequence is a flaky link splitting an F-key (`\eOP` for F1
+etc.) or arrow / PgUp / PgDn / Home / End across reads — emitting
+the buffered bytes as `KeyEsc + ...` would surface the leading
+`KeyEsc` and cancel the picker on a 50 ms timing transient. Every
+modern fuzzy finder (fzf, peco, percol) silently ignores keys it
+doesn't bind; we now match.
+
+The synchronous-arrival case (`feedSS3` default for unknown SS3
+bytes, `feedCSI` default for unknown CSI bytes) is symmetrically
+silent for the same reason: F1-F4 on most terminals (`\eOP` ..
+`\eOS`) is the common case, and the picker doesn't bind those.
+
+Without the flush, a flaky terminal or programmatic input that
+paused mid-sequence (e.g. `\e[` and stop) would leave the parser
+stuck — and worse for `stateCSI`, every subsequent typed byte in
 `0x40..0x7e` would terminate the sequence as unrecognized and be
 silently discarded by the default branch. The reader arms its
 flush timer for ALL THREE states (not just `stateEsc`) so any
-parked prelude resolves within the 50 ms window.
+parked prelude resolves within the 50 ms window. The state-reset
+side of the flush still happens for SS3/CSI even though no event
+is emitted — the next keystroke parses cleanly via `feedNormal`.
 
-Tests: `TestParser_FlushEsc_*` family in `parser_test.go`.
+Tests: `TestParser_FlushEsc_*` family in `parser_test.go`,
+`TestReader_Events_SS3FlushTimerResetsState` for the reader-driven
+integration.
 
 ## Resize
 
