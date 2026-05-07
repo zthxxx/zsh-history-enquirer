@@ -25,6 +25,20 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — Modifier-key arrow / Home / End / PgUp / PgDn /
+  Delete sequences were silently swallowed. xterm encodes them as
+  `\e[1;<modifier><letter>` (arrows + Home/End) or
+  `\e[<row>;<modifier>~` (PgUp/PgDn/Delete). The parser's dispatch
+  table only matched the plain forms, so Shift+Up / Ctrl+Up /
+  Alt+Up etc. fell through to the "unknown CSI; ignore" branch —
+  every modified press did nothing visible. Added
+  `stripCSIModifier` (`internal/keys/parser.go`) that normalizes
+  both encoding forms to the plain counterpart before dispatch.
+  The picker has no per-modifier behavior, so swallowing the
+  modifier is friendlier than swallowing the press. 13 regression
+  cases (every reasonable modifier × arrow/home/end/pgup/pgdn/del)
+  + 6 passthrough cases (DSR replies stay unchanged).
+
 * **2026-05-07** — Arrow keys via SS3 sequences (`\eOA` / `\eOB`
   / `\eOC` / `\eOD`) were not handled by the parser. Some terminals
   (xterm in DECCKM application-keypad mode, certain VT-series

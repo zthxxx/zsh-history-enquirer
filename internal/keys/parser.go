@@ -187,24 +187,30 @@ func (p *Parser) feedCSI(b byte, out []Event) []Event {
 	p.buf = p.buf[:0]
 	p.state = stateNormal
 
+	// Strip the optional `1;<modifier>` prefix so modifier-key forms
+	// like Shift+Up (`\e[1;2A`), Alt+Up (`\e[1;3A`), Ctrl+Up
+	// (`\e[1;5A`), etc. resolve to the same Key as the plain
+	// counterpart. The picker has no per-modifier behavior anyway —
+	// ignoring the modifier is friendlier than swallowing the press.
+	bare := stripCSIModifier(seq)
 	switch {
-	case seq == "A":
+	case bare == "A":
 		return append(out, KeyEvent{Key: KeyUp})
-	case seq == "B":
+	case bare == "B":
 		return append(out, KeyEvent{Key: KeyDown})
-	case seq == "C":
+	case bare == "C":
 		return append(out, KeyEvent{Key: KeyRight})
-	case seq == "D":
+	case bare == "D":
 		return append(out, KeyEvent{Key: KeyLeft})
-	case seq == "H" || seq == "1~":
+	case bare == "H" || bare == "1~":
 		return append(out, KeyEvent{Key: KeyHome})
-	case seq == "F" || seq == "4~":
+	case bare == "F" || bare == "4~":
 		return append(out, KeyEvent{Key: KeyEnd})
-	case seq == "5~":
+	case bare == "5~":
 		return append(out, KeyEvent{Key: KeyPageUp})
-	case seq == "6~":
+	case bare == "6~":
 		return append(out, KeyEvent{Key: KeyPageDown})
-	case seq == "3~":
+	case bare == "3~":
 		return append(out, KeyEvent{Key: KeyDelete})
 	case seq == "200~":
 		// Bracketed paste start. Subsequent bytes accumulate until
@@ -235,6 +241,64 @@ func (p *Parser) feedPaste(b byte, out []Event) []Event {
 	p.paste = p.paste[:0]
 	p.state = stateNormal
 	return append(out, ev)
+}
+
+// stripCSIModifier reduces "1;<mod><letter>" CSI sequences (the
+// xterm-style modifier-key encoding) to "<letter>" so the dispatch
+// table matches both the plain and modified forms with one entry.
+//
+// Examples:
+//
+//	"A"      → "A"     (plain Up)
+//	"1;2A"   → "A"     (Shift+Up)
+//	"1;5A"   → "A"     (Ctrl+Up)
+//	"1;3A"   → "A"     (Alt+Up)
+//	"1;6A"   → "A"     (Ctrl+Shift+Up)
+//	"5~"     → "5~"    (PgUp, no modifier)
+//	"5;5~"   → "5~"    (Ctrl+PgUp)
+//	"foo"    → "foo"   (unrecognized; passthrough)
+//
+// Only sequences with an explicit `1;<n>` prefix and a single-letter
+// terminator OR `<row>;<n>~` form are normalized. Anything else
+// passes through so unrelated CSI sequences (DSR, OSC, …) keep
+// their unique form for the dispatch table.
+func stripCSIModifier(seq string) string {
+	if seq == "" {
+		return seq
+	}
+	last := seq[len(seq)-1]
+	// Form 1: "1;<digits><letter>" → "<letter>".
+	if last >= '@' && last <= '~' && strings.HasPrefix(seq, "1;") {
+		body := seq[2 : len(seq)-1]
+		if isAllDigits(body) {
+			return string(last)
+		}
+	}
+	// Form 2: "<row>;<digits>~" → "<row>~". Used for PgUp/PgDn,
+	// Home, End, Delete in modified form.
+	if last == '~' {
+		semi := strings.IndexByte(seq, ';')
+		if semi > 0 {
+			row := seq[:semi]
+			rest := seq[semi+1 : len(seq)-1]
+			if isAllDigits(row) && isAllDigits(rest) {
+				return row + "~"
+			}
+		}
+	}
+	return seq
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, b := range []byte(s) {
+		if b < '0' || b > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func endsWith(buf, suffix []byte) bool {

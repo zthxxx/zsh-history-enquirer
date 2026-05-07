@@ -62,6 +62,67 @@ func TestParser_ArrowKeys(t *testing.T) {
 	}, got)
 }
 
+// TestParser_ModifierArrowKeys covers the xterm-style modified-key
+// CSI sequences. Without the modifier-strip the parser would only
+// match plain `\e[A` / `\e[B` / etc. and silently drop every
+// Shift+Up / Alt+Up / Ctrl+Up / etc. keypress. The picker has no
+// per-modifier behavior, so we treat every modifier form as the
+// plain navigation key.
+func TestParser_ModifierArrowKeys(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		seq  string
+		want Key
+	}{
+		{"shift-up", "\x1b[1;2A", KeyUp},
+		{"alt-up", "\x1b[1;3A", KeyUp},
+		{"shift-alt-up", "\x1b[1;4A", KeyUp},
+		{"ctrl-up", "\x1b[1;5A", KeyUp},
+		{"ctrl-shift-up", "\x1b[1;6A", KeyUp},
+		{"ctrl-down", "\x1b[1;5B", KeyDown},
+		{"shift-right", "\x1b[1;2C", KeyRight},
+		{"alt-left", "\x1b[1;3D", KeyLeft},
+		{"ctrl-home", "\x1b[1;5H", KeyHome},
+		{"shift-end", "\x1b[1;2F", KeyEnd},
+		{"ctrl-pgup", "\x1b[5;5~", KeyPageUp},
+		{"ctrl-pgdn", "\x1b[6;5~", KeyPageDown},
+		{"shift-delete", "\x1b[3;2~", KeyDelete},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			p := NewParser()
+			got := feedAll(p, tc.seq)
+			require.Equal(t,
+				[]Event{KeyEvent{Key: tc.want}},
+				got,
+				"%s should resolve to %v", tc.name, tc.want)
+		})
+	}
+}
+
+// TestStripCSIModifier_PassthroughForUnrelatedSeqs makes sure the
+// modifier-strip helper does NOT alter sequences that aren't in the
+// xterm modifier-encoding shape — DSR replies, OSC strings, unknown
+// CSI letters etc. should reach the dispatch table unchanged.
+func TestStripCSIModifier_PassthroughForUnrelatedSeqs(t *testing.T) {
+	t.Parallel()
+	cases := map[string]string{
+		"":       "",
+		"R":      "R",      // DSR cursor reply
+		"15;5R":  "15;5R",  // unrelated DSR-like
+		"4n":     "4n",     // unrelated CSI
+		"1;abcA": "1;abcA", // not all digits → passthrough
+		"5~":     "5~",     // PgUp plain, no modifier
+		"~":      "~",      // single tilde
+	}
+	for seq, want := range cases {
+		got := stripCSIModifier(seq)
+		require.Equalf(t, want, got, "stripCSIModifier(%q)", seq)
+	}
+}
+
 // TestParser_SS3ArrowKeys covers the SS3 (Single Shift 3) variant
 // `\eOA` etc. that some terminals (xterm in app-keypad mode, certain
 // VT-emulators, embedded firmware terminals) send instead of the CSI

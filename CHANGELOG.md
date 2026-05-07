@@ -127,6 +127,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `cmd/zsh-history-enquirer/main.go` that reconstructs `cfg.Input`
   via `app.NewConfig` and echoes it back to stdout. Three table
   tests pin the (preserves-input, no-args, malformed-argv) cases.
+- **Modifier-key arrows (`\e[1;2A` Shift+Up, `\e[1;5A` Ctrl+Up,
+  `\e[1;3A` Alt+Up, etc.) were silently dropped.** xterm encodes
+  modified keys as `\e[1;<modifier><letter>` for arrows / Home /
+  End and `\e[<row>;<modifier>~` for PgUp / PgDn / Delete. The
+  parser only matched plain forms (`\e[A`, `\e[5~`), so any
+  modified press fell through to the "unknown CSI; swallow" branch.
+  A user pressing Shift+Up to "navigate up" saw nothing happen.
+  Added `stripCSIModifier` that normalizes the modifier-encoded
+  forms to their plain counterparts before dispatch (the picker
+  has no per-modifier behavior anyway, so swallowing the modifier
+  is friendlier than swallowing the press). 13 regression cases
+  pin every reasonable modifier combo against arrows / Home / End
+  / PgUp / PgDn / Delete; 6 passthrough cases pin that unrelated
+  CSI sequences (DSR replies etc.) reach the dispatch unchanged.
 - **Arrow keys via SS3 sequences (`\eOA` / `\eOB` / etc.) cancelled
   the picker.** Some terminals — xterm in DECCKM/application-keypad
   mode, certain VT-series emulators, embedded firmware terminals —
