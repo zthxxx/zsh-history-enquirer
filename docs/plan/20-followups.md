@@ -10,6 +10,31 @@ Each entry must include:
 
 ## Open
 
+* **2026-05-07** — `internal/keys/parser.go` (437 LOC) + `reader.go`
+  (179 LOC) could be replaced with `charmbracelet/x/input` v0.3.7,
+  the same parser bubbletea v2 uses. Audit found: API mapping is
+  one-to-one (KeyPressEvent.Code, .Mod, .Text → our KeyEvent /
+  RuneEvent), `Cancel()` exists for context-aware shutdown, no
+  architectural conflict with the picker overlay model. Estimated
+  effort: 200-400 LOC change in keys + ~1000 LOC test rewrite for
+  behavior parity. Held back this round because (a) the existing
+  parser is well-covered (~1000 lines of tests, 13 modifier-key
+  regression cases, SS3 / bracketed-paste / CSI flush), (b) we have
+  no user-facing bug pointing at the parser, (c) cost/risk should
+  go in a focused refactor session with paired-down scope. Design
+  notes:
+  - The 50ms Esc flush timer in `reader.go` is replaced by x/input's
+    "if buf has only ESC, emit KeyEscape immediately" logic; this is
+    less robust against split-byte arrival but matches bubbletea's
+    proven behaviour over ssh.
+  - WINCH / SIGWINCH stays in `reader.go` (x/input doesn't observe
+    OS signals; ResizeEvent is still synthesized from `t.tty.Size()`).
+  - Need to pin `x/ansi` and `x/input` to a tested-together pair —
+    issue charmbracelet/x#296 had API skew between the two.
+  - All consumers (`internal/ui/update.go`, `internal/app/loop.go`,
+    `internal/app/run.go`) keep using `keys.Event` / `keys.KeyEvent` /
+    `keys.RuneEvent` — the swap is implementation-only.
+
 * **2026-05-07** — Initial post-load DSR cursor probe always falls back
   inside docker (expect's pty doesn't reply). Production terminals do
   reply; the user-facing impact is "first run looks fine." The fallback
