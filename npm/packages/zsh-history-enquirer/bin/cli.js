@@ -58,13 +58,19 @@ if (
   process.argv.length === 3 &&
   process.argv[2] === '--print-install-hint'
 ) {
+  // Double-quote the path so a copy-paste survives unusual install
+  // prefixes — e.g. `~/Library/Application Support/npm-prefix/...`,
+  // a custom user-name with a space, or anywhere else PLUGIN_PATH
+  // ends up containing a space. Paths with embedded double quotes
+  // are unsupported by typical filesystems mounted on macOS/Linux,
+  // so plain double-quote escaping suffices in practice.
   process.stderr.write([
     '',
     '  zsh-history-enquirer installed.',
     '',
     '  Add this line to your ~/.zshrc to enable the Ctrl+R picker:',
     '',
-    `    source ${PLUGIN_PATH}`,
+    `    source "${PLUGIN_PATH}"`,
     '',
   ].join('\n') + '\n');
   process.exit(0);

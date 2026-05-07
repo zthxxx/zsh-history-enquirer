@@ -42,6 +42,14 @@ test('bare --print-install-hint prints hint to stderr', () => {
   assert.equal(r.status, 0);
   assert.match(r.stderr, /zsh-history-enquirer installed/);
   assert.match(r.stderr, /source /);
+  // The plugin path must be wrapped in double quotes so a copy-paste
+  // survives install prefixes that contain spaces (e.g. macOS users
+  // whose home directory has a space).
+  assert.match(
+    r.stderr,
+    /source "[^"]+\.plugin\.zsh"/,
+    'plugin path must be double-quoted in the hint',
+  );
   assert.equal(r.stdout, '', 'stdout must stay empty for the hint path');
 });
 
