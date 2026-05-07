@@ -46,11 +46,30 @@ func fetchInitialState(
 	historyCh := make(chan historyResult, 1)
 
 	go func() {
+		// A panic here would crash the process before main()'s
+		// top-level recover could fire — separate goroutine. Send a
+		// failure result so the parent join doesn't hang on a closed
+		// channel; the picker degrades to col=1 fallback exactly as
+		// it would on a probe timeout, preserving BUFFER through the
+		// rest of the recovery chain.
+		defer func() {
+			if r := recover(); r != nil {
+				cursorCh <- cursorResult{err: fmt.Errorf("cursor probe panic: %v", r)}
+			}
+		}()
 		probe := tty.NewProbe(t)
 		row, col, leftover, err := probe.Cursor(ctx, CursorTimeout)
 		cursorCh <- cursorResult{row: row, col: col, leftover: leftover, err: err}
 	}()
 	go func() {
+		// Same defense as the cursor probe — a loader-side panic
+		// would otherwise be fatal. Fail with empty history so the
+		// picker still opens and the cancel path echoes BUFFER.
+		defer func() {
+			if r := recover(); r != nil {
+				historyCh <- historyResult{err: fmt.Errorf("history load panic: %v", r)}
+			}
+		}()
 		lines, err := loader.Load(ctx)
 		historyCh <- historyResult{lines, err}
 	}()

@@ -383,6 +383,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   Ctrl-R. Refactored the BUFFER-preservation echo into an
   `echoArgvAndExit()` helper and wired the `result.error` branch
   to call it after a stderr diagnostic.
+- **Panics in the parallel cursor-probe + history-load goroutines
+  also crashed the process.** Same defense as the keys reader: each
+  spawned goroutine in `fetchInitialState` now defers a recover that
+  converts the panic into a result-channel error so the parent join
+  can't hang on a never-closed channel. The picker degrades to col=1
+  fallback / empty history exactly as it would on a probe timeout
+  or load failure, and the rest of the recovery chain preserves
+  BUFFER through the cancel path. 1 regression test pins the loader
+  branch via a panicking Loader implementation.
 - **A panic in the keys reader goroutine still crashed the process.**
   The top-level `defer recoverPanic` in `main()` only catches panics
   on the main goroutine; a panic inside `Reader.Events`'s read loop

@@ -2,13 +2,16 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/creack/pty"
 	"github.com/stretchr/testify/require"
 
 	"github.com/zthxxx/zsh-history-enquirer/internal/keys"
@@ -283,6 +286,40 @@ func TestDebugProbe_WritesProbeAndGeom(t *testing.T) {
 	require.Contains(t, buf.String(), "row=7 col=42")
 	require.Contains(t, buf.String(), "leftover=\"log\"")
 	require.Contains(t, buf.String(), "rows=24 cols=80")
+}
+
+// panickingLoader is a test-only Loader that panics during Load.
+// Used to exercise fetchInitialState's panic-recovery defer.
+type panickingLoader struct{ msg string }
+
+func (p panickingLoader) Load(_ context.Context) ([]string, error) {
+	panic(p.msg)
+}
+
+// TestFetchInitialState_LoaderPanicConvertsToError pins that a panic
+// inside the history-load goroutine is recovered and surfaced as an
+// error result, so the parent join doesn't hang on a never-closed
+// channel and the picker still opens with empty history. Without
+// this defense the panic would propagate and crash the process.
+func TestFetchInitialState_LoaderPanicConvertsToError(t *testing.T) {
+	t.Parallel()
+	master, slave, err := pty.Open()
+	require.NoError(t, err)
+	defer master.Close()
+	defer slave.Close()
+	ttyHandle, err := tty.NewFromFile(slave)
+	require.NoError(t, err)
+
+	loader := panickingLoader{msg: "loader blew up"}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	_, hist := fetchInitialState(ctx, ttyHandle, loader, io.Discard)
+
+	require.Error(t, hist.err, "panic must be reported as the loader's err")
+	require.Contains(t, hist.err.Error(), "history load panic",
+		"err message must surface the recovered panic for debugging")
+	require.Contains(t, hist.err.Error(), "loader blew up",
+		"original panic value must round-trip into the err message")
 }
 
 // TestDebugEvent_DiscardIsNoOp pins the io.Discard / nil short-
