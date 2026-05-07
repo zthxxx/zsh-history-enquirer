@@ -161,38 +161,59 @@ func (e *TimeoutError) Unwrap() error { return e.Cause }
 
 // parseDSRResponse extracts (row, col) from a CSI <row>;<col>R reply
 // embedded in s. Bytes outside the response payload are returned as
-// leftover — pre-CSI bytes (anything before the `\x1b[`) and post-R
-// bytes (anything after the matched 'R') concatenated in input order.
+// leftover — pre-CSI bytes (anything before the matched `\x1b[`) and
+// post-R bytes (anything after the matched 'R') concatenated in input
+// order.
 //
-// Why anchor on `\x1b[` rather than the first `[` byte: a user who
-// types `[` immediately after Ctrl-R would otherwise short-circuit
-// the `start` search. Anchoring on the CSI introducer keeps the
-// parse robust for any printable user input that happens to overlap
-// the probe window.
+// Scans forward through every `\x1b[` introducer and prefers the first
+// candidate whose body parses as `<digits>;<digits>` ending at an 'R'.
+// This handles the realistic fast-typing race where the user presses
+// Ctrl-R then immediately taps an arrow key (or any other key whose
+// terminal encoding starts with `\x1b[`) before the picker finishes
+// its DSR probe. The buffer reads e.g. `\x1b[A\x1b[12;5R`; an anchor-
+// on-first-CSI parse would fail on `A\x1b[12;5` and force the col=1
+// fallback. Walking past the first non-DSR CSI lets us find the real
+// response, render the picker inline at the prompt, AND surface the
+// user's keypress (`\x1b[A`) via the leftover channel so reader.Prefeed
+// can replay it as a `KeyUp` event.
+//
+// The scan still anchors on `\x1b[` (not bare `[`) so a user-typed
+// printable `[` immediately after Ctrl-R does not short-circuit the
+// search.
 func parseDSRResponse(s string) (row, col int, leftover string, err error) {
-	csiStart := strings.Index(s, "\x1b[")
-	if csiStart < 0 {
-		return 0, 0, s, fmt.Errorf("malformed DSR response %q (no CSI)", s)
+	pos := 0
+	for {
+		idx := strings.Index(s[pos:], "\x1b[")
+		if idx < 0 {
+			return 0, 0, s, fmt.Errorf("malformed DSR response %q (no CSI)", s)
+		}
+		csiStart := pos + idx
+		// Search for the first 'R' after this introducer. Bytes between
+		// `\x1b[` and 'R' form the candidate body.
+		rRel := strings.IndexByte(s[csiStart+2:], 'R')
+		if rRel < 0 {
+			return 0, 0, s, fmt.Errorf("malformed DSR response %q (no R after CSI)", s)
+		}
+		rAbs := csiStart + 2 + rRel
+		body := s[csiStart+2 : rAbs]
+		// Try to parse as DSR. If the shape doesn't fit (no semicolon,
+		// or non-numeric body), advance past this `\x1b[` and try the
+		// next candidate. The advance is `csiStart + 2` so we skip the
+		// introducer we just rejected; if there's no further CSI we
+		// land in the no-CSI branch on the next iteration.
+		semi := strings.IndexByte(body, ';')
+		if semi < 0 {
+			pos = csiStart + 2
+			continue
+		}
+		rowStr, colStr := body[:semi], body[semi+1:]
+		rowVal, rerr := strconv.Atoi(rowStr)
+		colVal, cerr := strconv.Atoi(colStr)
+		if rerr != nil || cerr != nil {
+			pos = csiStart + 2
+			continue
+		}
+		leftover = s[:csiStart] + s[rAbs+1:]
+		return rowVal, colVal, leftover, nil
 	}
-	// Search for 'R' only after the CSI introducer so a stray user-
-	// typed `R` before the response doesn't drag the end-marker left
-	// of the actual reply.
-	rRel := strings.IndexByte(s[csiStart:], 'R')
-	if rRel < 0 {
-		return 0, 0, s, fmt.Errorf("malformed DSR response %q (no R after CSI)", s)
-	}
-	rAbs := csiStart + rRel
-	body := s[csiStart+2 : rAbs] // skip `\x1b[`
-	semi := strings.IndexByte(body, ';')
-	if semi < 0 {
-		return 0, 0, s, fmt.Errorf("malformed DSR response %q (no semicolon)", s)
-	}
-	rowStr, colStr := body[:semi], body[semi+1:]
-	rowVal, rerr := strconv.Atoi(rowStr)
-	colVal, cerr := strconv.Atoi(colStr)
-	if rerr != nil || cerr != nil {
-		return 0, 0, s, fmt.Errorf("malformed DSR response %q (non-numeric)", s)
-	}
-	leftover = s[:csiStart] + s[rAbs+1:]
-	return rowVal, colVal, leftover, nil
 }

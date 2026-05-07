@@ -190,29 +190,30 @@ func TestHandleProbeFallback_NonTimeoutErrorWithoutLeftoverStaysEmpty(t *testing
 // the regression where a malformed-DSR-parse error dropped every byte
 // the probe had consumed.
 //
-// Scenario: user presses Ctrl-R and immediately types Up arrow before
-// the picker finishes its DSR probe. The buffer reads
-// `\x1b[A\x1b[12;5R` — parseDSRResponse anchors on the FIRST `\x1b[`,
-// tries to parse `A\x1b[12;5` as `<row>;<col>`, fails, and returns the
-// entire input as leftover alongside a malformed-parse error.
+// The realistic trigger is a malformed body that the scan-forward
+// parser also cannot recover (e.g. `\x1b[abc;1R` — letters in the
+// row position). parseDSRResponse populates leftover with the entire
+// input string and returns the malformed-parse error. Pre-fix:
+// handleProbeFallback only honored TimeoutError.Leftover, so the
+// bytes were silently dropped. Post-fix: cur.leftover is the default
+// fallthrough, so the bytes round-trip through reader.Prefeed.
 //
-// Pre-fix: handleProbeFallback only honored TimeoutError.Leftover, so
-// the user's `\x1b[A` was silently dropped and the picker ate the
-// keypress. Post-fix: cur.leftover is the default fallthrough, so the
-// bytes round-trip through reader.Prefeed and the up-arrow becomes a
-// KeyUp event as the user expected.
+// Note: the more common fast-typing-arrow shape (`\x1b[A\x1b[12;5R`)
+// is now resolved cleanly by the scan-forward parseDSRResponse and
+// never reaches this fallback. That case is exercised in
+// TestParseDSRResponse_ScanForwardSkipsNonDSRCSI.
 func TestHandleProbeFallback_MalformedParseErrorRoundTripsLeftover(t *testing.T) {
 	t.Parallel()
 	cfg := &Config{Input: "abc"}
 	// Mirror what parseDSRResponse populates on a malformed parse:
 	// leftover = full input string, err = malformed-DSR diagnostic.
 	cur := cursorResult{
-		leftover: "\x1b[A\x1b[12;5R",
-		err:      errors.New(`malformed DSR response "\x1b[A\x1b[12;5R" (non-numeric)`),
+		leftover: "\x1b[abc;1R",
+		err:      errors.New(`malformed DSR response "\x1b[abc;1R" (non-numeric)`),
 	}
 	var stderr bytes.Buffer
 	leftover := handleProbeFallback(&cur, cfg, &stderr)
-	if leftover != "\x1b[A\x1b[12;5R" {
+	if leftover != "\x1b[abc;1R" {
 		t.Fatalf("leftover = %q, want full probe input on malformed parse", leftover)
 	}
 	if cur.col != 4 {
