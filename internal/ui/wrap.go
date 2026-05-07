@@ -11,12 +11,52 @@
 //  7. throttle.go      — leading-edge timer
 package ui
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/mattn/go-runewidth"
+)
 
 // PointerWidth is the number of cells reserved for the selection
 // pointer in front of every visible choice (matches the legacy
 // implementation: a 2-cell glyph).
 const PointerWidth = 2
+
+// tabStop is the cell distance between hardware tabstops. Most
+// terminals use 8 by default. We use the same constant because the
+// pointer-aware Tab math has to predict where the terminal will
+// land after a `\t`, and getting it wrong by even a few cells
+// causes wrap-row miscounts on entries that contain literal tabs
+// (heredoc indentation, multi-line shell snippets pasted into the
+// prompt). Hardware tabstop overrides are unusual enough to be out
+// of scope.
+const tabStop = 8
+
+// rowCellWidth returns the visible cell count of a single logical
+// line, accounting for `\t` advancing to the next `tabStop`. Used
+// only by WrappedRowCount because Tab is the only printable byte
+// whose cell footprint depends on the cursor's starting column —
+// runewidth (which we use everywhere else for non-line-level
+// calculations) treats `\t` as width 0, which silently underflows
+// the wrap math whenever a history entry contains a literal tab.
+//
+// startCol is the cell column the rendering starts at (0 for the
+// pointer-less continuation lines, PointerWidth for the first
+// line). The function returns how far the line extends.
+func rowCellWidth(line string, startCol int) int {
+	col := startCol
+	for _, r := range line {
+		if r == '\t' {
+			// Advance to the next multiple of tabStop. If we're
+			// exactly on a tabstop, advance to the next one (a Tab
+			// always moves the cursor at least one cell).
+			col = ((col / tabStop) + 1) * tabStop
+			continue
+		}
+		col += runewidth.RuneWidth(r)
+	}
+	return col
+}
 
 // WrappedRowCount returns the number of terminal rows that the given
 // text occupies when printed at column 0 of a `cols`-wide terminal,
@@ -34,14 +74,13 @@ const PointerWidth = 2
 //     than under-estimating: we draw one fewer match instead of
 //     overflowing).
 //
-// We count *cells* via CellWidth (mattn/go-runewidth). East Asian
+// We count *cells* via runewidth (mattn/go-runewidth). East Asian
 // wide glyphs (CJK, fullwidth punctuation, emoji) consume 2 cells
-// per rune; combining marks 0; everything else 1. The previous
-// implementations counted runes (under-counted CJK by 1 cell each)
-// or bytes (over-counted everything multi-byte by 2-3×); both
-// produced visible mis-alignments. With CellWidth the wrap is
-// accurate for every script the Unicode East Asian Width table
-// covers.
+// per rune; combining marks 0; everything else 1. `\t` advances to
+// the next 8-cell tabstop relative to the line's starting column,
+// matching standard terminal behaviour — the previous form
+// (`CellWidth(line)`) treated `\t` as 0 cells and silently
+// undercounted lines with literal tabs.
 func WrappedRowCount(text string, cols int) int {
 	if cols <= 0 {
 		return 1
@@ -50,14 +89,14 @@ func WrappedRowCount(text string, cols int) int {
 	first := true
 	for _, line := range strings.Split(text, "\n") {
 		// Pointer prefix only on the first logical line. Subsequent
-		// continuation lines don't get one (they are wraps, not new
-		// pointer-eligible items), but we still factor the prefix
-		// into the *first* line's wrap math.
-		width := CellWidth(line)
+		// continuation lines start at col 0; both feed the same
+		// rowCellWidth helper so Tab-advance math is consistent.
+		startCol := 0
 		if first {
-			width += PointerWidth
+			startCol = PointerWidth
 			first = false
 		}
+		width := rowCellWidth(line, startCol)
 		if width <= 0 {
 			rows++
 			continue

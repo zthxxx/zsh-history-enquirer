@@ -875,3 +875,34 @@ companion was resolved in the
   and the eventual fx OnStop's TTY.Close run, the reader has
   stopped touching `t.file`. Verified by the full `task test:unit`
   race-detector pass. Resolved in this iteration's commit.
+
+* **2026-05-07** — `WrappedRowCount` undercounted entries with
+  literal `\t`. The function used `CellWidth(line)` which delegates
+  to `runewidth.StringWidth`, which treats `\t` as 0 cells. But
+  terminals render `\t` by advancing the cursor to the next tabstop
+  (typically every 8 cells). For an entry like `ab\tcd` rendered
+  with the 2-cell pointer prefix:
+  - Old math: pointer (2) + a (1) + b (1) + tab (0) + c (1) + d (1)
+    = 6 cells. Picker thinks it fits in any cols ≥ 6.
+  - Reality: pointer at col 0..1, "ab" at 2..3, tab advances to col
+    8, "cd" at 8..9 = 10 cells. In a 8-col terminal it wraps to 2
+    rows.
+  Net effect: when the picker computes how many entries fit, it
+  could include one whose actual rendered height was larger than
+  the tail of the visible window — terminal scrolls up by the
+  difference, the next renderPre erases too few rows, stale
+  artefacts show until the next full re-render. Real-world
+  triggers: entries containing heredoc indentation, multi-line
+  shell snippets pasted into the prompt, or makefile-style
+  recipes saved to history. Fix: introduced a `rowCellWidth`
+  helper that walks the line column-by-column and treats `\t` as
+  "advance to the next 8-cell tabstop relative to the line's
+  starting column" — matching standard terminal behaviour. The
+  helper accepts a starting column so the pointer-prefixed first
+  line and the pointer-less continuation lines share the same
+  arithmetic. Hardware tabstop overrides (`tabs -4` etc.) are out
+  of scope; the constant is fixed at 8 cells. Pinned by
+  `TestWrappedRowCount_TabAdvancesToTabstop` (6 cases including
+  tab-on-tabstop-still-advances) and `TestRowCellWidth` (10 cases
+  exercising the helper directly). Resolved in this iteration's
+  commit.
