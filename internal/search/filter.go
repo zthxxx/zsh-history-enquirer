@@ -14,7 +14,22 @@ func AndFilter(choices, tokens []string) []string {
 		return choices
 	}
 
-	out := make([]string, 0, len(choices))
+	// Initial cap is a heuristic: the typical narrowed filter is
+	// well under 256 entries (a few seconds of typing reduces a
+	// 100k-entry history to a handful of matches). Pre-allocating
+	// `len(choices)` was the obvious choice but for HISTSIZE=100k
+	// it allocates 1.6 MB per call to hold (typically) <100 strings
+	// — and AndFilter runs on every keystroke (modulo the render
+	// throttle), so the GC pressure was visible in benchmarks. The
+	// 256 floor keeps the no-narrow path (single-token, broad match)
+	// from re-allocating excessively in the geometric-grow regime;
+	// any deeper filter just appends and the runtime amortizes the
+	// cost.
+	initialCap := 256
+	if len(choices) < initialCap {
+		initialCap = len(choices)
+	}
+	out := make([]string, 0, initialCap)
 	for _, c := range choices {
 		if matchesAll(c, tokens) {
 			out = append(out, c)

@@ -24,6 +24,30 @@ func BenchmarkAndFilter(b *testing.B) {
 	}
 }
 
+// BenchmarkAndFilter_NoNarrow exercises the broad-match path where
+// the filter matches a large fraction of entries (single broad
+// token). This guards against the result-slice initial-cap heuristic
+// silently making the broad-match path much slower than the
+// pre-allocated `len(choices)` regime — the geometric-grow append
+// has to be amortized cheap enough that 100k matches still complete
+// in single-digit milliseconds.
+func BenchmarkAndFilter_NoNarrow(b *testing.B) {
+	for _, n := range []int{1_000, 10_000, 100_000} {
+		choices := generateChoices(n)
+		// "g" is a substring of git/log/diff/push/pull/etc. so most
+		// entries match — the growth-amortized append path is what
+		// gets exercised here.
+		tokens := []string{"g"}
+
+		b.Run(fmt.Sprintf("N=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			for range b.N {
+				_ = AndFilter(choices, tokens)
+			}
+		})
+	}
+}
+
 // BenchmarkTokenize on realistic input sizes.
 func BenchmarkTokenize(b *testing.B) {
 	cases := []string{

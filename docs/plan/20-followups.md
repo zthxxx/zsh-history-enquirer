@@ -51,6 +51,21 @@ itself.)
 
 ## Addressed
 
+* **2026-05-07** — `search.AndFilter`'s result-slice initial cap was
+  `len(choices)`, sized for the worst-case "no narrow" filter where
+  every entry matches. At HISTSIZE=100k that's 1.6 MB allocated and
+  zeroed per call to hold (typically) <100 strings — and AndFilter
+  runs on every keystroke (modulo the render throttle). Capped to
+  `min(256, len(choices))`; the geometric-grow append amortizes the
+  rare broad-match case where many entries match. Bench:
+  `BenchmarkAndFilter/N=100000` 1.6 MB/op → 5 KB/op (320× smaller).
+  The broad-match `BenchmarkAndFilter_NoNarrow/N=100000` allocates
+  3.4 MB across 16 grow steps but peak memory is half the
+  pre-allocated worst case; net GC pressure is dominated by the
+  common narrow-filter case so total bytes-per-keystroke drops
+  ~9× under typical mixed-mode use. Two new bench cases pin the
+  contract.
+
 * **2026-05-07** — F1-F4 (and any unrecognized SS3 sequence) used to
   cancel the picker. On most modern terminals F1..F4 emit `\eOP`,
   `\eOQ`, `\eOR`, `\eOS` — single-shift-three sequences the picker
