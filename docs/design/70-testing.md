@@ -121,7 +121,7 @@ freshly-rendered packages.
 ## Coverage gate
 
 CI fails if total coverage drops below **70%**. Actual coverage
-hovers around 85–86%, so the gate has ~15 points of headroom for
+hovers around 89–90%, so the gate has ~20 points of headroom for
 legitimate untestable additions while still flagging
 regressions. The pull-up gate applies to `coverage.out` produced
 by `task ci:unit` (which is
@@ -135,7 +135,7 @@ Per-package targets:
 | `pkg/version` | 100% | -ldflags-injected fields. |
 | `internal/ui` | ~98% | renderer + FSM; only debug-format strings uncovered. |
 | `internal/history` | ~95% | ZshLoader's exec wrapper requires zsh. |
-| `internal/keys` | ~94% | parser + reader; SIGWINCH path is pty-dependent. |
-| `internal/tty` | ~70% | termios + cursor probe; pty-driven tests cover the typical paths, /dev/tty Open() and the live-probe race remain uncovered. |
-| `internal/app` | ~65% | Run() body needs a TTY; pty tests cover runEventLoop happy + cancel paths and readGeometry, e2e covers the orchestration layer. |
+| `internal/keys` | ~94% | parser + reader; pty-driven master-close exit pinned, the remaining couple of percent is the EINTR retry path on the live read syscall. |
+| `internal/tty` | ~75% | termios + cursor probe; pty-driven Size + Close-while-raw paths now pinned. /dev/tty Open() and NewDevTTY remain uncovered (require a real controlling terminal). |
+| `internal/app` | ~74% | Run() body needs a TTY; pty tests cover runEventLoop submit / cancel / preEvents / channel-closed / trailing-flush, fetchInitialState's twin panic-recovery defenses, and readGeometry's three arms. e2e covers the orchestration layer. |
 | `cmd/zsh-history-enquirer` | ~45% | main() needs a TTY; the panic-recovery helpers and version/help fast-paths are unit-tested, full main() flow is smoke-tested via the binary. |
