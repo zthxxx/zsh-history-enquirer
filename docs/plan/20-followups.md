@@ -602,3 +602,17 @@ companion was resolved in the
   in, no \r out) and `TestFixtureLoader_LFOnlyUnchanged` (the
   symmetric guard — embedded `\r` mid-line stays put). Resolved
   in this iteration's commit.
+
+* **2026-05-07** — `splitNonEmptyLines` was a misleading name:
+  it didn't actually strip empty lines. Embedded blank lines
+  (from a corrupt write or `echo "" >> $HISTFILE`) survived as
+  empty entries in the picker — rendered as blank rows that the
+  user could navigate to. Pressing Enter on one would set $BUFFER
+  to "" and silently swallow the user's typed prefix. Fix: the
+  function now actually drops empty post-trim lines, matching
+  what its name claimed. A CRLF-only line `\r\n` now also
+  collapses (the trailing-CR strip leaves "", which the empty
+  drop removes). Pinned by
+  `TestFixtureLoader_EmbeddedBlankLineDropped` and
+  `TestFixtureLoader_CRLFOnlyLineDropped`. Resolved in this
+  iteration's commit.

@@ -87,6 +87,47 @@ func TestFixtureLoader_LFOnlyUnchanged(t *testing.T) {
 	require.Equal(t, []string{"last", "middle \r still", "first"}, out)
 }
 
+// TestFixtureLoader_EmbeddedBlankLineDropped pins that empty lines
+// inside the file (from a corrupt write or a `echo "" >> $HISTFILE`)
+// do NOT become empty entries in the picker. Empty entries would
+// render as blank rows; pressing Enter on one would set $BUFFER
+// to "" and silently swallow the user's typed prefix.
+func TestFixtureLoader_EmbeddedBlankLineDropped(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "history.txt")
+	// "a\n\nb\n" — embedded blank line between "a" and "b".
+	content := "a\n\nb\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	out, err := FixtureLoader(path).Load(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []string{"b", "a"}, out,
+		"embedded blank line must not appear in output")
+	for _, line := range out {
+		require.NotEmptyf(t, line,
+			"output must not contain empty entries; got %q in %v", line, out)
+	}
+}
+
+// TestFixtureLoader_CRLFOnlyLineDropped — a `\r\n` (an empty CRLF
+// line) is `\r` after the LF strip; the trailing-CR pass turns it
+// into "", and the empty-line drop removes it entirely. So the
+// picker never sees a `\r`-only entry.
+func TestFixtureLoader_CRLFOnlyLineDropped(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "history.txt")
+	content := "first\r\n\r\nsecond\r\n"
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+
+	out, err := FixtureLoader(path).Load(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []string{"second", "first"}, out)
+}
+
 func TestFixtureLoader_MultilineEscape(t *testing.T) {
 	t.Parallel()
 

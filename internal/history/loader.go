@@ -139,24 +139,35 @@ func (l *fixtureLoader) Load(_ context.Context) ([]string, error) {
 	return ReverseDedupeUnescape(cleaned), nil
 }
 
+// splitNonEmptyLines splits s on '\n', strips a trailing '\r' from
+// each line (CRLF tolerance), and drops empty lines. The empty-line
+// drop matches the function name's intent and matters in practice
+// because:
+//
+//   - Embedded blank lines in $HISTFILE — produced by a corrupt
+//     write or by `echo "" >> $HISTFILE` — would otherwise become
+//     empty entries that the picker renders as blank rows. Pressing
+//     Enter on one would set $BUFFER to "" and silently swallow
+//     the user's typed prefix.
+//   - A CRLF-terminated `\r\n` only is stripped to "" (after the
+//     trailing-CR strip leaves an empty line).
 func splitNonEmptyLines(s string) []string {
 	s = strings.TrimRight(s, "\n")
 	if s == "" {
 		return nil
 	}
-	parts := strings.Split(s, "\n")
-	// Strip a trailing '\r' from each line so a CRLF-terminated
-	// $HISTFILE (e.g. one imported from Windows or written by a
-	// misconfigured editor) does not leave carriage-returns in the
-	// rendered choices. Without this strip, the picker would
-	// carriage-return mid-render and visibly scramble the frame —
-	// each entry's last byte would overwrite the start of the next.
-	for i, p := range parts {
+	raw := strings.Split(s, "\n")
+	out := make([]string, 0, len(raw))
+	for _, p := range raw {
 		if p != "" && p[len(p)-1] == '\r' {
-			parts[i] = p[:len(p)-1]
+			p = p[:len(p)-1]
 		}
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
 	}
-	return parts
+	return out
 }
 
 // stripExtendedHistoryPrefix removes the optional `: <ts>:<dur>;`
