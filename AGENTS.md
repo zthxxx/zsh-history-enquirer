@@ -45,8 +45,11 @@ internal/history — ZshLoader + FixtureLoader + ReverseDedupeUnescape
 internal/tty — TTY handle, raw-mode RAII, DSR cursor probe via Poll
 internal/keys — byte parser + Event types + bracketed-paste FSM
 pkg/version — -ldflags-injected version stamp (--version flag)
-                (ANSI escape strings come from charmbracelet/x/ansi —
-                 a third-party module shared with bubbletea / lipgloss)
+
+ANSI escape emission is delegated to charmbracelet/x/ansi (shared
+with bubbletea / lipgloss); cell-width counting is rivo/uniseg
+(grapheme-cluster aware so decomposed accents and emoji ZWJ
+families measure correctly). No bespoke wrapper packages.
 ```
 
 ## Distribution
