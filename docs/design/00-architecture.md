@@ -28,8 +28,6 @@ internal/
 │   ├─ cursor.go         # DSR probe via unix.Poll
 │   ├─ raw.go            # EnterRaw/LeaveRaw termios mutation
 │   └─ termios_{linux,darwin}.go  # GET/SET termios req constants
-├─ ansi/        # CSI primitives, kept tiny
-│   └─ ansi.go
 ├─ keys/        # spec/50, spec/60
 │   ├─ reader.go         # poll-based byte → Event stream
 │   ├─ parser.go         # FSM (Normal/Esc/CSI/Paste states)
@@ -38,7 +36,7 @@ internal/
     ├─ model.go          # state struct + rotateUp/rotateDown
     ├─ update.go         # event dispatch + scroll/page/end logic
     ├─ render.go         # Frame builder + token highlight
-    ├─ wrap.go           # WrappedRowCount (rune-count estimate)
+    ├─ wrap.go           # WrappedRowCount + InputCursorPosition (uniseg cluster width)
     └─ throttle.go       # leading-edge throttle (72 ms)
 
 pkg/                                       # public-ish reusable bits
