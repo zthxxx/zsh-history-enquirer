@@ -22,8 +22,7 @@ type Model struct {
 
 	// Data.
 	Choices []string // immutable post-loader output
-	Visible []string // sliding window over the filtered set
-	Filter  []string // current filtered-and-rotated view; Visible references this in-place
+	Filter  []string // current filtered-and-rotated view; rotated in place by Up/Down
 	Idx     int      // selection within Filter
 	Limit   int      // dynamic, capped at MaxLimit
 
@@ -78,7 +77,6 @@ func (m *Model) recomputeFilter() {
 		filter = slices.Clone(filter)
 	}
 	m.Filter = filter
-	m.Visible = m.Filter
 	m.Idx = 0
 }
 
