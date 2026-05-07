@@ -43,11 +43,29 @@ Each entry must include:
   only matters for tests. How to apply: don't try to fix it for
   expect — the renderer's correctness is verified at the model layer.
 
-(Two open items: the x/input parser swap above is a longer-form
-refactor held for a focused session, and the docker pty DSR
-limitation is intrinsic to the expect-based test harness — not a
-code bug. No open user-facing defect remains in the picker
-itself.)
+* **2026-05-07** — Resize-preserves-focus is not implemented. On a
+  SIGWINCH that significantly shrinks the terminal (e.g. window
+  drag-narrow), the renderer's dynamic limit shrinks and `m.Idx`
+  is clamped onto whatever entry now fits at the bottom of the new
+  visible window — typically the original `Filter[0]` if the cap is
+  tight. The user's previously-focused entry quietly shifts to a
+  different one without any explicit input. A robust fix would
+  track the focused entry by reference (not index), then after a
+  resize rotate the filter to bring that entry into the new visible
+  window — handled symmetrically with multi-line aware moveDown's
+  walk-from-bottom budget. Held back this round because: (a) no
+  e2e harness exercises mid-session SIGWINCH (expect can simulate
+  it but the picker's reflow timing makes it brittle to assert),
+  (b) most users don't resize mid-pick, (c) the existing
+  `NeedsFullErase` path already prevents the reflowed-stale-rows
+  artifact — only the focus-shift remains. Tracking note for a
+  focused UX session.
+
+(Three open items: the x/input parser swap above is a longer-form
+refactor held for a focused session, the docker pty DSR limitation
+is intrinsic to the expect-based test harness — not a code bug,
+and the resize-preserves-focus tracking is a UX nice-to-have.
+No open user-facing *defect* remains in the picker itself.)
 
 ## Addressed
 
