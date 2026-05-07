@@ -95,3 +95,93 @@ func TestTTY_LeaveRaw_RestoresTermios(t *testing.T) {
 	// LeaveRaw must be safe to call again.
 	require.NoError(t, tt.LeaveRaw())
 }
+
+// TestTTY_Size_ReturnsConfiguredWinsize covers the TIOCGWINSZ branch
+// of TTY.Size against a real pty. We set a specific winsize via
+// pty.Setsize and assert Size returns the same numbers — proves the
+// ioctl is wired correctly and the rows/cols ordering matches what
+// callers expect (rows first, cols second).
+//
+// Without an explicit test the only path that exercised Size was the
+// app/init readGeometry helper, which already had a fallback for
+// zero-size and so masked any wiring bug. Pinning Size directly so
+// future changes to termios_*.go can't silently flip the ordering.
+func TestTTY_Size_ReturnsConfiguredWinsize(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("pty unsupported on windows")
+	}
+	t.Parallel()
+
+	master, slave, err := pty.Open()
+	require.NoError(t, err)
+	defer func() { _ = master.Close() }()
+	defer func() { _ = slave.Close() }()
+
+	require.NoError(t, pty.Setsize(slave, &pty.Winsize{Rows: 42, Cols: 137}))
+
+	tt, err := NewFromFile(slave)
+	require.NoError(t, err)
+
+	rows, cols, err := tt.Size()
+	require.NoError(t, err)
+	require.Equal(t, 42, rows, "rows must match the configured winsize")
+	require.Equal(t, 137, cols, "cols must match the configured winsize")
+}
+
+// TestTTY_Size_AfterCloseReturnsError pins the failure mode of Size
+// after Close — the underlying fd is reset to nil so the ioctl path
+// would surface the standard "use of closed file" error from the
+// runtime. Callers that hold a stale TTY pointer must observe the
+// error rather than silently receiving (0, 0, nil).
+func TestTTY_Size_AfterCloseReturnsError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("pty unsupported on windows")
+	}
+	t.Parallel()
+
+	_, slave, err := pty.Open()
+	require.NoError(t, err)
+
+	tt, err := NewFromFile(slave)
+	require.NoError(t, err)
+	require.NoError(t, tt.Close())
+
+	_, _, err = tt.Size()
+	require.Error(t, err, "Size after Close must surface an error")
+}
+
+// TestTTY_Close_WhileRawEnteredRestoresAndCloses pins the panic-path
+// fx OnStop hook: a panic in upstream code can leave the picker in
+// raw mode at process tear-down. Close must still LeaveRaw before
+// closing the fd, otherwise the user's surrounding shell inherits a
+// terminal with ECHO off and ICANON off — every keystroke would echo
+// raw and Enter would not deliver a line. Without this guarantee the
+// "even a panic still leaves the user's terminal usable" promise in
+// NewDevTTY's docstring would be a lie.
+func TestTTY_Close_WhileRawEnteredRestoresAndCloses(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("pty unsupported on windows")
+	}
+	t.Parallel()
+
+	_, slave, err := pty.Open()
+	require.NoError(t, err)
+
+	tt, err := NewFromFile(slave)
+	require.NoError(t, err)
+
+	// Capture the savedTerm bytes so we can compare after Close.
+	pristine := *tt.savedTerm
+	require.NoError(t, tt.EnterRaw())
+	require.True(t, tt.rawEntered)
+
+	// Close() must call LeaveRaw internally — exercising the
+	// rawEntered=true branch of Close that was previously uncovered.
+	require.NoError(t, tt.Close())
+	require.Nil(t, tt.file, "Close must null out the file pointer")
+
+	// savedTerm bytes are unchanged — Close doesn't clobber them, just
+	// uses them to restore.
+	require.Equal(t, pristine, *tt.savedTerm,
+		"Close must use savedTerm to restore, not modify it")
+}
