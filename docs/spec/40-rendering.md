@@ -14,12 +14,16 @@ To achieve this:
 2. The terminal replies with `\e[<row>;<col>R`.
 3. The binary parses that, computes
    `initCol = current_col - cells(initial_input)`. `cells()` is
-   `mattn/go-runewidth.StringWidth` (wrapped as `ui.CellWidth`) —
-   East Asian Width-aware, so CJK ideographs / fullwidth
-   punctuation / emoji each contribute 2 cells, combining marks
-   contribute 0, and everything else contributes 1. Earlier
-   approximations (rune-count, byte-count) all visibly mis-aligned
-   the picker against the prompt for non-ASCII LBUFFER text.
+   `rivo/uniseg.StringWidth` (wrapped as `ui.CellWidth`) — counts by
+   Unicode grapheme cluster, so CJK ideographs / fullwidth
+   punctuation / single-codepoint emoji each contribute 2 cells, and
+   decomposed accented letters (`e + combining-acute = "é"`) and
+   emoji ZWJ families (man+ZWJ+woman+ZWJ+girl) report their actual
+   rendered footprint as one cluster instead of summing their
+   constituent runes. Earlier approximations (rune-count, byte-count)
+   all visibly mis-aligned the picker against the prompt for non-ASCII
+   LBUFFER text; per-rune width (the older `mattn/go-runewidth` path)
+   double-counted decomposed clusters.
 4. All subsequent draws and erases use `initCol` as the leftmost column
    they may touch.
 
@@ -72,17 +76,22 @@ sum over each "\n"-split line L of:
 The first logical line additionally counts the 2-cell selection
 pointer prefix (`›` + space).
 
-`cell_width()` is `mattn/go-runewidth.StringWidth` (wrapped as
+`cell_width()` is `rivo/uniseg.StringWidth` (wrapped as
 `ui.CellWidth`). Concretely:
 
 - ASCII / Latin extended / Cyrillic / Greek / Hebrew / Arabic: 1
-  cell per rune.
+  cell per cluster (most clusters are a single rune).
 - CJK ideographs, fullwidth punctuation, emoji, hangul syllables:
-  2 cells per rune.
-- Combining marks, zero-width joiners: 0 cells.
+  2 cells per cluster.
+- Combining marks merge into the preceding cluster — `e + ◌́` is
+  one 1-cell cluster, not 1 + 0.
+- Emoji ZWJ families (man+ZWJ+woman+ZWJ+girl) and flag clusters
+  (regional-indicator pairs) are a single 2-cell cluster, not the
+  sum of their components.
 
-The library packages the Unicode East Asian Width and emoji
-presentation tables, kept current with Unicode updates upstream.
+The library implements UAX #29 grapheme cluster boundaries on top
+of the Unicode East Asian Width and emoji presentation tables —
+both kept current with Unicode upstream.
 This replaces the earlier rune-count approximation (off by 1 per
 CJK glyph) and the byte-count formerly inherited from the legacy
 Node.js port.

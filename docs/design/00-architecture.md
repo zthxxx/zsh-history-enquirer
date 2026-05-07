@@ -73,7 +73,7 @@ standalone `.zsh` source under `plugin/` and is not compiled in.
                             keys)
                                               ▲
                                               │
-                                          internal/ansi
+                                  charmbracelet/x/ansi (third party)
 ```
 
 - No package may import a package "above" it in the graph.
@@ -128,12 +128,14 @@ Considered alternatives:
 as a bubbletea Model (Update + View) without the framework, so the
 testability is identical (or better — every render produces a Frame
 that can be inspected without intercepting bytes from a pseudo-tty).
-The escape emission lives in `internal/ansi/` so future contributors
-can swap the renderer without touching the FSM.
+The escape emission is delegated to `charmbracelet/x/ansi` — the
+same library bubbletea / lipgloss use — so the renderer code stays
+declarative and the byte sequences stay current with terminal-spec
+updates without us re-vendoring escape strings.
 
 ## External dependencies (kept minimal)
 
-Five direct Go-module dependencies — verified by `go mod graph`:
+Seven direct Go-module dependencies — verified by `go mod graph`:
 
 - `go.uber.org/fx` — DI
 - `golang.org/x/sys/unix` — termios + ioctls (pure Go syscall layer,
@@ -141,12 +143,21 @@ Five direct Go-module dependencies — verified by `go mod graph`:
 - `github.com/creack/pty` — pty pair for tty unit tests (test-only)
 - `pgregory.net/rapid` — property-based tests
 - `github.com/stretchr/testify` — assert/require
+- `github.com/charmbracelet/x/ansi` — ANSI escape emission helpers
+  (same library as bubbletea / lipgloss; replaces hand-rolled
+  `internal/ansi/`)
+- `github.com/rivo/uniseg` — Unicode grapheme cluster + width
+  measurement (replaces `mattn/go-runewidth` for the cell-arithmetic
+  primitive — uniseg measures by cluster, runewidth by rune, so
+  decomposed accented letters and emoji ZWJ families report
+  correctly)
 
-There is **no** bubbletea, lipgloss, or termenv. The earlier draft of
-this doc claimed bubbletea was used; it never was. SGR escapes are
-emitted directly from `internal/ui/render.go`, the wire bytes for
-the four colours we use (bold cyan for highlight, plain reset) are
-constants in the same file.
+There is **no** bubbletea, lipgloss, or termenv. The picker draws
+as an overlay on the user's existing prompt at a captured `initCol`
+— a full-screen TUI framework would conflict with that model. SGR
+escapes are emitted directly from `internal/ui/render.go`; the wire
+bytes for the four colours we use (bold cyan for highlight, plain
+reset) are constants in the same file.
 
 Standard library is preferred everywhere it's enough. Every
 dependency above must compile with `CGO_ENABLED=0` so the resulting

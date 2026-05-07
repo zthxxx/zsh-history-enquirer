@@ -131,7 +131,6 @@ Per-package targets:
 
 | Package | Coverage | Notes |
 | --- | --- | --- |
-| `internal/ansi` | 100% | wire-byte primitives — pinned by tests. |
 | `internal/search` | 100% | tokenize + AND-filter, pure functions. |
 | `pkg/version` | 100% | -ldflags-injected fields. |
 | `internal/ui` | ~98% | renderer + FSM; only debug-format strings uncovered. |
