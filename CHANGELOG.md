@@ -51,6 +51,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   - `internal/ui/highlight` — payload preservation under SGR strip.
   - `internal/keys/parser` — chunk-boundary invariance for the FSM.
 - `.go-arch-lint.yml` — package layering enforced in CI.
+- <kbd>Ctrl</kbd>+<kbd>W</kbd> deletes the previous word — matches
+  zsh's default `backward-kill-word` keymap. Rune-aware so CJK /
+  emoji words delete atomically.
 
 ### Fixed (vs. legacy 1.x bugs that survived into the rewrite)
 
@@ -120,6 +123,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `cmd/zsh-history-enquirer/main.go` that reconstructs `cfg.Input`
   via `app.NewConfig` and echoes it back to stdout. Three table
   tests pin the (preserves-input, no-args, malformed-argv) cases.
+- **`Backspace` corrupted multi-byte UTF-8 input.** Backspace was
+  doing `m.Input = m.Input[:len(m.Input)-1]` — slicing one BYTE off
+  the end. For ASCII this works because every char is 1 byte. For
+  CJK / emoji / accented Latin (all ≥2 bytes in UTF-8), it left a
+  trailing continuation byte and corrupted the input into invalid
+  UTF-8. Switched to `utf8.DecodeLastRuneInString` so Backspace
+  deletes one *rune*. Six regression cases pin the bug.
+
 - **`$LBUFFER="--version"` (or `--help`, `-h`) silently destroyed
   user input.** When the user typed a flag-shaped string at the
   prompt and pressed `^R`, the widget shelled out as

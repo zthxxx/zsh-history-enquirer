@@ -3,8 +3,9 @@
 | Key | Action |
 | --- | --- |
 | any text byte | append to input, re-filter, reset selection to row 0 |
-| <kbd>Backspace</kbd> | delete left, re-filter |
+| <kbd>Backspace</kbd> | delete one rune to the left (NOT one byte — multi-byte UTF-8 chars must delete atomically), re-filter |
 | <kbd>Ctrl</kbd>+<kbd>U</kbd> | clear input, re-filter |
+| <kbd>Ctrl</kbd>+<kbd>W</kbd> | delete the previous word (strip trailing whitespace + the run of non-whitespace before it). Matches zsh's default `backward-kill-word` muscle memory |
 | <kbd>↑</kbd> | move selection up; if at top of visible window, scroll the visible window up by 1 (rotate-in-place) |
 | <kbd>↓</kbd> | move selection down; if at bottom, scroll down enough rows to make the next entry fit (taking multi-line into account) |
 | <kbd>PageUp</kbd> | rotate visible window up by `limit` |

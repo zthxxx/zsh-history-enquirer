@@ -165,6 +165,9 @@ echo 'source '"$PWD"'/plugin/zsh-history-enquirer.plugin.zsh' >> ~/.zshrc
 | <kbd>↑</kbd> / <kbd>↓</kbd> | Move selection one line |
 | <kbd>PageUp</kbd> / <kbd>PageDown</kbd> | Jump a page |
 | <kbd>Home</kbd> / <kbd>End</kbd> | Jump to first / last match |
+| <kbd>Backspace</kbd> | Delete one character (rune-aware — works on CJK / emoji input) |
+| <kbd>Ctrl+W</kbd> | Delete the previous word (matches zsh's `backward-kill-word`) |
+| <kbd>Ctrl+U</kbd> | Clear the input |
 | <kbd>Enter</kbd> | Put the selected line into the prompt buffer (still editable — press <kbd>Enter</kbd> again to run it) |
 | <kbd>Esc</kbd> / <kbd>Ctrl+C</kbd> | Cancel; your typed input is preserved |
 

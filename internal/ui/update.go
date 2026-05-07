@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"unicode/utf8"
+
 	"github.com/zthxxx/zsh-history-enquirer/internal/keys"
 )
 
@@ -42,7 +44,14 @@ func (m *Model) applyKey(k keys.Key) (terminate bool) {
 	switch k {
 	case keys.KeyBackspace:
 		if m.Input != "" {
-			m.Input = m.Input[:len(m.Input)-1]
+			// Delete one rune, not one byte. For ASCII the two are
+			// identical; for multi-byte UTF-8 (CJK, emoji, accented
+			// Latin) a byte-level slice would leave a trailing
+			// continuation byte and corrupt the input into invalid
+			// UTF-8. Using DecodeLastRuneInString keeps the buffer
+			// valid even when the user types `你<bs>` or `🚀<bs>`.
+			_, size := utf8.DecodeLastRuneInString(m.Input)
+			m.Input = m.Input[:len(m.Input)-size]
 			m.Cursor = len(m.Input)
 			m.recomputeFilter()
 		}
@@ -50,6 +59,14 @@ func (m *Model) applyKey(k keys.Key) (terminate bool) {
 	case keys.KeyCtrlU:
 		m.Input = ""
 		m.Cursor = 0
+		m.recomputeFilter()
+		return false
+	case keys.KeyCtrlW:
+		// Delete the previous word — strip trailing whitespace then
+		// the run of non-whitespace before it. Matches zsh's default
+		// `backward-kill-word` and shell users' muscle memory.
+		m.Input = deleteLastWord(m.Input)
+		m.Cursor = len(m.Input)
 		m.recomputeFilter()
 		return false
 	case keys.KeyEnter:
@@ -84,6 +101,32 @@ func (m *Model) applyKey(k keys.Key) (terminate bool) {
 	default:
 		return false
 	}
+}
+
+// deleteLastWord returns s with the trailing word removed. A "word"
+// is a run of non-whitespace; the trailing whitespace separator is
+// also stripped so successive ^W's eat one word at a time. Walks
+// rune-by-rune so multi-byte characters (CJK, emoji, accented
+// Latin) are deleted atomically rather than leaving partial bytes.
+func deleteLastWord(s string) string {
+	if s == "" {
+		return s
+	}
+	runes := []rune(s)
+	// Strip trailing whitespace.
+	end := len(runes)
+	for end > 0 && isSpace(runes[end-1]) {
+		end--
+	}
+	// Strip trailing non-whitespace (the word itself).
+	for end > 0 && !isSpace(runes[end-1]) {
+		end--
+	}
+	return string(runes[:end])
+}
+
+func isSpace(r rune) bool {
+	return r == ' ' || r == '\t' || r == '\n' || r == '\r'
 }
 
 func max1(n int) int {

@@ -132,6 +132,9 @@ echo 'source '"$PWD"'/plugin/zsh-history-enquirer.plugin.zsh' >> ~/.zshrc
 | <kbd>↑</kbd> / <kbd>↓</kbd> | 移动选中行 |
 | <kbd>PageUp</kbd> / <kbd>PageDown</kbd> | 翻页 |
 | <kbd>Home</kbd> / <kbd>End</kbd> | 跳到首条 / 末条匹配 |
+| <kbd>Backspace</kbd> | 删除一个字符（按 rune，能正确处理中文 / emoji 多字节字符） |
+| <kbd>Ctrl+W</kbd> | 删除前一个单词（对齐 zsh 的 `backward-kill-word`） |
+| <kbd>Ctrl+U</kbd> | 清空输入 |
 | <kbd>Enter</kbd> | 把选中条目回填到 prompt（仍可编辑，再按一次 <kbd>Enter</kbd> 才执行） |
 | <kbd>Esc</kbd> / <kbd>Ctrl+C</kbd> | 取消，保留已输入的关键词 |
 

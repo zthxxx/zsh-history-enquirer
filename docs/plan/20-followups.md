@@ -25,6 +25,24 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — Two input-editing gaps surfaced under critical
+  scrutiny:
+  - **Backspace deleted one BYTE, not one rune.** For ASCII this is
+    fine (1 byte == 1 rune); for CJK / emoji / accented Latin it
+    leaves a trailing UTF-8 continuation byte and corrupts the
+    input into invalid UTF-8 — subsequent renders show `\xe4\xbd`
+    mojibake. Switched `internal/ui/update.go:KeyBackspace` to
+    `utf8.DecodeLastRuneInString` so multi-byte runes delete
+    atomically. Six regression cases (chinese / emoji / accented /
+    prefixed variants).
+  - **Ctrl-W silently no-op.** Common zsh muscle memory
+    (`backward-kill-word`); the FSM parser already produced
+    `KeyCtrlW` from `0x17` but `update.go` had no case for it.
+    Added `deleteLastWord` helper (rune-walk, strips trailing
+    whitespace then the preceding word). Seven regression cases
+    documented in `model_test.go` covering ASCII, multi-word, CJK,
+    emoji, edge cases. Spec/50 and both READMEs updated.
+
 * **2026-05-07** — Two flag-fast-path foot-guns, fixed in one
   iteration:
   - **`$LBUFFER="--version"` blanked input.** The widget invoked the

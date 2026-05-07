@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 
@@ -80,11 +81,73 @@ func TestModel_BackspaceShrinksInput(t *testing.T) {
 	require.Equal(t, "gi", m.Input)
 }
 
+// TestModel_BackspaceDeletesRuneNotByte pins the regression: a
+// byte-level Backspace would leave a trailing UTF-8 continuation
+// byte, corrupting the input into invalid UTF-8 and rendering as
+// `\xe4\xbd` mojibake. CJK / emoji / accented Latin chars are all
+// ≥2 bytes in UTF-8 so this matters in practice.
+func TestModel_BackspaceDeletesRuneNotByte(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		// `in`'s last rune must be removed; remaining bytes must be
+		// valid UTF-8 (and equal to `want`).
+		in   string
+		want string
+	}{
+		{"chinese", "你", ""},
+		{"prefixed-chinese", "git 你", "git "},
+		{"emoji", "🚀", ""},
+		{"prefixed-emoji", "ship 🚀", "ship "},
+		{"accented-latin", "café", "caf"},
+		{"ascii-still-works", "git", "gi"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			m := newTestModel(tc.in)
+			m.Update(keys.KeyEvent{Key: keys.KeyBackspace})
+			require.Equal(t, tc.want, m.Input)
+			require.Truef(t, utf8.ValidString(m.Input),
+				"Backspace produced invalid UTF-8: % x", m.Input)
+		})
+	}
+}
+
 func TestModel_CtrlUClearsInput(t *testing.T) {
 	t.Parallel()
 	m := newTestModel("anything")
 	m.Update(keys.KeyEvent{Key: keys.KeyCtrlU})
 	require.Empty(t, m.Input)
+}
+
+// TestModel_CtrlWDeletesLastWord pins shell-muscle-memory behaviour:
+// Ctrl-W strips trailing whitespace and the preceding word in one
+// keystroke. Tested across ASCII, multi-rune CJK / emoji, multiple
+// trailing spaces, and the empty-input no-op.
+func TestModel_CtrlWDeletesLastWord(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"two-words", "git status", "git "},
+		{"three-words-keeps-prefix", "git log -p", "git log "},
+		{"trailing-space-stripped", "git log ", "git "},
+		{"single-word", "git", ""},
+		{"empty-noop", "", ""},
+		{"chinese-word", "命令 你好", "命令 "},
+		{"emoji-word", "ship 🚀", "ship "},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			m := newTestModel(tc.in)
+			m.Update(keys.KeyEvent{Key: keys.KeyCtrlW})
+			require.Equal(t, tc.want, m.Input)
+		})
+	}
 }
 
 func TestModel_EnterSubmitsFocused(t *testing.T) {
