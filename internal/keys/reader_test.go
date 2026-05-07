@@ -213,6 +213,50 @@ func TestReader_Events_EscFlushTimerDelivers(t *testing.T) {
 	require.Equal(t, KeyEvent{Key: KeyEsc}, got[0])
 }
 
+// TestReader_Events_SS3FlushTimerDelivers exercises the same flush
+// path for an aborted SS3 prelude. A terminal that emits `\eO` and
+// then nothing (rare but possible on flaky links and embedded
+// firmware emulators) used to leave the picker frozen with the
+// parser stuck in stateSS3 — the reader did not arm the flush
+// timer for that state, so FlushEsc was never called and the user
+// saw no key feedback until some unrelated byte unstuck the
+// sequence. The fix wires stateSS3 into the same arm-flush branch
+// as stateEsc; this test pins it.
+func TestReader_Events_SS3FlushTimerDelivers(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("pty unsupported on windows")
+	}
+
+	master, slave, err := pty.Open()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = master.Close()
+		_ = slave.Close()
+	})
+
+	t1, err := tty.NewFromFile(slave)
+	require.NoError(t, err)
+	require.NoError(t, t1.EnterRaw())
+	t.Cleanup(func() { _ = t1.LeaveRaw() })
+
+	r := NewReader(t1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events := r.Events(ctx)
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		_, _ = io.WriteString(master, "\x1bO")
+	}()
+
+	// FlushEsc on a stale SS3 emits Esc + 'O' rune. Both must arrive
+	// within the same window the bare-Esc path uses.
+	got := drainEvents(events, 2, 1*time.Second)
+	require.Len(t, got, 2, "stalled SS3 must flush within ~150ms")
+	require.Equal(t, KeyEvent{Key: KeyEsc}, got[0])
+	require.Equal(t, RuneEvent{R: 'O'}, got[1])
+}
+
 // Defensive compile-time check: the unix package must export the
 // poll constants we depend on. A future Go-x-sys reshuffle that
 // removes these would otherwise break us at runtime.

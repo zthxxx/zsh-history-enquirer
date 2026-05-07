@@ -136,7 +136,14 @@ func (r *Reader) Events(ctx context.Context) <-chan Event {
 			n, rerr := unix.Read(fd, buf)
 			if n > 0 {
 				events := r.parser.Feed(buf[:n])
-				if r.parser.state == stateEsc {
+				// Arm the flush timer whenever the parser is left in a
+				// state FlushEsc can resolve. Otherwise an aborted SS3
+				// prelude (terminal sent `\eO` then nothing — rare but
+				// possible on flaky links and unusual emulators) would
+				// leave the picker frozen indefinitely with no events
+				// emitted: the user would see no key feedback until any
+				// other byte arrived to break the SS3 sequence.
+				if r.parser.state == stateEsc || r.parser.state == stateSS3 {
 					armFlush()
 				}
 				if !emit(events) {

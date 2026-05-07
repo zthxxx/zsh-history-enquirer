@@ -503,3 +503,16 @@ companion was resolved in the
   `TestParser_PlainEscThenBackspaceStillCancels`, and e2e
   scenario 20-alt-backspace.exp (validated on both glibc and
   musl). Resolved in this iteration's commit.
+
+* **2026-05-07** — The reader's flush timer was only armed for
+  `stateEsc`, not `stateSS3`, but `Parser.FlushEsc` already handled
+  both. Net effect: a terminal that sent `\eO` and then nothing
+  (rare on flaky links / embedded firmware emulators) would freeze
+  the picker — the parser sat in stateSS3, the reader never armed
+  the timer, FlushEsc was never called, and no events surfaced
+  until some unrelated byte unstuck the sequence. The user saw a
+  picker with no key feedback. Fix is one line: arm flush when
+  state is `stateEsc` OR `stateSS3`. Pinned by
+  `TestReader_Events_SS3FlushTimerDelivers`, which mirrors the
+  existing `TestReader_Events_EscFlushTimerDelivers` pty test.
+  Resolved in this iteration's commit.
