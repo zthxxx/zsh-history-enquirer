@@ -36,8 +36,6 @@ components:
     in: internal/tty/**
   keys:
     in: internal/keys/**
-  ansi:
-    in: internal/ansi/**
   version:
     in: pkg/version/**
 
@@ -45,7 +43,12 @@ deps:
   cmd:
     mayDependOn: [app, version]
   app:
-    mayDependOn: [history, search, ui, tty, keys, ansi, version]
+    # The third-party charmbracelet/x/ansi (which used to be wrapped
+    # by internal/ansi) is freely available to every package via
+    # `anyVendorDeps: true` — we no longer need an `ansi` component
+    # rule because there's no in-repo package to constrain.
+    mayDependOn: [history, search, ui, tty, keys, version]
+    anyVendorDeps: true
   history:
     anyVendorDeps: true
   search:
@@ -55,12 +58,12 @@ deps:
     # logical layering is bytes → events → ui state, even though keys
     # imports tty for its byte source — so the transitive
     # ui→keys→tty edge is intended.
-    mayDependOn: [search, ansi, keys]
+    mayDependOn: [search, keys]
+    anyVendorDeps: true
   keys:
     mayDependOn: [tty]
+    anyVendorDeps: true
   tty:
-    mayDependOn: [ansi]
-  ansi:
     anyVendorDeps: true
   version:
     anyVendorDeps: true

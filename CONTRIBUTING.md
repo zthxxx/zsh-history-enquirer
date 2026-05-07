@@ -87,11 +87,14 @@ Enforced by `.go-arch-lint.yml`. The TL;DR:
 
 - `cmd/` may import `internal/app` and `pkg/`.
 - `internal/app` may import every other internal package.
-- `internal/ui` may import `internal/{search, ansi, keys}`.
+- `internal/ui` may import `internal/{search, keys}`.
 - `internal/keys` may import `internal/tty`.
-- `internal/tty` may import `internal/ansi`.
-- `internal/{history, search, ansi, version}` import nothing else
+- `internal/{history, search, tty, version}` import nothing else
   internal — they are leaf packages.
+
+ANSI escape strings are emitted via `charmbracelet/x/ansi` (a
+third-party module), available to every package — there is no
+in-repo `internal/ansi` wrapper.
 
 Reach for a layer-violating import and `task lint:arch` will tell
 you. CI runs the same check.

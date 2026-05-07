@@ -44,8 +44,9 @@ internal/search — Tokenize + AndFilter (case-insensitive, AND-only)
 internal/history — ZshLoader + FixtureLoader + ReverseDedupeUnescape
 internal/tty — TTY handle, raw-mode RAII, DSR cursor probe via Poll
 internal/keys — byte parser + Event types + bracketed-paste FSM
-internal/ansi — minimal escape-string assembler
 pkg/version — -ldflags-injected version stamp (--version flag)
+                (ANSI escape strings come from charmbracelet/x/ansi —
+                 a third-party module shared with bubbletea / lipgloss)
 ```
 
 ## Distribution
