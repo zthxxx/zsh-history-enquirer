@@ -51,6 +51,25 @@ itself.)
 
 ## Addressed
 
+* **2026-05-07** — ↑/↓ wrap-around at the edges of a fully-visible
+  filter scrambled the displayed order. When `len(Filter) <= m.Limit`
+  (e.g. user filtered to 2-3 entries), pressing ↓ at the bottom did
+  `m.Idx = 0; m.rotateDown(1)` — but the rotation moved Filter[0] to
+  the back and clamped focus onto the new Filter[0] which used to be
+  Filter[1]. So a list `[a-1, a-2, a-3]` after the wrap-around showed
+  as `[a-2, a-3, a-1]` with focus on a-2 (NOT a-1 as the user
+  expected). Symmetric bug on `moveUp`'s rotateUp(1) at the top.
+  **Addressed in pending commit**: when `len(Filter) <= m.Limit`,
+  wrap branches now just set `m.Idx = 0` (Down) or
+  `m.Idx = len(m.Filter) - 1` (Up) without rotation — the list
+  stays in its natural order and focus jumps cleanly to the other
+  end. Two regression tests pin both directions; the existing
+  `TestModel_DownWrapsWhenFilterFitsInLimit` was strengthened to
+  also assert `m.Focused() == "a-1"` and that the visible Filter
+  matches its pre-wrap snapshot. spec/50-keybindings now describes
+  the wrap-around invariant alongside the multi-line scroll-down
+  algorithm.
+
 * **2026-05-07** — Multi-line scroll-down advanced focus by a single
   rotation only; when the next entry was multi-line and didn't fit
   alongside the current visible head, `renderBody`'s dynamic limit

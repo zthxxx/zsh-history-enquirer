@@ -920,14 +920,17 @@ func TestModel_ScrollThenClear_RestoresChronologicalOrder(t *testing.T) {
 }
 
 // TestModel_DownWrapsWhenFilterFitsInLimit — when len(Filter) <=
-// Limit, the entire filter is visible at once, and Down at the
-// bottom wraps to top via the rotateDown path.
+// Limit, the entire filter is visible at once. Pressing ↓ at the
+// bottom must wrap focus to the FIRST entry without rotating the
+// visible list (rotation here would scramble the displayed order:
+// the user would see [a-2, a-3, a-1] instead of [a-1, a-2, a-3]).
 func TestModel_DownWrapsWhenFilterFitsInLimit(t *testing.T) {
 	t.Parallel()
 	choices := []string{"a-1", "a-2", "a-3"}
 	m := NewModel("a", choices, 15, 80, 1, 1, DefaultMaxLimit)
 	m.Render(RenderOptions{})
 	require.Equal(t, 3, m.Limit, "all 3 entries must fit in the limit")
+	snapshot := slices.Clone(m.Filter)
 
 	// Walk to the last visible entry.
 	m.Update(keys.KeyEvent{Key: keys.KeyDown})
@@ -939,6 +942,31 @@ func TestModel_DownWrapsWhenFilterFitsInLimit(t *testing.T) {
 	m.Render(RenderOptions{PrevSize: m.Limit})
 	require.Equal(t, 0, m.Idx,
 		"Down past the last visible entry must wrap to top (Idx=0)")
+	require.Equal(t, "a-1", m.Focused(),
+		"wrap-around must focus the FIRST entry (a-1), not the post-rotation second")
+	require.Equal(t, snapshot, m.Filter,
+		"wrap-around in a fully-visible filter must NOT rotate the visible order")
+}
+
+// TestModel_UpWrapsWhenFilterFitsInLimit — symmetric to the Down
+// wrap test: ↑ at the top of a fully-visible filter must focus
+// the LAST entry without rotating the displayed order.
+func TestModel_UpWrapsWhenFilterFitsInLimit(t *testing.T) {
+	t.Parallel()
+	choices := []string{"a-1", "a-2", "a-3"}
+	m := NewModel("a", choices, 15, 80, 1, 1, DefaultMaxLimit)
+	m.Render(RenderOptions{})
+	require.Equal(t, 3, m.Limit)
+	require.Equal(t, "a-1", m.Focused(), "starts on first")
+	snapshot := slices.Clone(m.Filter)
+
+	// ↑ at top of fully-visible filter — wrap to bottom.
+	m.Update(keys.KeyEvent{Key: keys.KeyUp})
+	m.Render(RenderOptions{PrevSize: m.Limit})
+	require.Equal(t, "a-3", m.Focused(),
+		"↑ at top of fully-visible filter must wrap focus to the LAST entry")
+	require.Equal(t, snapshot, m.Filter,
+		"wrap-around in a fully-visible filter must NOT rotate the visible order")
 }
 
 // TestModel_DownAdvancesOntoMultiLineEntry — pins the

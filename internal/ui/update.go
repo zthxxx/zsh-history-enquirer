@@ -211,7 +211,17 @@ func (m *Model) moveUp() {
 		m.Idx--
 		return
 	}
-	// Already at the top of the visible window — rotate one in.
+	if m.Limit > 0 && len(m.Filter) <= m.Limit {
+		// Wrap around — entire filter is visible at once, so just
+		// move focus to the last entry without rotating. Rotating
+		// here would reorder the visible list (last entry to front),
+		// which contradicts the user's mental model of "↑ at top
+		// goes to the bottom of the same list".
+		m.Idx = len(m.Filter) - 1
+		return
+	}
+	// At the top of the visible window with more entries above —
+	// rotate one in from the back.
 	m.rotateUp(1)
 }
 
@@ -230,9 +240,13 @@ func (m *Model) moveDown() {
 		return
 	}
 	if len(m.Filter) <= m.Limit {
-		// Wrap around — there is nothing more to scroll into view.
+		// Wrap around — entire filter is already visible, so just
+		// move focus to the first entry without rotating. The legacy
+		// rotation here (rotateDown(1)) reordered the visible list:
+		// after wrap, the displayed order was the previous tail
+		// followed by the previous head, NOT the natural [0..len-1]
+		// the user expects to see when ↓ wraps from end to top.
 		m.Idx = 0
-		m.rotateDown(1)
 		return
 	}
 	// At the bottom of the visible window with more entries below.

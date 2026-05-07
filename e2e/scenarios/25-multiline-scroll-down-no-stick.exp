@@ -55,7 +55,15 @@ expect_after timeout {
 expect "% "
 sleep 0.4
 
-send -- "HISTFILE=/tmp/multiline-stick-history fc -R\r"
+# Export HISTFILE so the picker subprocess inherits it. An inline
+# override (`HISTFILE=... fc -R`) only affects the parent shell's
+# in-memory history; the picker spawns its own zsh subshell that
+# reads HISTFILE from env, so we must `export` to make the seeded
+# fixture visible to the picker.
+send -- "export HISTFILE=/tmp/multiline-stick-history\r"
+sleep 0.2
+expect "% "
+send -- "fc -R\r"
 sleep 0.4
 expect "% "
 

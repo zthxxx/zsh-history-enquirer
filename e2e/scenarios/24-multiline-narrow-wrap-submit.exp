@@ -34,12 +34,16 @@ log_user 1
 # Custom $HISTFILE with one multi-line entry. zsh stores embedded
 # newlines as literal backslash-n; the loader's
 # ReverseDedupeUnescape un-escapes them so the picker sees real LFs.
-# Each line below is 50 chars (50 'X' / 'Y' / 'Z' + the marker), well
-# above the 40-col terminal width — so each line wraps to two visual
-# rows once the picker is rendering.
+# Each `echo` line is 50+ chars (5 char "echo " + 48 X/Y/Z + the
+# marker), well above the 40-col terminal width — so each line
+# wraps to two visual rows once the picker is rendering. The 3
+# echoes also produce 3 self-contained stdout markers when zsh
+# executes the multi-line BUFFER, giving the assertion section
+# clean printable output (rather than relying on `command not
+# found` stderr output as a fallback).
 exec sh -c {
   printf ': 1568797200:0;ml-marker-pre\n' > /tmp/multiline-narrow-history
-  printf ': 1568797201:0;printf "%%s %%s %%s\\\\n" XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXalpha\\\\nYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYbeta\\\\nZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZgamma\n' >> /tmp/multiline-narrow-history
+  printf ': 1568797201:0;echo XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXalpha\\\\necho YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYbeta\\\\necho ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZgamma\n' >> /tmp/multiline-narrow-history
   printf ': 1568797202:0;ml-marker-post\n' >> /tmp/multiline-narrow-history
 }
 
@@ -54,10 +58,16 @@ expect_after timeout {
 expect "% "
 sleep 0.4
 
-# Configure the shell to use our custom HISTFILE before opening the
-# picker — fc -R will re-read on the binary's side and pick up the
-# multi-line entry.
-send -- "HISTFILE=/tmp/multiline-narrow-history fc -R\r"
+# Configure the shell to use our custom HISTFILE before opening
+# the picker. `export` (NOT inline `HISTFILE=... fc -R`) is
+# required because the picker spawns its own zsh subshell that
+# reads HISTFILE from env — an inline override only sets the var
+# for the duration of `fc -R` in the parent shell. With `export`,
+# every subsequent picker subprocess inherits the custom path.
+send -- "export HISTFILE=/tmp/multiline-narrow-history\r"
+sleep 0.2
+expect "% "
+send -- "fc -R\r"
 sleep 0.4
 expect "% "
 

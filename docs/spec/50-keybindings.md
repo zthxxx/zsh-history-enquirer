@@ -62,6 +62,19 @@ or, worse, gets stuck — `renderBody` shrinks the limit and clamps
 `m.Idx` back to the same logical entry, so the user observes a "lost"
 keypress.
 
+## Wrap-around at edges
+
+When the entire filter fits in the visible window
+(`len(Filter) <= m.Limit`), pressing ↓ at the bottom or ↑ at the
+top wraps focus to the other end **without rotating the visible
+list**. The displayed order is preserved across the wrap so the
+user sees `[a-1, a-2, a-3]` continuously, not `[a-2, a-3, a-1]`
+on the wrap-down or `[a-3, a-1, a-2]` on the wrap-up.
+
+When `len(Filter) > m.Limit`, the wrap path doesn't apply — there
+are entries to scroll into view, and ↑/↓ rotate the window
+through them.
+
 ## Cancel / no-match-submit invariants
 
 - <kbd>Esc</kbd> and <kbd>Ctrl</kbd>+<kbd>C</kbd>: the binary writes the

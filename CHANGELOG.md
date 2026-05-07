@@ -97,6 +97,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   (`strings.Contains`); only the visual emphasis was incomplete.
   Now every match is collected and the merge step folds the
   overlapping spans into one continuous SGR-wrapped run.
+- **↑/↓ wrap-around at the edges of a fully-visible filter no
+  longer scrambles the displayed order.** When `len(Filter) <=
+  m.Limit` (the user filtered to 2-3 entries), pressing ↓ at the
+  bottom did `m.Idx = 0; rotateDown(1)` — but the rotation moved
+  Filter[0] to the back and clamped focus onto the new Filter[0]
+  which used to be Filter[1]. So a list `[a-1, a-2, a-3]` after
+  wrap-around showed as `[a-2, a-3, a-1]` with focus on a-2
+  (NOT a-1 as the user expected). Symmetric bug on `moveUp`'s
+  rotateUp(1) at the top. Both branches now set `m.Idx` to the
+  correct edge without rotating; the visible list stays in its
+  natural order and focus jumps cleanly to the other end. Two
+  regression tests pin both directions.
 - **Pressing ↓ at the bottom of the visible window onto a multi-
   line entry no longer "loses" the keypress.** The legacy moveDown
   rotated the filter by 1 unconditionally; when the next entry was
