@@ -67,6 +67,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed (vs. legacy 1.x bugs that survived into the rewrite)
 
+- **`--histsize=-1` no longer fed `HISTSIZE=-1` to zsh.** `flag.Int`
+  accepts negative integers, so a typo invocation previously produced
+  zsh-version-dependent behaviour (no-history view in some, hard
+  error in others). The defaulting branch now clamps any
+  `HistSize <= 0` to `DefaultHistSize` (100k) so the picker behaves
+  predictably regardless of operator intent.
+- **`cli.js`'s install hint now double-quotes the plugin path.** On
+  systems where the npm install prefix contains a space (custom user
+  names, unusual macOS layouts, certain WSL setups), copy-pasting
+  the suggested `source /path/...` line into `~/.zshrc` would fail —
+  zsh's `source` treated the second word as a separate argument.
+  Hint now prints `source "/path/..."` so the suggestion survives
+  any space-containing prefix.
 - **User-arrow-before-DSR-probe race**: pressing
   <kbd>Ctrl</kbd>+<kbd>R</kbd> and immediately tapping an arrow / Home
   / End used to leave the picker rendered at the col=1 fallback
