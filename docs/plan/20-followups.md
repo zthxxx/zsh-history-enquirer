@@ -25,6 +25,19 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — Arrow keys via SS3 sequences (`\eOA` / `\eOB`
+  / `\eOC` / `\eOD`) were not handled by the parser. Some terminals
+  (xterm in DECCKM application-keypad mode, certain VT-series
+  emulators, embedded firmware) send `\eO<key>` instead of the CSI
+  `\e[<key>` form. Falling through to the "ESC + unrelated byte"
+  branch, the parser emitted `KeyEsc + 'O' rune + arrow letter
+  rune` — every arrow press would CANCEL the picker. Added
+  `stateSS3` + `feedSS3` to internal/keys/parser.go covering A/B/C/D
+  (arrows) and H/F (Home/End). `FlushEsc` also drains a hung SS3
+  prelude (`\eO` with no follow-up byte) to avoid blocking input.
+  Three regression tests cover arrow recognition, unknown-byte
+  safety fallback, and the flush case.
+
 * **2026-05-07** — Architectural mismatch surfaced by an added e2e
   scenario (19-ctrl-w-word-delete): `fx.StartTimeout(5s)` and a
   matching 5-second `context.WithTimeout` in main were intended to

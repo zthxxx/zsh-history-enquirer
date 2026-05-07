@@ -22,6 +22,7 @@ const (
 	stateNormal state = iota
 	stateEsc          // saw \e, awaiting next byte
 	stateCSI          // saw \e[, accumulating params
+	stateSS3          // saw \eO (Single Shift 3); awaiting key code
 	statePaste        // inside bracketed paste, awaiting \e[201~
 )
 
@@ -49,6 +50,8 @@ func (p *Parser) Feed(in []byte) []Event {
 			out = p.feedEsc(b, out)
 		case stateCSI:
 			out = p.feedCSI(b, out)
+		case stateSS3:
+			out = p.feedSS3(b, out)
 		case statePaste:
 			out = p.feedPaste(b, out)
 		}
@@ -59,12 +62,21 @@ func (p *Parser) Feed(in []byte) []Event {
 // FlushEsc treats a pending solitary ESC as Esc keypress. Called when
 // the caller knows no more bytes are coming for some milliseconds —
 // otherwise we would never emit the standalone Esc event.
+//
+// A pending SS3 prelude (`\eO` with no follow-up byte) flushes as
+// Esc + 'O' rune so the picker doesn't sit forever holding the key
+// state if the terminal aborts mid-sequence. Same pattern as Esc.
 func (p *Parser) FlushEsc() []Event {
-	if p.state == stateEsc {
+	switch p.state {
+	case stateEsc:
 		p.state = stateNormal
 		return []Event{KeyEvent{Key: KeyEsc}}
+	case stateSS3:
+		p.state = stateNormal
+		return []Event{KeyEvent{Key: KeyEsc}, RuneEvent{R: 'O'}}
+	default:
+		return nil
 	}
-	return nil
 }
 
 func (p *Parser) feedNormal(b byte, out []Event) []Event {
@@ -110,6 +122,16 @@ func (p *Parser) feedEsc(b byte, out []Event) []Event {
 		p.state = stateCSI
 		p.buf = p.buf[:0]
 		return out
+	case 'O':
+		// SS3 (Single Shift 3) prelude — terminals running in
+		// "application keypad mode" (xterm DECCKM, some VT-series
+		// emulators, embedded firmware terminals) send `\eOA` for
+		// arrow up, `\eOB` for down, etc., instead of the CSI form
+		// `\e[A` / `\e[B` we already handle. Without this branch the
+		// fallback would surface as "Esc + 'O' rune + arrow letter
+		// rune" — Esc would CANCEL the picker on every arrow press.
+		p.state = stateSS3
+		return out
 	case 0x1b:
 		// ESC ESC: emit one Esc and treat the second as start of a
 		// new sequence.
@@ -120,6 +142,36 @@ func (p *Parser) feedEsc(b byte, out []Event) []Event {
 		// the byte as if it arrived in normal state.
 		p.state = stateNormal
 		out = append(out, KeyEvent{Key: KeyEsc})
+		return p.feedNormal(b, out)
+	}
+}
+
+// feedSS3 maps the byte after `\eO` to the equivalent CSI key. Only
+// arrow keys + Home/End are observed in real-world SS3 streams; any
+// other byte falls back to "Esc + 'O' + byte-as-rune" for safety,
+// matching what the parser would have done before SS3 was wired in.
+func (p *Parser) feedSS3(b byte, out []Event) []Event {
+	p.state = stateNormal
+	switch b {
+	case 'A':
+		return append(out, KeyEvent{Key: KeyUp})
+	case 'B':
+		return append(out, KeyEvent{Key: KeyDown})
+	case 'C':
+		return append(out, KeyEvent{Key: KeyRight})
+	case 'D':
+		return append(out, KeyEvent{Key: KeyLeft})
+	case 'H':
+		return append(out, KeyEvent{Key: KeyHome})
+	case 'F':
+		return append(out, KeyEvent{Key: KeyEnd})
+	default:
+		// Unrecognized SS3 — best-effort fallback so we don't swallow
+		// the bytes silently. Emits Esc + 'O' + byte. The picker will
+		// cancel on Esc; that's the same behavior as before SS3
+		// support was wired in, so it is at most a no-op regression
+		// for sequences we never claimed to handle.
+		out = append(out, KeyEvent{Key: KeyEsc}, RuneEvent{R: 'O'})
 		return p.feedNormal(b, out)
 	}
 }

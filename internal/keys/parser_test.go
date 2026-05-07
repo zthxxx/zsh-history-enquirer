@@ -62,6 +62,59 @@ func TestParser_ArrowKeys(t *testing.T) {
 	}, got)
 }
 
+// TestParser_SS3ArrowKeys covers the SS3 (Single Shift 3) variant
+// `\eOA` etc. that some terminals (xterm in app-keypad mode, certain
+// VT-emulators, embedded firmware terminals) send instead of the CSI
+// `\e[A` form. Without SS3 handling, every arrow press in such a
+// terminal would surface as Esc + 'O' + arrow letter — the picker
+// would CANCEL on the Esc and append "OA"/"OB" to the input.
+func TestParser_SS3ArrowKeys(t *testing.T) {
+	t.Parallel()
+
+	p := NewParser()
+	got := feedAll(p, "\x1bOA\x1bOB\x1bOC\x1bOD\x1bOH\x1bOF")
+	require.Equal(t, []Event{
+		KeyEvent{Key: KeyUp},
+		KeyEvent{Key: KeyDown},
+		KeyEvent{Key: KeyRight},
+		KeyEvent{Key: KeyLeft},
+		KeyEvent{Key: KeyHome},
+		KeyEvent{Key: KeyEnd},
+	}, got)
+}
+
+// TestParser_SS3UnknownByteFallsBackSafely ensures an unrecognized
+// SS3 sequence (`\eOX`) doesn't get swallowed silently — we emit
+// Esc + 'O' + 'X' so the user at least sees something happen
+// (matches pre-SS3-fix behavior for those bytes).
+func TestParser_SS3UnknownByteFallsBackSafely(t *testing.T) {
+	t.Parallel()
+
+	p := NewParser()
+	got := feedAll(p, "\x1bOX")
+	require.Equal(t, []Event{
+		KeyEvent{Key: KeyEsc},
+		RuneEvent{R: 'O'},
+		RuneEvent{R: 'X'},
+	}, got)
+}
+
+// TestParser_FlushEsc_DuringSS3Pending releases an unfinished SS3
+// prelude (the user's terminal emitted `\eO` then nothing for >50ms).
+// Before this fix it would have remained in stateSS3 indefinitely,
+// blocking ALL subsequent input until a key code byte arrived.
+func TestParser_FlushEsc_DuringSS3Pending(t *testing.T) {
+	t.Parallel()
+
+	p := NewParser()
+	require.Empty(t, feedAll(p, "\x1bO"), "no events emitted yet")
+	got := p.FlushEsc()
+	require.Equal(t, []Event{
+		KeyEvent{Key: KeyEsc},
+		RuneEvent{R: 'O'},
+	}, got)
+}
+
 func TestParser_HomeEnd(t *testing.T) {
 	t.Parallel()
 

@@ -127,6 +127,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `cmd/zsh-history-enquirer/main.go` that reconstructs `cfg.Input`
   via `app.NewConfig` and echoes it back to stdout. Three table
   tests pin the (preserves-input, no-args, malformed-argv) cases.
+- **Arrow keys via SS3 sequences (`\eOA` / `\eOB` / etc.) cancelled
+  the picker.** Some terminals — xterm in DECCKM/application-keypad
+  mode, certain VT-series emulators, embedded firmware terminals —
+  send `\eO<key>` instead of the CSI form `\e[<key>` for arrow /
+  Home / End keys. The parser only handled CSI; SS3 fell through to
+  the "ESC + unrelated byte" branch, emitting `KeyEsc + RuneEvent
+  'O' + RuneEvent <key>`. The picker would CANCEL on every arrow
+  press in such a terminal (preserving input but never letting the
+  user navigate). Added `stateSS3` + `feedSS3` covering A/B/C/D/H/F.
+  `FlushEsc` also drains a hung SS3 prelude. Three regression tests
+  pin the arrow / unknown-byte fallback / flush behaviors.
 - **Picker session > 5 seconds crashed with "context deadline
   exceeded".** `fx.StartTimeout(5*time.Second)` and
   `context.WithTimeout(..., 5*time.Second)` in `main.go` were
