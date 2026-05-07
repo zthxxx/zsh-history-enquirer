@@ -135,6 +135,162 @@ func TestRunEventLoop_CtxDoneCancelsAndReturnsInput(t *testing.T) {
 	require.True(t, model.Canceled, "model must record the cancel")
 }
 
+// TestRunEventLoop_PreEventTerminatesBeforeLiveStream pins the
+// preEvents prelude: when bytes the cursor probe consumed contain a
+// terminating event (Enter, Esc — e.g. the user impatiently pressed
+// Enter while the picker was still probing), runEventLoop must
+// process them BEFORE switching the live event channel on. Without
+// this, the live `<-events` select would race the prelude consumer
+// and the user-impatient submit could be silently dropped.
+func TestRunEventLoop_PreEventTerminatesBeforeLiveStream(t *testing.T) {
+	t.Parallel()
+	master, slave, err := pty.Open()
+	require.NoError(t, err)
+	defer master.Close()
+	defer slave.Close()
+
+	require.NoError(t, unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{
+		Row: 24, Col: 80,
+	}))
+	ttyHandle, err := tty.NewFromFile(slave)
+	require.NoError(t, err)
+
+	model := ui.NewModel("git", []string{"git status", "git log"}, 24, 80, 1, 1, ui.DefaultMaxLimit)
+
+	// Live event channel is intentionally never written to — if the
+	// loop tries to read a live event before consuming preEvents the
+	// test deadlocks.
+	events := make(chan keys.Event)
+	preEvents := []keys.Event{keys.KeyEvent{Key: keys.KeyEnter}}
+
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			if _, rerr := master.Read(buf); rerr != nil {
+				return
+			}
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	result, err := runEventLoop(ctx, ttyHandle, model, events, preEvents, io.Discard)
+	require.NoError(t, err, "preEvent submit must terminate cleanly with no error")
+	require.NotNil(t, result)
+	require.Equal(t, "git status", result.Output,
+		"prelude Enter on focused first match must surface as Output")
+	require.True(t, model.Submitted, "model must record the submit from the preEvent")
+}
+
+// TestRunEventLoop_PreEventNonTerminatingThenLive pins the
+// pre-event-then-live branch: a non-terminating preEvent (e.g. a
+// rune the cursor probe captured) must update the model AND leave
+// the loop ready to consume live events. Subsequent Enter via the
+// live channel terminates as normal.
+//
+// This guards the `if len(preEvents) > 0 { render(false) }` arm:
+// the post-prelude render must fire even when the prelude itself
+// did not terminate, so the user sees the picker reflect the
+// preEvent's input before pressing the next key.
+func TestRunEventLoop_PreEventNonTerminatingThenLive(t *testing.T) {
+	t.Parallel()
+	master, slave, err := pty.Open()
+	require.NoError(t, err)
+	defer master.Close()
+	defer slave.Close()
+
+	require.NoError(t, unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{
+		Row: 24, Col: 80,
+	}))
+	ttyHandle, err := tty.NewFromFile(slave)
+	require.NoError(t, err)
+
+	// Empty initial input; the preEvent will type 'g'.
+	model := ui.NewModel("", []string{"git status", "ls -la"}, 24, 80, 1, 1, ui.DefaultMaxLimit)
+
+	events := make(chan keys.Event, 1)
+	events <- keys.KeyEvent{Key: keys.KeyEnter}
+	close(events)
+
+	preEvents := []keys.Event{keys.RuneEvent{R: 'g'}}
+
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			if _, rerr := master.Read(buf); rerr != nil {
+				return
+			}
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	result, err := runEventLoop(ctx, ttyHandle, model, events, preEvents, io.Discard)
+	require.NoError(t, err, "submit must terminate cleanly with no error")
+	require.NotNil(t, result)
+	require.Equal(t, "git status", result.Output,
+		"preEvent typed 'g' which narrowed the filter; subsequent Enter "+
+			"on the focused match must surface as Output")
+	require.True(t, model.Submitted)
+	require.Equal(t, "g", model.Input,
+		"preEvent rune must have landed in m.Input before the live Enter fired")
+}
+
+// TestRunEventLoop_EventsChannelClosedWithoutTerminator pins the
+// reader-died branch: when the events channel is closed without ever
+// emitting a terminating event (the reader goroutine exited because
+// of POLLHUP or a panic recovery), the loop must treat the close as
+// an implicit cancel — set Canceled=true, return Input as Result, and
+// surface a non-nil error so HandleError can dispatch.
+//
+// Without this branch the loop would spin on a closed channel forever
+// (selecting on a closed channel is non-blocking, and ev would be
+// the zero value → still loop). Closing observed via the (ok=false)
+// pattern is what guarantees a clean teardown.
+func TestRunEventLoop_EventsChannelClosedWithoutTerminator(t *testing.T) {
+	t.Parallel()
+	master, slave, err := pty.Open()
+	require.NoError(t, err)
+	defer master.Close()
+	defer slave.Close()
+
+	require.NoError(t, unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{
+		Row: 24, Col: 80,
+	}))
+	ttyHandle, err := tty.NewFromFile(slave)
+	require.NoError(t, err)
+
+	model := ui.NewModel("user-typed", []string{"any"}, 24, 80, 1, 1, ui.DefaultMaxLimit)
+
+	// Channel closed immediately, no events delivered.
+	events := make(chan keys.Event)
+	close(events)
+
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			if _, rerr := master.Read(buf); rerr != nil {
+				return
+			}
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	result, err := runEventLoop(ctx, ttyHandle, model, events, nil, io.Discard)
+	require.Error(t, err, "channel close without terminator must surface as a loop error")
+	require.NotErrorIs(t, err, context.Canceled,
+		"the close itself is the trigger, not ctx — must surface as 'input closed'")
+	require.NotNil(t, result, "result must be non-nil so PrintResult preserves Input")
+	require.Equal(t, "user-typed", result.Output,
+		"channel-closed cancel must echo Input — widget contract")
+	require.True(t, model.Canceled,
+		"model must record the cancel so SubmitResult takes the right branch")
+}
+
 // TestReadGeometry_FallsBackOnZeroSize pins the docker-pty fallback:
 // some pty configurations (notably docker's pty without an explicit
 // SIGWINCH driver) report rows=0, cols=0 from TIOCGWINSZ. Without
