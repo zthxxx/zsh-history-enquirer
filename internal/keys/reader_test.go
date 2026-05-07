@@ -304,18 +304,42 @@ func TestReader_Events_SignalDoesNotKillLoop(t *testing.T) {
 	// Drain until we see the 'x' rune. If the loop died, we'll time
 	// out on the channel close instead.
 	deadline := time.After(2 * time.Second)
-	for {
+	seenX := false
+	for !seenX {
 		select {
 		case ev, ok := <-events:
 			if !ok {
 				t.Fatal("events channel closed unexpectedly — EINTR likely tore down the loop")
 			}
 			if re, isRune := ev.(RuneEvent); isRune && re.R == 'x' {
-				return // success: keystroke after SIGWINCH bursts
+				seenX = true
 			}
 			// Other events (resize) are fine; ignore and keep draining.
 		case <-deadline:
 			t.Fatal("did not receive 'x' keystroke within 2s after SIGWINCH bursts")
+		}
+	}
+
+	// IMPORTANT: cancel and wait for the reader goroutine to exit
+	// BEFORE letting t.Cleanup close the slave PTY. Without this
+	// drain, a SIGWINCH that arrived just before cancel can still
+	// be queued in the reader's `winch` channel; the goroutine
+	// would then call `r.tty.Size()` (which calls `t.file.Fd()`)
+	// concurrently with the cleanup's `slave.Close()` and the race
+	// detector flags it. Draining the events channel until close
+	// guarantees the reader has exited; the close is the only
+	// signal we have for "goroutine done" (no Done() / WaitGroup
+	// is exposed by Reader).
+	cancel()
+	drainDeadline := time.After(2 * time.Second)
+	for {
+		select {
+		case _, ok := <-events:
+			if !ok {
+				return // reader goroutine has exited cleanly
+			}
+		case <-drainDeadline:
+			t.Fatal("reader goroutine did not exit within 2s of cancel — race window still open")
 		}
 	}
 }

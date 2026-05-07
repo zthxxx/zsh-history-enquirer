@@ -837,3 +837,20 @@ companion was resolved in the
   `\e[12` case). Fuzzer (`FuzzParser_NoPanicOnArbitraryBytes`)
   re-exercised at 5s/265k execs/sec — no regressions.
   Resolved in this iteration's commit.
+
+* **2026-05-07** — Race detector flagged `TestReader_Events_SignalDoesNotKillLoop`
+  added in an earlier iteration of this loop. The test fires
+  SIGWINCH bursts (which queue in the reader's `winch` channel)
+  and asserts that subsequent keystrokes still arrive. After the
+  assertion, the test returned, deferred `cancel()` fired, and
+  `t.Cleanup` called `slave.Close()`. But the reader goroutine
+  could still be alive at that point, in the WINCH-drain branch
+  calling `r.tty.Size()` (which reads `t.file.Fd()`). The race
+  detector caught the read-during-close. Other reader tests
+  (BasicFlow, PasteEvent, etc.) don't trip the race because they
+  don't fire SIGWINCH, so the WINCH branch never runs. Fix: after
+  observing the expected event, the test now explicitly cancels
+  ctx and drains the events channel until close — the channel
+  close is the signal that the reader goroutine has fully
+  exited, so subsequent cleanup is safe. 5/5 repeated runs pass
+  the race detector cleanly. Resolved in this iteration's commit.
