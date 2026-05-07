@@ -25,6 +25,23 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — Architectural mismatch surfaced by an added e2e
+  scenario (19-ctrl-w-word-delete): `fx.StartTimeout(5s)` and a
+  matching 5-second `context.WithTimeout` in main were intended to
+  prevent stuck startup, but `invokeRun.OnStart` runs the picker
+  synchronously, so any interactive session > 5s tripped
+  `context.DeadlineExceeded` mid-render. The picker would die with
+  terminal stuck in raw mode and `recoverStartFailure` echoing
+  argv to BUFFER. Fix: bump both timeouts to 1 hour. The picker is
+  bounded by user attention, not a wall clock; the
+  `signal.NotifyContext` wrapper around runCtx already provides
+  proper teardown on real signals (SIGINT / SIGTERM / SIGHUP).
+  Lock-down: scenario 19's expect/sleep total is ~5.5s — without
+  the bump, that scenario would fail; with the bump, it passes
+  cleanly. Documented in AGENTS.md "preserve-input invariant" so a
+  future contributor doesn't tighten the timeout thinking it's a
+  defensive default.
+
 * **2026-05-07** — Cross-cutting bug surfaced by the previous fix:
   the plugin started passing `bin -- "$LBUFFER"` (to neutralize
   flag-fast-path collisions), but the npm shim's missing-binary

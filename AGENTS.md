@@ -151,6 +151,31 @@ Run a single Go test: `go test ./internal/ui -run TestRender_PointerOnFocused`.
   rendering is the entire UX claim. The renderer only ever touches
   rows from `InitRow` down to `InitRow + state.size`, and only
   columns from `InitCol` rightward.
+- **The "preserve `$LBUFFER`" invariant has four uncovered paths
+  the layered code already handles — don't break them.** When you
+  edit any of these, run `task release:smoke` to verify:
+  1. `BUFFER=$(...)` resolves to user-typed text on **submit**
+     (focused entry) and on **cancel** (typed input echoed).
+  2. **Hard early-error in Run()** — `t.EnterRaw()` or
+     `readGeometry()` fails. `preserveOnError` in
+     `internal/app/module.go` synthesizes a `RunResult` from
+     `cfg.Input` so `PrintResult` still fires.
+  3. **fx-provider startup failure** — `/dev/tty` unopenable in
+     a headless container. `recoverStartFailure` in
+     `cmd/zsh-history-enquirer/main.go` reconstructs `cfg.Input`
+     via `app.NewConfig` and writes it to stdout when `a.Start()`
+     errors.
+  4. **External `kill -TERM <pid>`** — `invokeRun` wraps
+     `context.Background()` with
+     `signal.NotifyContext(SIGINT, SIGTERM, SIGHUP)` so the event
+     loop's `<-ctx.Done()` case fires, the cancel-preserves-input
+     path runs, and fx OnStop hooks restore termios.
+- **The plugin passes `--` before `$LBUFFER`** so the binary's
+  doc fast-paths (`--version`, `--help`, `-h`) cannot be triggered
+  by user input that happens to look like a flag. The npm shim
+  also strips a leading `--` from its missing-binary-fallback
+  echo. If you change either side, change both — and update
+  `task release:smoke` step 3/4 accordingly.
 
 ## Triggers for `/ship`
 

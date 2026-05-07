@@ -1,0 +1,58 @@
+#!/usr/bin/env expect
+# 19-ctrl-w-word-delete.exp
+#
+# Ctrl-W (zsh's default backward-kill-word) deletes the last word
+# from the picker's input + re-filters. Common shell muscle memory;
+# for years the picker silently dropped this keystroke. The fix
+# landed in update.go's KeyCtrlW case + deleteLastWord helper.
+
+set timeout 12
+log_user 1
+
+spawn -noecho zsh -il
+expect_after timeout {
+  puts stderr "TIMEOUT in 19-ctrl-w-word-delete"
+  exit 1
+}
+
+expect "% "
+sleep 0.4
+
+# Open the picker.
+send -- "\x12"
+sleep 1.0
+
+# Type "git xyz" — the "git" matches some seed entries but adding
+# "xyz" filters them all out. The picker should show "(no matches)".
+send -- "git xyz"
+sleep 0.5
+expect "no matches"
+sleep 0.3
+
+# Press Ctrl-W (0x17). Strips trailing whitespace + the preceding
+# word "xyz". Input becomes "git ". The picker should re-filter to
+# show entries containing "git". We assert on " status" (with the
+# leading space — separating the highlighted "git" from the rest)
+# rather than "git status" because the rendered bytes look like
+# `\x1b[1;36mgit\x1b[0m status` and expect's literal-substring match
+# can't see "git status" as contiguous when SGR codes break it up.
+send -- "\x17"
+sleep 0.6
+expect -- " status"
+sleep 0.3
+
+# Another Ctrl-W strips the trailing space + "git" word. Input
+# becomes empty. The full unfiltered history should be visible.
+# "echo ok" is the most-recent unfiltered entry — at this point no
+# tokens are active, so the line is rendered without SGR codes
+# between "echo" and "ok".
+send -- "\x17"
+sleep 0.6
+expect "echo ok"
+sleep 0.3
+
+# Cancel cleanly.
+send -- "\x1b"
+sleep 0.3
+send -- "exit\r"
+expect eof

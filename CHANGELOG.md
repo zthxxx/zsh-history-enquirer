@@ -127,6 +127,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `cmd/zsh-history-enquirer/main.go` that reconstructs `cfg.Input`
   via `app.NewConfig` and echoes it back to stdout. Three table
   tests pin the (preserves-input, no-args, malformed-argv) cases.
+- **Picker session > 5 seconds crashed with "context deadline
+  exceeded".** `fx.StartTimeout(5*time.Second)` and
+  `context.WithTimeout(..., 5*time.Second)` in `main.go` were
+  intended as "fail fast on stuck startup" guardrails, but
+  `invokeRun` runs the entire picker session synchronously inside
+  `OnStart`. A real interactive session (slow human, multiple
+  keystrokes, paste, step away for coffee) routinely exceeds 5s.
+  The fx layer would then cancel the picker context, propagate
+  `context.DeadlineExceeded`, and fall through to
+  `recoverStartFailure` — terminal in raw mode, picker frame
+  half-erased, BUFFER set to argv echo. Regression caught by e2e
+  scenario 19 (Ctrl-W word delete) which has just-barely-over-5s
+  sleep totals. Bumped both timeouts to 1 hour — the picker is
+  bounded by user attention, not a fixed wall clock; SIGINT /
+  SIGTERM / SIGHUP still tear it down via the
+  `signal.NotifyContext`-wrapped `runCtx`.
 - **Builds embedded the contributor's absolute filesystem paths.**
   `go build` without `-trimpath` writes the absolute build-time
   source path into the produced binary's symbol table. For an

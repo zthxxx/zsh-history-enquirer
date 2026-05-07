@@ -108,14 +108,23 @@ func main() {
 		app.Module,
 		fx.NopLogger, // silence fx; the widget contract requires
 		// stderr to stay quiet.
-		fx.StartTimeout(5*time.Second),
+		// StartTimeout covers the *interactive picker session* because
+		// invokeRun runs Run() synchronously inside OnStart. A real
+		// human can keep the picker open for arbitrary time (typing,
+		// stepping out for coffee). 1h is a "no realistic upper bound"
+		// stand-in. SIGINT/SIGTERM still tears it down via the
+		// runCtx-wrapping signal.NotifyContext in invokeRun. The
+		// previous 5s timeout caused interactive sessions to crash
+		// with "context deadline exceeded" after sitting idle on the
+		// picker — a real e2e regression caught by scenario 19.
+		fx.StartTimeout(1*time.Hour),
 		fx.StopTimeout(5*time.Second),
 	)
 
 	// Start runs every constructor + every Invoke synchronously. Our
 	// only Invoke runs the picker. After it shuts down via
 	// fx.Shutdowner the call returns and we exit the process.
-	startCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	startCtx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 	defer cancel()
 	if err := a.Start(startCtx); err != nil {
 		// Provider-time failure (e.g. /dev/tty unopenable in a headless
