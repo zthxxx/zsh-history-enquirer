@@ -24,7 +24,11 @@ CMD_PATH="./cmd/zsh-history-enquirer"
 
 VERSION="${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
 COMMIT="${COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)}"
-DATE="${DATE:-$(date -u '+%Y-%m-%dT%H:%M:%SZ')}"
+# DATE uses the HEAD commit's ISO-8601 timestamp rather than wall-clock
+# build time, so a release tag produces byte-identical binaries across
+# CI re-runs (must agree with Taskfile.yml's host-build DATE; both
+# surfaces converge on the commit timestamp).
+DATE="${DATE:-$(git log -1 --format=%cI HEAD 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')}"
 
 LDFLAGS="-s -w \
   -X ${PKG_PATH}/pkg/version.version=${VERSION} \
