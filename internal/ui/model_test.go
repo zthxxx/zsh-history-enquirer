@@ -121,6 +121,34 @@ func TestModel_CtrlUClearsInput(t *testing.T) {
 	require.Empty(t, m.Input)
 }
 
+// TestModel_CtrlPCtrlNAreUpDownAliases pins the Ctrl-P / Ctrl-N
+// alias behaviour: zsh's emacs keymap binds these to
+// up-line-or-history / down-line-or-history. Power users press
+// these reflexively. Without an alias the picker would silently
+// ignore them.
+func TestModel_CtrlPCtrlNAreUpDownAliases(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		alias     keys.Key
+		canonical keys.Key
+	}{
+		{"ctrl-p == up", keys.KeyCtrlP, keys.KeyUp},
+		{"ctrl-n == down", keys.KeyCtrlN, keys.KeyDown},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			a := newTestModel("")
+			b := newTestModel("")
+			a.Update(keys.KeyEvent{Key: tc.alias})
+			b.Update(keys.KeyEvent{Key: tc.canonical})
+			require.Equal(t, b.Idx, a.Idx,
+				"%v should leave Idx where %v does", tc.alias, tc.canonical)
+		})
+	}
+}
+
 // TestModel_CtrlWDeletesLastWord pins shell-muscle-memory behaviour:
 // Ctrl-W strips trailing whitespace and the preceding word in one
 // keystroke. Tested across ASCII, multi-rune CJK / emoji, multiple

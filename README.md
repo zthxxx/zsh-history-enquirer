@@ -163,6 +163,7 @@ echo 'source '"$PWD"'/plugin/zsh-history-enquirer.plugin.zsh' >> ~/.zshrc
 | --- | --- |
 | any text | Multi-word fuzzy filter — every space-separated token must appear in the line (case-insensitive); matches are highlighted in the rendered list |
 | <kbd>↑</kbd> / <kbd>↓</kbd> | Move selection one line |
+| <kbd>Ctrl+P</kbd> / <kbd>Ctrl+N</kbd> | Aliases for ↑ / ↓ (zsh emacs-keymap muscle memory) |
 | <kbd>PageUp</kbd> / <kbd>PageDown</kbd> | Jump a page |
 | <kbd>Home</kbd> / <kbd>End</kbd> | Jump to first / last match |
 | <kbd>Backspace</kbd> | Delete one character (rune-aware — works on CJK / emoji input) |

@@ -130,6 +130,7 @@ echo 'source '"$PWD"'/plugin/zsh-history-enquirer.plugin.zsh' >> ~/.zshrc
 | --- | --- |
 | 任意可见字符 | 空格分词 AND 模糊筛选（不区分大小写） |
 | <kbd>↑</kbd> / <kbd>↓</kbd> | 移动选中行 |
+| <kbd>Ctrl+P</kbd> / <kbd>Ctrl+N</kbd> | ↑ / ↓ 的别名（对齐 zsh emacs keymap 的肌肉记忆） |
 | <kbd>PageUp</kbd> / <kbd>PageDown</kbd> | 翻页 |
 | <kbd>Home</kbd> / <kbd>End</kbd> | 跳到首条 / 末条匹配 |
 | <kbd>Backspace</kbd> | 删除一个字符（按 rune，能正确处理中文 / emoji 多字节字符） |

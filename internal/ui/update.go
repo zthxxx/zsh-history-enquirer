@@ -80,10 +80,14 @@ func (m *Model) applyKey(k keys.Key) (terminate bool) {
 		// of the "what is m.Result on cancel" semantics.
 		m.Result = m.SubmitResult()
 		return true
-	case keys.KeyUp:
+	case keys.KeyUp, keys.KeyCtrlP:
+		// Ctrl-P is zsh's emacs-keymap "previous history" — same
+		// motion as ↑ in this picker (move selection up by one).
 		m.moveUp()
 		return false
-	case keys.KeyDown:
+	case keys.KeyDown, keys.KeyCtrlN:
+		// Ctrl-N is zsh's emacs-keymap "next history" — same motion
+		// as ↓ in this picker.
 		m.moveDown()
 		return false
 	case keys.KeyPageUp:

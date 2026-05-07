@@ -54,6 +54,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - <kbd>Ctrl</kbd>+<kbd>W</kbd> deletes the previous word — matches
   zsh's default `backward-kill-word` keymap. Rune-aware so CJK /
   emoji words delete atomically.
+- <kbd>Ctrl</kbd>+<kbd>P</kbd> / <kbd>Ctrl</kbd>+<kbd>N</kbd>
+  aliases for ↑ / ↓. Power users with zsh's emacs-keymap muscle
+  memory now have those keys reach the picker's row navigation
+  instead of being silently dropped.
 
 ### Fixed (vs. legacy 1.x bugs that survived into the rewrite)
 
