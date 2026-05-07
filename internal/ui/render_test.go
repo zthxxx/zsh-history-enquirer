@@ -373,3 +373,50 @@ func TestRender_DynamicLimitMatchesSanitizedRender(t *testing.T) {
 		})
 	}
 }
+
+// FuzzRender_NoPanicOnArbitraryGeometry runs Render against arbitrary
+// (input, choices, geometry) tuples to confirm the renderer never
+// panics. A panic here would crash the picker mid-session and leak the
+// user's typed $LBUFFER (the keys-reader recover catches goroutine
+// panics, but a render-time panic on the main goroutine bypasses it
+// and reaches main()'s top-level recover, where BUFFER is already
+// preserved — but we'd rather catch the panic in CI than rely on the
+// recovery path).
+//
+// Run with:
+//
+//	go test -fuzz=FuzzRender_NoPanicOnArbitraryGeometry \
+//	  -fuzztime=15s ./internal/ui/...
+func FuzzRender_NoPanicOnArbitraryGeometry(f *testing.F) {
+	// Seed corpus: real-world shapes we've debugged.
+	f.Add("", "", 24, 80, 1, 1) // blank input, default geom.
+	f.Add("git", "git status\ngit log", 24, 80, 1, 5)
+	f.Add("xxx", strings.Repeat("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n", 5), 5, 20, 1, 5)
+	f.Add(strings.Repeat("x", 100), "", 5, 20, 1, 1)    // wrapping input.
+	f.Add("\x1b[2J", "evil\x1b[Hpayload", 24, 40, 1, 1) // ESC in input + choices.
+	f.Add(strings.Repeat("你", 50), "你好", 24, 40, 1, 1)  // CJK wrap.
+	f.Add("é", "café\nattempt", 24, 80, 1, 1)          // decomposed accent.
+
+	f.Fuzz(func(t *testing.T, input, choicesJoined string, rows, cols, initRow, initCol int) {
+		// Constrain ranges to plausible terminal geometry — fuzzing
+		// with rows=-MAX_INT or cols=2^31 just stresses the runtime,
+		// not the renderer logic. NewModel's signature is int but the
+		// sane domain is small.
+		if rows < 1 || rows > 200 || cols < 1 || cols > 500 {
+			return
+		}
+		if initRow < 1 || initRow > rows || initCol < 1 || initCol > cols+1 {
+			return
+		}
+		choices := strings.Split(choicesJoined, "\n")
+		m := NewModel(input, choices, rows, cols, initRow, initCol, DefaultMaxLimit)
+		// Drive a render pass and a follow-up render with the prior
+		// frame's bookkeeping fed back in — exercises both the first-
+		// frame and Pre-walks-back paths.
+		first := m.Render(RenderOptions{})
+		_ = m.Render(RenderOptions{
+			PrevSize:      first.Size,
+			PrevCursorRow: first.CursorRow,
+		})
+	})
+}
