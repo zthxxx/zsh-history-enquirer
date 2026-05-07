@@ -89,6 +89,30 @@ Boundary conditions to test:
   not be swallowed waiting for a CSI completion.
 - Multi-byte UTF-8 must be decoded into a single RuneEvent.
 
+## Stuck-prelude flush (`Parser.FlushEsc`)
+
+The 50 ms `flushTimer` in `keys.Reader` calls `Parser.FlushEsc`
+whenever the parser is parked in any of `stateEsc` / `stateSS3` /
+`stateCSI` and no follow-up bytes have arrived. Each prelude has a
+distinct flush translation so the user's intent (typically Esc =
+cancel) is preserved instead of the picker freezing forever:
+
+| Parked state | Bytes consumed | Flush emits                                       |
+| ------------ | -------------- | ------------------------------------------------- |
+| `stateEsc`   | `\e`           | `KeyEsc`                                          |
+| `stateSS3`   | `\eO`          | `KeyEsc`, `RuneEvent('O')`                        |
+| `stateCSI`   | `\e[<params?>` | `KeyEsc`, `RuneEvent('[')`, params as runes       |
+
+Without this, a flaky terminal or programmatic input that paused
+mid-sequence (e.g. `\e[` and stop) would leave the parser stuck —
+and worse for `stateCSI`, every subsequent typed byte in
+`0x40..0x7e` would terminate the sequence as unrecognized and be
+silently discarded by the default branch. The reader arms its
+flush timer for ALL THREE states (not just `stateEsc`) so any
+parked prelude resolves within the 50 ms window.
+
+Tests: `TestParser_FlushEsc_*` family in `parser_test.go`.
+
 ## Resize
 
 `SIGWINCH` is captured via `signal.Notify` and translated into a

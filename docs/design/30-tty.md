@@ -69,7 +69,7 @@ package tty
 type Probe struct{ tty *TTY }
 
 func NewProbe(t *TTY) *Probe
-func (p *Probe) Cursor(ctx context.Context, timeout time.Duration) (row, col int, err error)
+func (p *Probe) Cursor(ctx context.Context, timeout time.Duration) (row, col int, leftover string, err error)
 ```
 
 Implementation:
@@ -81,10 +81,21 @@ Implementation:
    docker's pty emulation** — some kernels block past the
    deadline. `unix.Poll` honours its timeout byte-for-byte
    regardless of the file's blocking mode.
-3. Parse `\e[<row>;<col>R`. 1-indexed in the protocol.
-4. Return any bytes consumed past the response as `Leftover` on
-   a `*tty.TimeoutError` so the caller can replay them through
-   the keystream parser (see `keys.Reader.Prefeed`).
+3. The poll → read pair MUST be EINTR-resilient on BOTH halves —
+   a SIGWINCH that lands while the read syscall is in flight
+   would otherwise force a fallback every time the user resizes
+   their terminal mid-Ctrl-R.
+4. Anchor the response parse on `\x1b[`, not the first `[`, and
+   require the loop break on `\x1b[<...>R` (not just any `R`).
+   Without these anchors, a fast-typing user pressing `^R [` or
+   `^R R` would short-circuit the parse / loop and lose
+   keystrokes.
+5. Parse `\e[<row>;<col>R`. 1-indexed in the protocol.
+6. Return any bytes consumed alongside the response as
+   `leftover` (a separate return value) — and on the timeout
+   path, via `*tty.TimeoutError.Leftover`. Both routes feed the
+   same `keys.Reader.Prefeed` so the user's pre-render
+   keystrokes never get silently dropped.
 
 The probe **must** run after raw mode is entered; otherwise the
 terminal's line discipline echoes the response and corrupts the
