@@ -66,6 +66,14 @@ func (p *Parser) Feed(in []byte) []Event {
 // A pending SS3 prelude (`\eO` with no follow-up byte) flushes as
 // Esc + 'O' rune so the picker doesn't sit forever holding the key
 // state if the terminal aborts mid-sequence. Same pattern as Esc.
+//
+// A pending stateCSI (saw `\e[` with no terminator yet) flushes as
+// Esc + '[' rune + each accumulated parameter byte as a rune. Without
+// this branch a flaky terminal that sends `\e[` and stops would leave
+// the parser stuck silently — subsequent keystrokes get eaten by the
+// CSI accumulator until something happens to land in 0x40..0x7e and
+// terminate the sequence (only to be discarded in the unrecognized-
+// sequence default branch).
 func (p *Parser) FlushEsc() []Event {
 	switch p.state {
 	case stateEsc:
@@ -74,6 +82,27 @@ func (p *Parser) FlushEsc() []Event {
 	case stateSS3:
 		p.state = stateNormal
 		return []Event{KeyEvent{Key: KeyEsc}, RuneEvent{R: 'O'}}
+	case stateCSI:
+		// Snapshot p.buf BEFORE clearing it — same defensive pattern
+		// as the SS3 branch. Param bytes (digits, ';', '?') are all
+		// printable ASCII; multi-byte UTF-8 cannot reach here because
+		// the CSI accumulator only sees bytes that haven't yet hit
+		// the 0x40..0x7e terminator range.
+		bufBytes := append([]byte{}, p.buf...)
+		p.state = stateNormal
+		p.buf = p.buf[:0]
+		out := []Event{KeyEvent{Key: KeyEsc}, RuneEvent{R: '['}}
+		for _, b := range bufBytes {
+			if b >= 0x20 && b < 0x7f {
+				out = append(out, RuneEvent{R: rune(b)})
+			}
+			// Non-printable bytes inside the CSI buffer are dropped:
+			// they cannot be interpreted as part of a real CSI (the
+			// accumulator would have stopped on them) and re-emitting
+			// them as raw runes would risk re-injecting control
+			// characters into the input row.
+		}
+		return out
 	default:
 		return nil
 	}

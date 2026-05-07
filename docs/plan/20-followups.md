@@ -815,3 +815,25 @@ companion was resolved in the
   with the original publish. The check adds ~5 network round-trips
   per release (one per platform + one for the umbrella) but makes
   retries safe. Resolved in this iteration's commit.
+
+* **2026-05-07** — `FlushEsc` and the reader's flush-arming branch
+  both ignored `stateCSI`. If the terminal sent `\e[` and stopped
+  (a flaky link, a kill mid-sequence, or programmatic input that
+  paused before sending the CSI terminator), the parser stayed in
+  stateCSI forever — and worse, every subsequent typed byte was
+  silently consumed by the CSI accumulator: any byte in
+  `0x40..0x7e` terminates the sequence as an unrecognized one and
+  is dropped in the default branch. So a user who types Esc + [ +
+  pause then tries to type `git` to escape the freeze would lose
+  the `g` (a printable letter in 0x40..0x7e), see no feedback,
+  and conclude the picker is hung. Fix:
+  - `FlushEsc` now handles stateCSI by emitting Esc + '[' + each
+    accumulated parameter byte as a Rune (preserves typed digits
+    like `\e[12<pause>`).
+  - The reader's arm-flush branch added stateCSI to the list of
+    states FlushEsc can resolve, alongside stateEsc and stateSS3.
+  Pinned by `TestParser_FlushEsc_DuringCSIPending` (the bare
+  `\e[` case) and `TestParser_FlushEsc_DuringCSIWithParams` (the
+  `\e[12` case). Fuzzer (`FuzzParser_NoPanicOnArbitraryBytes`)
+  re-exercised at 5s/265k execs/sec — no regressions.
+  Resolved in this iteration's commit.

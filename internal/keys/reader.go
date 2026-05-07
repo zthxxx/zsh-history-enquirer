@@ -137,13 +137,18 @@ func (r *Reader) Events(ctx context.Context) <-chan Event {
 			if n > 0 {
 				events := r.parser.Feed(buf[:n])
 				// Arm the flush timer whenever the parser is left in a
-				// state FlushEsc can resolve. Otherwise an aborted SS3
-				// prelude (terminal sent `\eO` then nothing — rare but
-				// possible on flaky links and unusual emulators) would
-				// leave the picker frozen indefinitely with no events
-				// emitted: the user would see no key feedback until any
-				// other byte arrived to break the SS3 sequence.
-				if r.parser.state == stateEsc || r.parser.state == stateSS3 {
+				// state FlushEsc can resolve. Otherwise an aborted ESC
+				// prelude (terminal sent `\eO` or `\e[` then nothing —
+				// rare but possible on flaky links and unusual
+				// emulators) would leave the picker frozen indefinitely
+				// with no events emitted: the user would see no key
+				// feedback until any other byte arrived to break the
+				// sequence (and even then, the buffered bytes would be
+				// silently discarded by the unrecognized-sequence
+				// default branch). stateCSI is in the list because a
+				// stuck `\e[` is the same hazard as a stuck `\eO`.
+				switch r.parser.state {
+				case stateEsc, stateSS3, stateCSI:
 					armFlush()
 				}
 				if !emit(events) {

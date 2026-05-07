@@ -176,6 +176,48 @@ func TestParser_FlushEsc_DuringSS3Pending(t *testing.T) {
 	}, got)
 }
 
+// TestParser_FlushEsc_DuringCSIPending — the same hazard as the SS3
+// case but for CSI: the terminal emitted `\e[` and then stopped (a
+// flaky link, a kill mid-sequence, or a programmatic input that
+// paused). Without the flush branch, the parser would stay in
+// stateCSI forever — and worse, every subsequent typed letter would
+// be SILENTLY EATEN by the CSI accumulator (any byte in 0x40..0x7e
+// terminates the sequence as an unrecognized one and is discarded).
+// The flush emits Esc + '[' so the user's intent (cancel the picker)
+// is honored when the terminal misbehaves.
+func TestParser_FlushEsc_DuringCSIPending(t *testing.T) {
+	t.Parallel()
+
+	p := NewParser()
+	require.Empty(t, feedAll(p, "\x1b["), "no events emitted yet")
+	got := p.FlushEsc()
+	require.Equal(t, []Event{
+		KeyEvent{Key: KeyEsc},
+		RuneEvent{R: '['},
+	}, got)
+	require.Equal(t, stateNormal, p.state, "parser must return to normal after flush")
+}
+
+// TestParser_FlushEsc_DuringCSIWithParams — when the CSI accumulator
+// has buffered some param bytes (e.g. `\e[12` paused before the
+// terminator), the flush emits Esc + '[' + each param byte as a
+// rune. Preserves the user's typed input rather than silently
+// discarding the digits.
+func TestParser_FlushEsc_DuringCSIWithParams(t *testing.T) {
+	t.Parallel()
+
+	p := NewParser()
+	require.Empty(t, feedAll(p, "\x1b[12"), "no events emitted yet")
+	got := p.FlushEsc()
+	require.Equal(t, []Event{
+		KeyEvent{Key: KeyEsc},
+		RuneEvent{R: '['},
+		RuneEvent{R: '1'},
+		RuneEvent{R: '2'},
+	}, got)
+	require.Equal(t, stateNormal, p.state)
+}
+
 // TestParser_AltBackspaceMapsToCtrlW pins the Mac/iTerm/xterm meta
 // modifier behavior: Alt+Backspace arrives as `\e\x7f` (or `\e\x08`
 // on terminals using BS as backspace). zsh's emacs keymap binds the
