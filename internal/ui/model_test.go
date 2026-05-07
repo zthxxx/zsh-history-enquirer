@@ -163,6 +163,84 @@ func TestModel_PasteSanitizesControlBytesToSpaces(t *testing.T) {
 	}
 }
 
+// TestNewModel_InputSanitizedAtConstruction pins the third entry
+// point for raw control bytes into m.Input. The typing path is
+// covered by TestModel_TypingNewlineGetsSanitized; the paste path
+// by TestModel_PasteSanitizesControlBytesToSpaces. The remaining
+// entry is the initial input from argv: a $LBUFFER carrying raw
+// control bytes (e.g. a power user who pressed Ctrl-V Ctrl-[ and
+// then Ctrl-R, or a hostile clipboard auto-pasted before Ctrl-R)
+// would land in m.Input verbatim and the first render's
+// `body.WriteString(m.Input)` would let the ESC reposition the
+// cursor or clear the screen. NewModel must therefore funnel
+// the initial input through the same sanitizer.
+//
+// We assert on m.Input directly (not the rendered body) because the
+// body legitimately contains our own SGR / cursor-control escapes
+// from the ansi package — checking `frame.Body` for an ESC byte
+// would false-positive. The render-level guard for argv-sourced
+// dangerous *sequences* lives in TestRender_InputRowESCNotPassedThrough.
+func TestNewModel_InputSanitizedAtConstruction(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		argvInput string
+		wantInput string
+		wantCells int // CellWidth(want)
+	}{
+		{"plain", "git", "git", 3},
+		{"esc-only", "\x1b", " ", 1},
+		{"esc-clear-screen", "git\x1b[2J", "git [2J", 7},
+		{"sgr-color", "ls\x1b[31m", "ls [31m", 7},
+		{"bel", "x\x07y", "x y", 3},
+		{"del", "abc\x7f", "abc ", 4},
+		{"newline-collapsed", "a\nb", "a b", 3},
+		{"unicode-untouched", "你好 git", "你好 git", 8},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			m := NewModel(tc.argvInput, []string{"a"}, 24, 80, 1, 1, DefaultMaxLimit)
+			require.Equal(t, tc.wantInput, m.Input,
+				"NewModel must run input through sanitizeInputString")
+			require.Equal(t, tc.wantCells, m.Cursor,
+				"Cursor must reflect the sanitized input's cell width")
+			require.False(t, containsControlByte(m.Input),
+				"m.Input must not retain any C0 / DEL byte after construction")
+		})
+	}
+}
+
+// TestRender_ArgvESCNotPassedThrough is the integration counterpart:
+// even when the argv input contained a dangerous sequence, the
+// rendered body must not carry that exact sequence to the terminal.
+// Distinct from TestRender_InputRowESCNotPassedThrough — that test
+// exercises the paste path; this one exercises the construct-time
+// path where m.Input starts non-empty.
+func TestRender_ArgvESCNotPassedThrough(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		argv string
+		// substr is the literal argv-sourced byte sequence that
+		// must not appear verbatim in frame.Body.
+		substr string
+	}{
+		{"clear-screen", "find\x1b[2J .", "\x1b[2J"},
+		{"home-cursor", "cd\x1b[H", "\x1b[H"},
+		{"reset", "ls\x1bc", "\x1bc"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			m := NewModel(tc.argv, []string{"a"}, 24, 80, 1, 1, DefaultMaxLimit)
+			frame := m.Render(RenderOptions{})
+			require.NotContainsf(t, frame.Body, tc.substr,
+				"argv sequence %q must not reach frame.Body: %q", tc.substr, frame.Body)
+		})
+	}
+}
+
 // TestModel_TypingNewlineGetsSanitized — same protection on the
 // per-rune typing path. Hard to type \n directly (Enter is bound
 // to Submit), but a custom keymap or a misconfigured terminal

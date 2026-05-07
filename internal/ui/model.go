@@ -52,18 +52,30 @@ type Model struct {
 
 // NewModel constructs a Model with sensible defaults given an initial
 // input, captured geometry, and the post-loader choices list.
+//
+// The initial input is run through sanitizeInputString before being
+// stored. This preserves the contract — m.Input never contains C0
+// or DEL bytes — that the typing and paste paths already enforce.
+// Without this, a $LBUFFER carrying raw control bytes (a power user
+// who pressed Ctrl-V Ctrl-[ before Ctrl-R, or a hostile clipboard
+// auto-pasted into the prompt) would land in m.Input verbatim and
+// the first render's `body.WriteString(m.Input)` would let the ESC
+// reposition the cursor or clear the screen. The trade-off — the
+// rare power-user case loses the literal ESC byte on cancel — is
+// strictly preferable to a broken first render.
 func NewModel(input string, choices []string, rows, cols, initRow, initCol, maxLimit int) *Model {
 	if maxLimit <= 0 {
 		maxLimit = DefaultMaxLimit
 	}
+	sanitized := sanitizeInputString(input)
 	m := &Model{
 		InitCol:  initCol,
 		InitRow:  initRow,
 		Width:    cols,
 		Height:   rows,
 		Choices:  choices,
-		Input:    input,
-		Cursor:   CellWidth(input),
+		Input:    sanitized,
+		Cursor:   CellWidth(sanitized),
 		MaxLimit: maxLimit,
 	}
 	m.recomputeFilter()

@@ -661,3 +661,33 @@ companion was resolved in the
   (paste a payload with `\x1b[2J` → frame.Body must not contain
   the literal sequence; m.Input must not retain the ESC byte
   either). Resolved in this iteration's commit.
+
+* **2026-05-07** — The third entry point for raw control bytes
+  into `m.Input` was the **initial argv input** itself. Typing /
+  paste paths were now sanitized, but `NewModel(input, ...)` stored
+  argv directly into `m.Input` with no scrubbing. A power user
+  who pressed Ctrl-V Ctrl-[ to insert a literal ESC into LBUFFER
+  before Ctrl-R, or a hostile clipboard auto-pasted before the
+  picker invocation, would hand the picker a `cfg.Input` carrying
+  raw control bytes — and the very first render's
+  `body.WriteString(m.Input)` would let the ESC clear the screen
+  before the user touched a key. Verified empirically by a
+  throwaway `TestProbe_NewModelInputSanitized` that reproduced
+  `git\x1b[2J\r\n  (no matches)` in `frame.Body`. Fix: NewModel
+  now runs `input` through `sanitizeInputString` before storing
+  it, and computes `Cursor` from the sanitized cell width. The
+  trade-off — a power user with a pre-existing raw-ESC LBUFFER
+  loses that single byte if they cancel the picker — is strictly
+  preferable to a screen-clearing first render, and the lost byte
+  can be re-inserted with the same Ctrl-V Ctrl-[ keystroke.
+  Pinned by `TestNewModel_InputSanitizedAtConstruction` (8 cases:
+  plain, ESC-only, ESC[2J, SGR colour, BEL, DEL, newline, CJK)
+  and an integration counterpart
+  `TestRender_ArgvESCNotPassedThrough` (3 distinct dangerous
+  sequences). Sub-pixel pre-existing imperfection noted but not
+  fixed: the `computeInitCol` math in `run.go` still calls
+  `ui.CellWidth(cfg.Input)` on the *raw* bytes, so when argv has
+  control bytes the reported prompt column may differ from the
+  zsh line-editor's caret-notation rendering by 1-2 cells. No
+  user impact in the common case (no control bytes in argv).
+  Resolved in this iteration's commit.
