@@ -46,7 +46,7 @@ for platform in "${PLATFORMS[@]}"; do
   out="${BUILD_DIR}/${APP_NAME}-${GOOS}-${GOARCH}"
   echo "==> ${out}"
   CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" \
-    go build -ldflags "${LDFLAGS}" -o "${out}" "${CMD_PATH}"
+    go build -trimpath -ldflags "${LDFLAGS}" -o "${out}" "${CMD_PATH}"
 
   # Verify the linux artifacts are statically linked. macOS binaries
   # always link against /usr/lib/dyld, which is part of the OS ABI,

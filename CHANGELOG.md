@@ -127,6 +127,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `cmd/zsh-history-enquirer/main.go` that reconstructs `cfg.Input`
   via `app.NewConfig` and echoes it back to stdout. Three table
   tests pin the (preserves-input, no-args, malformed-argv) cases.
+- **Builds embedded the contributor's absolute filesystem paths.**
+  `go build` without `-trimpath` writes the absolute build-time
+  source path into the produced binary's symbol table. For an
+  open-source release this leaks the maintainer's `$HOME` layout
+  and breaks per-build reproducibility (different developers
+  building the same commit produce binaries with different bytes).
+  Added `-trimpath` to every `go build` invocation in
+  `Taskfile.yml` and `scripts/build-all.sh` — release artifacts now
+  contain only repo-relative paths and are bit-reproducible
+  modulo Go's BuildID.
 - **npm shim's missing-binary fallback echoed back `--` separator.**
   After the plugin started passing `bin -- "$LBUFFER"`, a fall-through
   invocation (no platform binary present) ran

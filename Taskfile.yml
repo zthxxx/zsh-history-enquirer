@@ -46,7 +46,7 @@ tasks:
     env:
       CGO_ENABLED: "0"
     cmds:
-      - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.APP_NAME}} {{.CMD_PATH}}
+      - go build -trimpath -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.APP_NAME}} {{.CMD_PATH}}
     sources:
       - ./**/*.go
       - go.mod
@@ -61,7 +61,7 @@ tasks:
       GOOS: linux
       GOARCH: amd64
     cmds:
-      - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.APP_NAME}}-linux-amd64 {{.CMD_PATH}}
+      - go build -trimpath -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.APP_NAME}}-linux-amd64 {{.CMD_PATH}}
     sources:
       - ./**/*.go
       - go.mod
@@ -180,7 +180,7 @@ tasks:
     env:
       CGO_ENABLED: "0"
     cmds:
-      - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.APP_NAME}}-${GOOS}-${GOARCH} {{.CMD_PATH}}
+      - go build -trimpath -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.APP_NAME}}-${GOOS}-${GOARCH} {{.CMD_PATH}}
 
   ci:release:package:
     desc: Flatten download-artifact dist/**/zsh-history-enquirer-* into release/ + checksums.txt
