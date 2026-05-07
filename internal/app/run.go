@@ -8,7 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/zthxxx/zsh-history-enquirer/internal/ansi"
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/zthxxx/zsh-history-enquirer/internal/history"
 	"github.com/zthxxx/zsh-history-enquirer/internal/keys"
 	"github.com/zthxxx/zsh-history-enquirer/internal/tty"
@@ -57,9 +58,9 @@ func Run(ctx context.Context, cfg *Config, t *tty.TTY, loader history.Loader, st
 	defer func() { _ = t.LeaveRaw() }()
 
 	// Hide cursor + bracketed paste on; flip back at exit.
-	_, _ = io.WriteString(t.Writer(), ansi.HideCursor+ansi.BracketedPasteOn)
+	_, _ = io.WriteString(t.Writer(), ansi.HideCursor+ansi.SetModeBracketedPaste)
 	defer func() {
-		_, _ = io.WriteString(t.Writer(), ansi.BracketedPasteOff+ansi.ShowCursor)
+		_, _ = io.WriteString(t.Writer(), ansi.ResetModeBracketedPaste+ansi.ShowCursor)
 	}()
 
 	debugW := openDebugLog()

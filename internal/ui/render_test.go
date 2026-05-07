@@ -179,7 +179,7 @@ func TestRender_LongInputWraps(t *testing.T) {
 
 	// Post must walk up exactly (Size - CursorRow) = 1 row, then place
 	// the caret at the col-15 wrap position. Pre-fix it emitted "[35G".
-	require.Contains(t, frame.Post, "\x1b[1F",
+	require.Contains(t, frame.Post, "\x1b[F",
 		"Post must walk up 1 row from the bottom of the body to the cursor wrap row")
 	require.Contains(t, frame.Post, "\x1b[15G",
 		"Post must position the caret at col 15 (where the 30th char's caret rests on the wrap row)")
@@ -199,7 +199,7 @@ func TestRender_PreWalksUpFromInputWrapCursor(t *testing.T) {
 	// before it can address the input row to redraw.
 	frame := m.Render(RenderOptions{PrevSize: 2, PrevCursorRow: 1})
 
-	require.Contains(t, frame.Pre, "\x1b[1F",
+	require.Contains(t, frame.Pre, "\x1b[F",
 		"Pre must walk up the previous CursorRow (1) before erasing")
 	// Two CSI 2K erase-line sequences for the two prev body rows.
 	require.Equal(t, 2, strings.Count(frame.Pre, "\x1b[2K"),

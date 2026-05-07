@@ -1,12 +1,13 @@
 package ui
 
-import "github.com/mattn/go-runewidth"
+import "github.com/rivo/uniseg"
 
 // CellWidth returns the number of terminal cells the string s occupies
 // when rendered in a typical UTF-8-aware terminal. East Asian wide
 // glyphs (CJK ideographs, fullwidth punctuation, emoji) consume 2
-// cells per rune; everything else consumes 1. Combining marks and
-// zero-width joiners contribute 0.
+// cells per glyph; everything else consumes 1. Combining marks and
+// zero-width joiners contribute 0 — they merge into the preceding
+// grapheme cluster rather than reserving their own cell.
 //
 // Callers that need a column-arithmetic value (cursor positioning,
 // wrap math, picker init column) should use this helper rather than
@@ -15,10 +16,13 @@ import "github.com/mattn/go-runewidth"
 // the byte-count factor (2-4×). Both produce visible mis-alignments
 // against the prompt and the wrapped picker body.
 //
-// We delegate to mattn/go-runewidth (used by every other Charm /
-// bubbletea / cobra-style TUI in the Go ecosystem) so the East Asian
-// Width and emoji presentation tables stay current with Unicode
-// updates without us re-vendoring them.
+// We delegate to rivo/uniseg's grapheme-cluster-aware string width.
+// The earlier mattn/go-runewidth measured per-rune width which
+// over-counted decomposed glyphs (e + combining acute = "é" rendered
+// as one cell) and emoji ZWJ sequences (man+ZWJ+woman+ZWJ+girl, the
+// family pictograph, rendered as one wide cell). uniseg builds on
+// the same Unicode tables but groups runes into grapheme clusters
+// first — matching what every modern terminal actually paints.
 func CellWidth(s string) int {
-	return runewidth.StringWidth(s)
+	return uniseg.StringWidth(s)
 }

@@ -5,7 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/zthxxx/zsh-history-enquirer/internal/ansi"
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/zthxxx/zsh-history-enquirer/internal/search"
 )
 
@@ -130,8 +131,8 @@ func (m *Model) renderBody(inputExtra int) (string, int, int) { //nolint:gocriti
 
 	// Step 1: write the input row at the captured prompt column.
 	var body strings.Builder
-	body.WriteString(ansi.CursorToCol(m.InitCol))
-	body.WriteString(ansi.EraseLineEnd)
+	body.WriteString(ansi.CursorHorizontalAbsolute(m.InitCol))
+	body.WriteString(ansi.EraseLineRight)
 	body.WriteString(m.Input)
 
 	// Step 2: walk the filtered list, accumulating row counts until
@@ -369,11 +370,11 @@ func (m *Model) renderPre(prevSize, prevCursorRow int) string {
 	var b strings.Builder
 	// Walk up to row N from wherever the previous Post landed.
 	if prevCursorRow > 0 {
-		b.WriteString(ansi.CursorPrevLine(prevCursorRow))
+		b.WriteString(ansi.CursorPreviousLine(prevCursorRow))
 	}
 	// Erase the input row's tail starting at the captured prompt col.
-	b.WriteString(ansi.CursorToCol(m.InitCol))
-	b.WriteString(ansi.EraseLineEnd)
+	b.WriteString(ansi.CursorHorizontalAbsolute(m.InitCol))
+	b.WriteString(ansi.EraseLineRight)
 	if prevSize <= 0 {
 		// First frame (or a previous frame with empty body, which
 		// cannot actually happen because we always emit "(no matches)"
@@ -384,12 +385,12 @@ func (m *Model) renderPre(prevSize, prevCursorRow int) string {
 	// to col 0 of the next row in raw mode; EraseLine wipes the row.
 	for range prevSize {
 		b.WriteString("\r\n")
-		b.WriteString(ansi.EraseLine)
+		b.WriteString(ansi.EraseEntireLine)
 	}
 	// Walk back up to the input row and reset the column for Body to
 	// continue from the captured prompt position.
-	b.WriteString(ansi.CursorPrevLine(prevSize))
-	b.WriteString(ansi.CursorToCol(m.InitCol))
+	b.WriteString(ansi.CursorPreviousLine(prevSize))
+	b.WriteString(ansi.CursorHorizontalAbsolute(m.InitCol))
 	return b.String()
 }
 
@@ -401,8 +402,8 @@ func (m *Model) renderPost(currentSize, cursorRow, cursorCol int) string {
 	var b strings.Builder
 	walkUp := currentSize - cursorRow
 	if walkUp > 0 {
-		b.WriteString(ansi.CursorPrevLine(walkUp))
+		b.WriteString(ansi.CursorPreviousLine(walkUp))
 	}
-	b.WriteString(ansi.CursorToCol(cursorCol))
+	b.WriteString(ansi.CursorHorizontalAbsolute(cursorCol))
 	return b.String()
 }

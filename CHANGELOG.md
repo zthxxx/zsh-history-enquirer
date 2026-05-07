@@ -418,6 +418,26 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   reader arms its 50ms flush timer for stateCSI alongside
   stateEsc / stateSS3.
 
+### Internal — replace hand-rolled libs with community standards
+
+- **`internal/ansi` deleted; consumers now use `charmbracelet/x/ansi`
+  v0.11.7.** The 100-line bespoke escape-string emitter has been
+  replaced with the same library bubbletea / lipgloss use. Byte
+  output is identical (or equivalent — `\x1b[K` vs `\x1b[0K` mean the
+  same thing) so e2e expectations are unchanged. The `n=1` form of
+  `CursorPreviousLine` shifted from `\x1b[1F` to `\x1b[F` (terminals
+  treat both as "one line up") — three test assertions updated to
+  match.
+- **`mattn/go-runewidth` swapped for `rivo/uniseg` v0.4.7** in the
+  cell-width helpers. uniseg iterates Unicode grapheme clusters so a
+  decomposed `é` (`e + combining-acute`) and emoji ZWJ families like
+  the family pictograph are measured as their rendered cell footprint
+  rather than as the sum of their constituent runes. The `CellWidth`
+  helper, `rowCellWidth` in `WrappedRowCount`, and the rune-walking
+  `InputCursorPosition` all drive the cursor off cluster widths now.
+  Common cases (ASCII, CJK, single-char emoji) produce identical
+  widths to runewidth, so no test expectations needed updating.
+
 ### Distribution / release process
 
 - **`scripts/release/build-npm.sh --publish` is now idempotent.**

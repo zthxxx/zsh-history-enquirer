@@ -25,6 +25,25 @@ companion was resolved in the
 
 ## Addressed
 
+* **2026-05-07** — Library audit (per user direction) replaced two
+  hand-rolled modules with community-standard equivalents:
+  - `internal/ansi/ansi.go` (100 LOC) → `charmbracelet/x/ansi`
+    v0.11.7. Same byte output; non-deprecated names
+    (`SetModeBracketedPaste`, `RequestCursorPositionReport`,
+    `EraseLineRight`, `EraseEntireLine`, `CursorHorizontalAbsolute`,
+    `CursorPreviousLine`) used so future deprecation cycles don't
+    bite.
+  - `mattn/go-runewidth` → `rivo/uniseg` v0.4.7 for cell-width
+    counting. uniseg measures by grapheme cluster so decomposed
+    accented letters and emoji ZWJ families report their actual
+    rendered footprint, not the rune sum. `CellWidth`,
+    `rowCellWidth`, and `InputCursorPosition` all switched.
+  - Kept custom: `internal/history/loader.go` (no community Go
+    library parses zsh extended-history; `fc -ln 1` shell-out is
+    the canonical decoder anyway), the picker-overlay layout
+    helpers in `wrap.go` (TUI libs assume full-screen control —
+    not the captured-prompt overlay model this picker uses).
+
 * **2026-05-07** — `InputCursorPosition` used a closed-form
   `(initCol + cellsBefore - 1) / cols` division that mishandled wide
   glyphs at wrap boundaries. When a 2-cell CJK character meets a

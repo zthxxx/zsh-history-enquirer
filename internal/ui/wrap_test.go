@@ -208,6 +208,47 @@ func TestInputExtraRows(t *testing.T) {
 	}
 }
 
+// TestProperty_InputCursorPosition_BoundedAndConsistent locks down two
+// invariants the renderer relies on:
+//
+//  1. The returned col is always within the terminal's visible width
+//     (1..cols). A bug here would emit a CSI G escape past cols, which
+//     terminals silently clamp — masking the bug visually.
+//  2. The row count returned is monotonic in cellsBefore: walking more
+//     of the input never produces a smaller row offset. A regression
+//     here would show up as the caret jumping up while the user types.
+func TestProperty_InputCursorPosition_BoundedAndConsistent(t *testing.T) {
+	t.Parallel()
+
+	rapid.Check(t, func(rt *rapid.T) {
+		// Constrain to printable ASCII + a CJK glyph so the walker
+		// exercises both 1-cell and 2-cell paths but stays valid UTF-8.
+		input := rapid.StringMatching(`[a-z你]{0,20}`).Draw(rt, "input")
+		cols := rapid.IntRange(1, 50).Draw(rt, "cols")
+		initCol := rapid.IntRange(1, cols).Draw(rt, "initCol")
+		// cellsBefore <= total cells of input.
+		totalCells := CellWidth(input)
+		cellsBefore := rapid.IntRange(0, totalCells).Draw(rt, "cellsBefore")
+
+		row, col := InputCursorPosition(initCol, input, cellsBefore, cols)
+
+		require.GreaterOrEqualf(rt, col, 1,
+			"col must be at least 1 (1-indexed)")
+		require.LessOrEqualf(rt, col, cols,
+			"col must not exceed cols=%d (got %d)", cols, col)
+		require.GreaterOrEqualf(rt, row, 0,
+			"row must be non-negative")
+
+		// Monotonicity: extending cellsBefore can only increase or hold
+		// the row count, never decrease it.
+		if cellsBefore < totalCells {
+			row2, _ := InputCursorPosition(initCol, input, cellsBefore+1, cols)
+			require.GreaterOrEqualf(rt, row2, row,
+				"row must be monotonic in cellsBefore")
+		}
+	})
+}
+
 func TestProperty_WrappedRowCount_Monotonic(t *testing.T) {
 	t.Parallel()
 

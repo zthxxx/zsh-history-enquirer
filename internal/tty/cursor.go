@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/zthxxx/zsh-history-enquirer/internal/ansi"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Probe asks the terminal for its current cursor position via the DSR
@@ -55,7 +55,7 @@ func NewProbe(t *TTY) *Probe {
 // The loop also requires `\x1b[<...>R`, not merely a stray `R`, so a
 // user who types `R` before the response doesn't break out early.
 func (p *Probe) Cursor(ctx context.Context, timeout time.Duration) (row, col int, leftover string, err error) {
-	if _, err = io.WriteString(p.tty.Writer(), ansi.DSRCursor); err != nil {
+	if _, err = io.WriteString(p.tty.Writer(), ansi.RequestCursorPositionReport); err != nil {
 		return 0, 0, "", fmt.Errorf("write DSR: %w", err)
 	}
 

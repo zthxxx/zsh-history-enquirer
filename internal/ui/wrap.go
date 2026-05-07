@@ -14,7 +14,7 @@ package ui
 import (
 	"strings"
 
-	"github.com/mattn/go-runewidth"
+	"github.com/rivo/uniseg"
 )
 
 // PointerWidth is the number of cells reserved for the selection
@@ -36,24 +36,31 @@ const tabStop = 8
 // line, accounting for `\t` advancing to the next `tabStop`. Used
 // only by WrappedRowCount because Tab is the only printable byte
 // whose cell footprint depends on the cursor's starting column —
-// runewidth (which we use everywhere else for non-line-level
-// calculations) treats `\t` as width 0, which silently underflows
-// the wrap math whenever a history entry contains a literal tab.
+// uniseg (like every other width-aware library) reports `\t` as
+// width 0, which silently underflows the wrap math whenever a
+// history entry contains a literal tab.
+//
+// We iterate grapheme clusters (not runes) so an emoji ZWJ family
+// or a decomposed accented Latin letter contributes its rendered
+// cell footprint as a single unit — `e + combining-acute` reports
+// as 1 cell, not 1 + 0.
 //
 // startCol is the cell column the rendering starts at (0 for the
 // pointer-less continuation lines, PointerWidth for the first
 // line). The function returns how far the line extends.
 func rowCellWidth(line string, startCol int) int {
 	col := startCol
-	for _, r := range line {
-		if r == '\t' {
+	g := uniseg.NewGraphemes(line)
+	for g.Next() {
+		cluster := g.Str()
+		if cluster == "\t" {
 			// Advance to the next multiple of tabStop. If we're
 			// exactly on a tabstop, advance to the next one (a Tab
 			// always moves the cursor at least one cell).
 			col = ((col / tabStop) + 1) * tabStop
 			continue
 		}
-		col += runewidth.RuneWidth(r)
+		col += uniseg.StringWidth(cluster)
 	}
 	return col
 }
@@ -65,34 +72,37 @@ func rowCellWidth(line string, startCol int) int {
 // input row; col is the 1-indexed terminal column matching ANSI's
 // CSI G escape.
 //
-// We rune-walk rather than use a closed-form division because of two
-// terminal quirks no cell-only formula handles correctly:
+// We grapheme-walk rather than use a closed-form division because of
+// two terminal quirks no cell-only formula handles correctly:
 //
-//  1. Wide-char-over-wrap-boundary. A 2-cell CJK glyph at col `cols`
-//     has only 1 free cell — every common terminal soft-wraps the
-//     entire glyph to the next row. A division-based formula assumes
-//     contiguous cell packing and miscounts cursor col by 1 cell for
-//     such inputs (a pasted CJK suffix on a long ASCII filter).
+//  1. Wide-grapheme-over-wrap-boundary. A 2-cell CJK glyph (or an
+//     emoji ZWJ family pictograph) at col `cols` has only 1 free
+//     cell — every common terminal soft-wraps the entire grapheme
+//     to the next row. A division-based formula assumes contiguous
+//     cell packing and miscounts cursor col by 1 cell for such
+//     inputs (a pasted CJK suffix on a long ASCII filter).
 //  2. Deferred wrap. After writing exactly `cols` cells starting at
 //     col 1, the cursor sits at "col cols+1" but renders at the last
 //     visible cell. We clamp to col `cols` so subsequent CursorToCol
 //     escapes don't get clipped silently by the terminal.
 //
 // `\t` and `\n` never appear in m.Input (sanitized at append time —
-// see `sanitizeInputRune`), so we don't handle them. Combining marks
-// and zero-width joiners (RuneWidth==0) are treated as no-op cell
-// movements, matching how runewidth measures string width.
+// see `sanitizeInputRune`), so we don't handle them. Iterating
+// grapheme clusters via uniseg means a decomposed `e + combining
+// acute` ("é") moves the cursor 1 cell, not 1 + 0; same for emoji
+// ZWJ families.
 func InputCursorPosition(initCol int, input string, cellsBefore, cols int) (row, col int) {
 	if cols <= 0 {
 		return 0, initCol
 	}
 	cur := initCol
 	consumed := 0
-	for _, r := range input {
+	g := uniseg.NewGraphemes(input)
+	for g.Next() {
 		if consumed >= cellsBefore {
 			break
 		}
-		w := runewidth.RuneWidth(r)
+		w := uniseg.StringWidth(g.Str())
 		if w == 0 {
 			continue
 		}
