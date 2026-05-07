@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"strings"
 	"unicode/utf8"
 
 	"github.com/zthxxx/zsh-history-enquirer/internal/keys"
@@ -47,13 +46,22 @@ func (m *Model) appendString(s string) {
 	m.recomputeFilter()
 }
 
-// sanitizeInputRune maps newline / carriage-return / tab to space
-// and leaves every other rune unchanged. The picker has nothing
-// useful to do with the control characters in a single-line filter
-// box, and rendering them verbatim corrupts the terminal layout.
+// sanitizeInputRune collapses any C0 control byte (0x00-0x1f) or
+// DEL (0x7f) to a space, leaving every other rune unchanged. The
+// input row is rendered verbatim into the picker frame, so any
+// pass-through control byte would corrupt the layout: \n / \t mean
+// nothing in a single-line filter, \r would carriage-return into
+// the prompt prefix, BEL would beep on every keystroke, and most
+// dangerously a bare \x1b would let a pasted ANSI escape (e.g. a
+// clipboard with `\x1b[2J`) reposition the cursor or clear the
+// screen mid-render.
+//
+// Mapping to space (rather than dropping or caret-quoting) matches
+// the existing \n / \r / \t behaviour: pasted multi-line shell
+// commands collapse into space-separated search tokens, which is
+// the most useful interpretation for a filter box.
 func sanitizeInputRune(r rune) rune {
-	switch r {
-	case '\n', '\r', '\t':
+	if r < 0x20 || r == 0x7f {
 		return ' '
 	}
 	return r
@@ -62,7 +70,7 @@ func sanitizeInputRune(r rune) rune {
 // sanitizeInputString applies sanitizeInputRune across an entire
 // string. Used by paste handling.
 func sanitizeInputString(s string) string {
-	if !strings.ContainsAny(s, "\n\r\t") {
+	if !containsControlByte(s) {
 		return s
 	}
 	out := make([]rune, 0, len(s))
@@ -70,6 +78,20 @@ func sanitizeInputString(s string) string {
 		out = append(out, sanitizeInputRune(r))
 	}
 	return string(out)
+}
+
+// containsControlByte reports whether s holds any C0 / DEL byte —
+// the trigger condition for sanitizeInputString to do real work.
+// Plain UTF-8 multi-byte runes (CJK, emoji) have no bytes < 0x20,
+// so the check is byte-level rather than rune-level for speed.
+func containsControlByte(s string) bool {
+	for i := range len(s) {
+		c := s[i]
+		if c < 0x20 || c == 0x7f {
+			return true
+		}
+	}
+	return false
 }
 
 //nolint:gocyclo // straightforward dispatch; each branch is one line

@@ -636,3 +636,28 @@ companion was resolved in the
   `TestRender_EntryESCNotPassedThrough` (integration: ESC byte
   absent from `frame.Body`), and `TestRender_SubmitReturnsUnsanitized`
   (round-trip preservation). Resolved in this iteration's commit.
+
+* **2026-05-07** — The symmetric threat on the **input row**: the
+  search-input sanitizer (`sanitizeInputRune`) only filtered
+  `\n` / `\r` / `\t` to spaces, leaving 0x00-0x1f and 0x7f as
+  passthrough. Bracketed-paste payloads from the parser deliberately
+  preserve embedded control bytes (so `\x03` doesn't fire CtrlC
+  inside a paste, per the existing test), so a clipboard with
+  e.g. `\x1b[2J` would land in `m.Input` verbatim, and the
+  renderer's `body.WriteString(m.Input)` would let the ESC clear
+  the screen mid-frame. Same threat surface as the choice-side fix
+  above, but reachable just by pasting any text that survived
+  `cat -v` of an ANSI-coloured `grep` output. Fix: extended
+  `sanitizeInputRune` to map every C0 byte (0x00-0x1f) and 0x7f to
+  space — matching the long-standing `\n` / `\r` / `\t` behaviour
+  and keeping the input row a flat single-line string. Tokenization
+  on space means a paste of `git\x1b[2J log` searches for `git`,
+  `[2J`, `log` (an aggressive but safe filter); the user can
+  backspace the spurious token. Pinned by an extended
+  `TestModel_PasteSanitizesControlBytesToSpaces` (10 new cases:
+  `\x1b`, `\x1b[2J`, `\x1b[31m`, BEL, DEL, NUL, vertical-tab,
+  form-feed, plus untouched-CJK/emoji guards) and a new
+  integration test `TestRender_InputRowESCNotPassedThrough`
+  (paste a payload with `\x1b[2J` → frame.Body must not contain
+  the literal sequence; m.Input must not retain the ESC byte
+  either). Resolved in this iteration's commit.

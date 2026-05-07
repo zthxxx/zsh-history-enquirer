@@ -121,12 +121,15 @@ func TestModel_CtrlUClearsInput(t *testing.T) {
 	require.Empty(t, m.Input)
 }
 
-// TestModel_PasteSanitizesNewlinesToSpaces pins the regression
-// where a multi-line paste payload would scribble across the
-// terminal. Pasted control bytes are useless as filter input, so
-// we map \n / \r / \t to space (preserving the token boundary)
-// before they ever land in m.Input.
-func TestModel_PasteSanitizesNewlinesToSpaces(t *testing.T) {
+// TestModel_PasteSanitizesControlBytesToSpaces pins the regression
+// where a paste payload containing C0 control bytes (0x00-0x1f) or
+// DEL (0x7f) would be written verbatim into the input row, then
+// rendered straight to the terminal — letting a clipboard with an
+// embedded `\x1b[2J` clear the screen, a stray `\r` carriage-return
+// into the prompt, or a `\x07` BEL beep on every keystroke. We map
+// every such byte to a space (matching the long-standing \n / \r /
+// \t behaviour) so the input row stays a flat single-line string.
+func TestModel_PasteSanitizesControlBytesToSpaces(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
@@ -138,6 +141,17 @@ func TestModel_PasteSanitizesNewlinesToSpaces(t *testing.T) {
 		{"tab-to-space", "git\tlog", "git log"},
 		{"plain-passthrough", "git log", "git log"},
 		{"multiline-block", "line1\nline2\nline3", "line1 line2 line3"},
+		// New cases — the C0 / DEL coverage we just extended.
+		{"esc-to-space", "git\x1b log", "git  log"},
+		{"clear-screen-defanged", "git\x1b[2J log", "git [2J log"},
+		{"sgr-color-defanged", "git\x1b[31m red", "git [31m red"},
+		{"bel-to-space", "ding\x07ding", "ding ding"},
+		{"del-to-space", "abc\x7fdef", "abc def"},
+		{"nul-to-space", "abc\x00def", "abc def"},
+		{"vertical-tab", "a\x0bb", "a b"},
+		{"form-feed", "a\x0cb", "a b"},
+		{"unicode-untouched", "你好 world", "你好 world"},
+		{"emoji-untouched", "🚀 ship", "🚀 ship"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

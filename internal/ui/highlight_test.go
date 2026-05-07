@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"pgregory.net/rapid"
+
+	"github.com/zthxxx/zsh-history-enquirer/internal/keys"
 )
 
 func TestHighlight_NoTokens(t *testing.T) {
@@ -183,6 +185,29 @@ func TestRender_SubmitReturnsUnsanitized(t *testing.T) {
 	m := NewModel("", []string{original}, 24, 80, 1, 1, DefaultMaxLimit)
 	require.Equal(t, original, m.SubmitResult(),
 		"SubmitResult must return the un-sanitized entry bytes")
+}
+
+// TestRender_InputRowESCNotPassedThrough is the symmetric guard
+// for the input row. The choice-rendering path is sanitized via
+// sanitizeChoiceForRender; the input-row path is sanitized at
+// write-time via sanitizeInputRune (so m.Input itself never
+// contains a raw ESC). This integration check pins the contract
+// from the renderer's perspective: even after a paste of a
+// payload containing an ESC sequence, the rendered frame must
+// not carry that ESC through to the terminal.
+func TestRender_InputRowESCNotPassedThrough(t *testing.T) {
+	t.Parallel()
+	m := NewModel("", []string{"git status"}, 24, 80, 1, 1, DefaultMaxLimit)
+	// Simulate a paste of a payload with an embedded clear-screen.
+	m.Update(keys.PasteEvent{Payload: "find\x1b[2J ."})
+	frame := m.Render(RenderOptions{})
+	require.NotContainsf(t, frame.Body, "\x1b[2J",
+		"raw ESC from paste leaked through to terminal: %q", frame.Body)
+	// And m.Input itself must already be clean — no ESC byte
+	// reaches storage, so subsequent renders / SubmitResult are
+	// also safe.
+	require.NotContains(t, m.Input, "\x1b",
+		"m.Input must not retain raw ESC after sanitization")
 }
 
 // TestProperty_Highlight_Idempotent: running highlight twice with the
