@@ -68,12 +68,11 @@ standalone `.zsh` source under `plugin/` and is not compiled in.
   history        search     ui        keys      tty        version
                               │        │         │
                               ▼        ▼         ▼
-                          (search,    (tty)    (ansi)
-                            ansi,
-                            keys)
-                                              ▲
-                                              │
-                                  charmbracelet/x/ansi (third party)
+                          (search,    (tty)   (third-party
+                            keys,                charmbracelet/x/ansi
+                            third-party          for cursor / erase
+                            charmbracelet/       escapes)
+                            x/ansi)
 ```
 
 - No package may import a package "above" it in the graph.
