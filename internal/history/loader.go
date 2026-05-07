@@ -52,7 +52,13 @@ const DefaultHistSize = 100_000
 //   - The cost is one process exec, ~5 ms — acceptable next to the
 //     DSR round-trip we already pay.
 func NewZshLoader(opts Options) Loader {
-	if opts.HistSize == 0 {
+	// Guard zero AND negative HistSize: a user could pass
+	// `--histsize=-1` (flag.Int accepts negatives), and `HISTSIZE=-1`
+	// surfaces as a no-history view in some zsh versions and a
+	// hard error in others — neither shape is what the user meant.
+	// Snap both to DefaultHistSize so the picker behaves predictably
+	// regardless of the operator's intent.
+	if opts.HistSize <= 0 {
 		opts.HistSize = DefaultHistSize
 	}
 	return &zshLoader{opts: opts}

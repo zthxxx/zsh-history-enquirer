@@ -207,6 +207,23 @@ func TestNewZshLoader_DefaultsHistSize(t *testing.T) {
 		DefaultHistSize, zl.opts.HistSize)
 }
 
+// TestNewZshLoader_DefaultsNegativeHistSize covers the
+// negative-value defaulting branch. flag.Int accepts negative
+// numbers, so a `--histsize=-1` argv is syntactically valid; the
+// loader must promote that to DefaultHistSize so zsh doesn't
+// surface a no-history view (or a hard error, depending on
+// version) for what is almost certainly a typo.
+func TestNewZshLoader_DefaultsNegativeHistSize(t *testing.T) {
+	t.Parallel()
+
+	loader := NewZshLoader(Options{HistSize: -42})
+	zl, ok := loader.(*zshLoader)
+	require.True(t, ok, "NewZshLoader must return a *zshLoader")
+	require.Equal(t, DefaultHistSize, zl.opts.HistSize,
+		"negative HistSize must default to %d, got %d",
+		DefaultHistSize, zl.opts.HistSize)
+}
+
 // TestZshLoader_BadZshBinaryReturnsError covers the error path when
 // the configured zsh binary doesn't exist. The error message should
 // mention "exec failed" so callers can pattern-match on it.
