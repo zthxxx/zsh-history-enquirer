@@ -122,12 +122,15 @@ func TestParseDSRResponse_MalformedReturnsFullInputAsLeftover(t *testing.T) {
 	}
 }
 
-// FuzzParseDSRResponse confirms parseDSRResponse never panics on
-// arbitrary byte input — including pathological shapes a scan-forward
-// loop could in principle iterate forever on (very long inputs,
-// unbalanced introducers, etc). Standard `go test` runs each seed
-// once; the fuzzer's mutate loop runs with `-fuzz=FuzzParseDSRResponse`.
-func FuzzParseDSRResponse(f *testing.F) {
+// FuzzParseDSRResponse_NoPanicOnArbitraryBytes confirms parseDSRResponse
+// never panics or runs forever on arbitrary byte input. Pathological
+// shapes a scan-forward loop could in principle iterate forever on
+// (very long inputs, unbalanced introducers, etc.) are part of the
+// seed corpus. Naming mirrors `FuzzParser_NoPanicOnArbitraryBytes` and
+// `FuzzRender_NoPanicOnArbitraryGeometry` for consistency. Standard
+// `go test` runs each seed once; the fuzzer's mutate loop runs with
+// `-fuzz=FuzzParseDSRResponse_NoPanicOnArbitraryBytes`.
+func FuzzParseDSRResponse_NoPanicOnArbitraryBytes(f *testing.F) {
 	seeds := []string{
 		"",
 		"\x1b[",
