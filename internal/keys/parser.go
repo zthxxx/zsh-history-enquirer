@@ -99,21 +99,69 @@ func (p *Parser) feedNormal(b byte, out []Event) []Event {
 		// NUL — drop silently.
 		return out
 	default:
-		// Decode UTF-8 starting at this byte. Buffer if incomplete.
+		// Decode UTF-8 starting at the buffered bytes. The loop drains
+		// the buffer one rune at a time and resyncs across invalid
+		// bytes so a stray 0xff or stray continuation byte (0x80-0xbf)
+		// does not silently swallow the valid bytes that follow it.
+		//
+		// Resync rules:
+		//   1. If decode fails AND the first byte is not a valid
+		//      UTF-8 lead (continuation 0x80-0xbf, the unused
+		//      0xc0/0xc1, or 0xf5-0xff), drop just that byte and
+		//      retry.
+		//   2. If decode fails AND the buffer already holds the full
+		//      utf8.UTFMax (4 bytes) without forming a valid rune,
+		//      the lead byte must be invalid in context. Drop the
+		//      lead and retry.
+		//   3. Otherwise, the buffer holds a partial valid sequence;
+		//      wait for more bytes.
+		//
+		// Without this resync, feeding `[0xff, 'a', 'b', 'c']` filled
+		// the buffer to UTFMax and then dropped all four bytes — the
+		// user's `abc` typed after a corrupt byte was silently lost.
 		p.buf = append(p.buf, b)
-		r, size := utf8.DecodeRune(p.buf)
-		if r == utf8.RuneError && size <= 1 {
-			// Either invalid byte sequence or partial rune; keep
-			// accumulating. Cap the buffer to four bytes (max UTF-8
-			// rune width) so a stream of garbage cannot grow forever.
-			if len(p.buf) >= utf8.UTFMax {
-				p.buf = p.buf[:0]
+		for {
+			r, size := utf8.DecodeRune(p.buf)
+			if r == utf8.RuneError && size <= 1 {
+				if len(p.buf) > 0 && !isValidUTF8Lead(p.buf[0]) {
+					p.buf = p.buf[1:]
+					continue
+				}
+				if len(p.buf) >= utf8.UTFMax {
+					p.buf = p.buf[1:]
+					continue
+				}
+				return out
 			}
-			return out
+			out = append(out, RuneEvent{R: r})
+			p.buf = p.buf[size:]
+			if len(p.buf) == 0 {
+				return out
+			}
 		}
-		p.buf = p.buf[:0]
-		return append(out, RuneEvent{R: r})
 	}
+}
+
+// isValidUTF8Lead reports whether b can start a well-formed UTF-8
+// sequence. The Go utf8.RuneStart function is too permissive — it
+// returns true for any byte whose top two bits are not the 10
+// continuation pattern, so 0xc0, 0xc1, and 0xf5-0xff (all leads
+// the UTF-8 spec deprecates or rejects) all pass. We need the
+// stricter form for resync: a stray 0xff followed by ASCII has to
+// be dropped on the first byte rather than left in the buffer
+// indefinitely waiting for invalid continuations.
+func isValidUTF8Lead(b byte) bool {
+	switch {
+	case b < 0x80:
+		return true // ASCII
+	case b >= 0xc2 && b <= 0xdf:
+		return true // 2-byte lead
+	case b >= 0xe0 && b <= 0xef:
+		return true // 3-byte lead
+	case b >= 0xf0 && b <= 0xf4:
+		return true // 4-byte lead (capped at U+10FFFF)
+	}
+	return false
 }
 
 func (p *Parser) feedEsc(b byte, out []Event) []Event {

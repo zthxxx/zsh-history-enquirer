@@ -436,6 +436,62 @@ func TestParser_GarbageUTF8Recovers(t *testing.T) {
 	require.Equal(t, 'a', last.R)
 }
 
+// TestParser_InvalidLeadDoesNotSwallowFollowingASCII pins the
+// resync regression. Earlier the parser's UTFMax-cap logic dropped
+// the entire 4-byte buffer when decode failed; if a stray
+// continuation byte (0xbd here) was followed by valid ASCII, those
+// 3 ASCII bytes were silently lost — the user's `abc` typed after
+// a stray byte simply never reached the picker. The fix walks the
+// buffer one byte at a time on resync, so only the invalid lead
+// is dropped and the trailing ASCII surfaces.
+func TestParser_InvalidLeadDoesNotSwallowFollowingASCII(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		in   []byte
+		want []rune
+	}{
+		{
+			name: "stray-continuation-then-ascii",
+			in:   []byte{0xbd, 'a', 'b', 'c'},
+			want: []rune{'a', 'b', 'c'},
+		},
+		{
+			name: "lone-0xff-then-ascii",
+			in:   []byte{0xff, 'g', 'i', 't'},
+			want: []rune{'g', 'i', 't'},
+		},
+		{
+			name: "valid-emoji-then-stray-then-ascii",
+			in:   []byte{0xf0, 0x9f, 0x9a, 0x80, 0xff, 'x'},
+			want: []rune{0x1f680, 'x'},
+		},
+		{
+			name: "incomplete-4byte-lead-then-ascii",
+			// 0xf0 expects 3 continuation bytes. With only ASCII
+			// after, decode fails until the buffer hits UTFMax;
+			// then the lead is dropped and the ASCII resyncs.
+			in:   []byte{0xf0, 'a', 'b', 'c'},
+			want: []rune{'a', 'b', 'c'},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			p := NewParser()
+			events := p.Feed(tc.in)
+			got := make([]rune, 0, len(events))
+			for _, ev := range events {
+				if re, ok := ev.(RuneEvent); ok {
+					got = append(got, re.R)
+				}
+			}
+			require.Equal(t, tc.want, got,
+				"valid bytes after invalid lead must surface")
+		})
+	}
+}
+
 // TestProperty_Parser_ChunkBoundaryInvariance asserts that splitting
 // the same input at any byte boundary yields the same Event sequence
 // as feeding it whole. The parser is a finite-state machine and

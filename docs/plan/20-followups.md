@@ -516,3 +516,19 @@ companion was resolved in the
   `TestReader_Events_SS3FlushTimerDelivers`, which mirrors the
   existing `TestReader_Events_EscFlushTimerDelivers` pty test.
   Resolved in this iteration's commit.
+
+* **2026-05-07** — The parser's invalid-UTF-8 cap dropped the
+  whole 4-byte buffer when decode failed. If a stray invalid byte
+  was followed by valid ASCII (e.g. `[0xbd, 'a', 'b', 'c']`), the
+  buffer filled to UTFMax, the cap fired, and the user's `abc`
+  was silently swallowed alongside the bad byte. Real-world
+  triggers: terminal locale mismatch, SSH bit corruption, paste
+  of partial-UTF-8 binary content. Fix walks the buffer one byte
+  at a time on resync — drops only the actually-invalid lead
+  byte, then re-attempts decode on the rest. Tightens the lead
+  check to a strict `isValidUTF8Lead` (UTF-8 spec — not
+  `utf8.RuneStart`, which permissively accepts 0xc0/0xc1/0xf5-ff).
+  Pinned by `TestParser_InvalidLeadDoesNotSwallowFollowingASCII`
+  with four scenarios (stray continuation, lone 0xff, valid-emoji
+  + stray + ascii, incomplete 4-byte lead). Resolved in this
+  iteration's commit.
