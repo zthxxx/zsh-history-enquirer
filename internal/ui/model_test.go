@@ -579,6 +579,46 @@ func TestModel_EndOnEntryLargerThanTerminal(t *testing.T) {
 		"End on overflow-only entry must still focus index 0")
 }
 
+// TestModel_EndWithMultiLineChoicesOnNarrowTerminal pins the
+// scrollToEnd ↔ renderBody agreement on the user-emphasized
+// integration case: a list of multi-line choices on a terminal
+// narrow enough that the lines themselves wrap. Both code paths
+// run the same per-choice WrappedRowCount over the sanitized form;
+// any drift between them — say if scrollToEnd dropped the
+// inputExtra accounting or skipped the sanitize step — would
+// rotate the visible window past the last-fit entry and land focus
+// off-screen.
+//
+// Setup: 3 multi-line choices, each with one wrapping logical line
+// at 20 cols. Terminal is 12×20: heightLimit = 12 - 3 = 9. Each
+// choice consumes 4 rows (per the wrap-test fixture). Two fit
+// (8 rows), the third overflows. End must rotate by 2 so the third
+// entry lands at the bottom of the visible window with focus on it.
+func TestModel_EndWithMultiLineChoicesOnNarrowTerminal(t *testing.T) {
+	t.Parallel()
+	multiLineWithWrap := strings.Repeat("a", 18) + "\n" +
+		strings.Repeat("b", 25) + "\nshort"
+	// Three distinct entries with the same shape (4 wrap rows each).
+	// Distinct heads so we can assert focus on the last entry.
+	choices := []string{
+		"X-" + multiLineWithWrap,
+		"Y-" + multiLineWithWrap,
+		"Z-" + multiLineWithWrap,
+	}
+
+	m := NewModel("", choices, 12, 20, 1, 1, DefaultMaxLimit)
+	m.Render(RenderOptions{})
+
+	m.Update(keys.KeyEvent{Key: keys.KeyEnd})
+
+	// scrollToEnd should rotate so the LAST entry is at the visible
+	// tail. The Filter is now rotated; the last original entry
+	// (Z-...) lives at index visibleCount-1 in the rotated slice.
+	require.Containsf(t, m.Focused(), "Z-",
+		"End must land focus on the last multi-line+wrap entry; got %q",
+		m.Focused())
+}
+
 // TestModel_NewModel_ZeroMaxLimitDefaults pins the maxLimit<=0
 // guard in NewModel: passing 0 (or negative) must default to
 // DefaultMaxLimit. The fx graph routes cfg.MaxLimit through this,
