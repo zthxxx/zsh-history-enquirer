@@ -104,11 +104,11 @@ func TestParseDSRResponse_Malformed(t *testing.T) {
 func TestParseDSRResponse_MalformedReturnsFullInputAsLeftover(t *testing.T) {
 	t.Parallel()
 	cases := []string{
-		"\x1b[12R",            // no semicolon
-		"\x1b[abc;1R",         // non-numeric row
-		"\x1b[1;abcR",         // non-numeric col
-		"\x1b[A\x1b[12;5R",    // user typed Up before DSR; first CSI body fails the parse
-		"\x1b[\x1b[12;5R",     // bare CSI prefix wedged in front of the response
+		"\x1b[12R",         // no semicolon
+		"\x1b[abc;1R",      // non-numeric row
+		"\x1b[1;abcR",      // non-numeric col
+		"\x1b[A\x1b[12;5R", // user typed Up before DSR; first CSI body fails the parse
+		"\x1b[\x1b[12;5R",  // bare CSI prefix wedged in front of the response
 	}
 	for _, c := range cases {
 		row, col, leftover, err := parseDSRResponse(c)
