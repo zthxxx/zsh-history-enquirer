@@ -62,9 +62,22 @@ func NewModel(input string, choices []string, rows, cols, initRow, initCol, maxL
 
 // recomputeFilter rebuilds Filter from Choices using the current
 // Input. The Visible window points at the start of the filtered list.
+//
+// search.AndFilter aliases Choices when the input has no tokens (a
+// documented zero-copy fast path). Filter is mutated in place by
+// rotateUp / rotateDown, so we clone in that case to keep the
+// "Choices is immutable post-loader" invariant intact. Without the
+// clone, scrolling the empty-input view scrambles Choices, and a
+// subsequent recomputeFilter — e.g. after Ctrl-U — returns a
+// permuted history that no longer matches reverse-chronological
+// order.
 func (m *Model) recomputeFilter() {
 	tokens := search.Tokenize(m.Input)
-	m.Filter = search.AndFilter(m.Choices, tokens)
+	filter := search.AndFilter(m.Choices, tokens)
+	if len(tokens) == 0 {
+		filter = slices.Clone(filter)
+	}
+	m.Filter = filter
 	m.Visible = m.Filter
 	m.Idx = 0
 }

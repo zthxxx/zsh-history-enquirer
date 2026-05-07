@@ -474,3 +474,18 @@ companion was resolved in the
   scripts/release/build-npm.sh. Build + render-umbrella +
   per-platform packages reproduce the right shape after the
   rename. Resolved in this iteration's commit.
+
+* **2026-05-07** — `recomputeFilter` aliased `m.Choices` whenever
+  the input had no tokens (search.AndFilter's documented zero-copy
+  fast path). The model's `rotateUp` / `rotateDown` mutate Filter
+  in place, so scrolling the empty-input view scrambled Choices,
+  and a subsequent `recomputeFilter` (e.g. after Ctrl-U) returned
+  the rotated permutation rather than reverse-chronological order.
+  Real user impact: after a few Up presses + a typo + Ctrl-U, the
+  picker showed history out of order. Fixed by cloning the slice
+  in `recomputeFilter` when tokens is empty (cost is one
+  slice-header copy on the rare empty-input recompute, not on
+  every keystroke). Pinned by `TestModel_RotateDoesNotMutateChoices`
+  (direct invariant) and
+  `TestModel_ScrollThenClear_RestoresChronologicalOrder`
+  (user-visible scenario). Resolved in this iteration's commit.

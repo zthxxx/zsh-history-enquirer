@@ -667,6 +667,53 @@ func TestModel_RotateUpDown_RoundTrip(t *testing.T) {
 	}
 }
 
+// TestModel_RotateDoesNotMutateChoices pins a stability invariant:
+// search.AndFilter aliases m.Choices when the input has no tokens,
+// so without an explicit clone in recomputeFilter, rotateUp /
+// rotateDown would scribble the rotation through into the immutable
+// Choices slice. The user-visible failure is that scrolling the
+// empty-input view, then typing-and-clearing, returns a permuted
+// history instead of the chronological order.
+func TestModel_RotateDoesNotMutateChoices(t *testing.T) {
+	t.Parallel()
+	choices := []string{"alpha", "beta", "gamma", "delta", "epsilon"}
+	snapshot := slices.Clone(choices)
+
+	m := NewModel("", choices, 24, 80, 1, 1, DefaultMaxLimit)
+	m.rotateUp(2)
+	m.rotateDown(3)
+
+	require.Equal(t, snapshot, choices,
+		"Choices was mutated by Filter rotations — alias leak")
+}
+
+// TestModel_ScrollThenClear_RestoresChronologicalOrder is the
+// user-facing pin of the same invariant. Scroll via Up, type a
+// character, then Ctrl-U; the resulting Filter must equal the
+// original Choices order, not a rotated permutation.
+func TestModel_ScrollThenClear_RestoresChronologicalOrder(t *testing.T) {
+	t.Parallel()
+	choices := []string{"newest", "second", "third", "fourth", "fifth"}
+	snapshot := slices.Clone(choices)
+
+	m := NewModel("", choices, 24, 80, 1, 1, DefaultMaxLimit)
+	m.Render(RenderOptions{})
+
+	// Rotate the empty-input view a couple of times via Up.
+	m.Update(keys.KeyEvent{Key: keys.KeyUp})
+	m.Update(keys.KeyEvent{Key: keys.KeyUp})
+
+	// Type then clear. recomputeFilter runs both at the rune-append
+	// and at the Ctrl-U step.
+	m.Update(keys.RuneEvent{R: 'x'})
+	m.Update(keys.KeyEvent{Key: keys.KeyCtrlU})
+
+	require.Equal(t, snapshot, m.Filter,
+		"after scroll-and-clear, Filter must equal original Choices order")
+	require.Equal(t, snapshot, choices,
+		"underlying Choices must remain in chronological order")
+}
+
 // TestModel_DownWrapsWhenFilterFitsInLimit — when len(Filter) <=
 // Limit, the entire filter is visible at once, and Down at the
 // bottom wraps to top via the rotateDown path.
