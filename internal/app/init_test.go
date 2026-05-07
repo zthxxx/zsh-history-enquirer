@@ -44,6 +44,95 @@ func TestReadGeometry_ReportsExplicitWinsize(t *testing.T) {
 	require.Equal(t, 100, cols)
 }
 
+// TestRunEventLoop_SubmitReturnsFocusedEntry pins the happy path:
+// feed a single KeyEnter event with a non-empty filtered list, and
+// the loop should return a RunResult whose Output is the focused
+// entry.
+func TestRunEventLoop_SubmitReturnsFocusedEntry(t *testing.T) {
+	t.Parallel()
+	master, slave, err := pty.Open()
+	require.NoError(t, err)
+	defer master.Close()
+	defer slave.Close()
+
+	require.NoError(t, unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{
+		Row: 24, Col: 80,
+	}))
+	ttyHandle, err := tty.NewFromFile(slave)
+	require.NoError(t, err)
+
+	model := ui.NewModel("git", []string{"git status", "git log"}, 24, 80, 1, 1, ui.DefaultMaxLimit)
+	require.NotEmpty(t, model.Filter, "fixture must have at least one match")
+
+	events := make(chan keys.Event, 1)
+	events <- keys.KeyEvent{Key: keys.KeyEnter}
+	close(events)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Drain master so writes from runEventLoop don't block the pty buffer.
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			if _, rerr := master.Read(buf); rerr != nil {
+				return
+			}
+		}
+	}()
+
+	result, err := runEventLoop(ctx, ttyHandle, model, events, nil, io.Discard)
+	require.NoError(t, err, "submit must terminate cleanly with no error")
+	require.NotNil(t, result)
+	require.Equal(t, "git status", result.Output,
+		"Enter on the focused first match must return that entry")
+	require.True(t, model.Submitted, "model must record the submit")
+}
+
+// TestRunEventLoop_CtxDoneCancelsAndReturnsInput pins the cancel
+// path triggered by an external context cancellation (e.g. a
+// SIGTERM through signal.NotifyContext). The loop must set
+// model.Canceled, set Result = Input, and return a non-nil result
+// alongside ctx.Err() — so invokeRun's preserveOnError still has a
+// RunResult to print and the user's typed text survives the
+// teardown.
+func TestRunEventLoop_CtxDoneCancelsAndReturnsInput(t *testing.T) {
+	t.Parallel()
+	master, slave, err := pty.Open()
+	require.NoError(t, err)
+	defer master.Close()
+	defer slave.Close()
+
+	require.NoError(t, unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{
+		Row: 24, Col: 80,
+	}))
+	ttyHandle, err := tty.NewFromFile(slave)
+	require.NoError(t, err)
+
+	model := ui.NewModel("typed-input", []string{"any"}, 24, 80, 1, 1, ui.DefaultMaxLimit)
+	events := make(chan keys.Event)
+
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			if _, rerr := master.Read(buf); rerr != nil {
+				return
+			}
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already-canceled ctx — loop must observe it on first select
+
+	result, err := runEventLoop(ctx, ttyHandle, model, events, nil, io.Discard)
+	require.ErrorIs(t, err, context.Canceled,
+		"loop must surface ctx.Err on cancel so HandleError can dispatch")
+	require.NotNil(t, result, "result must be non-nil so PrintResult writes Input back")
+	require.Equal(t, "typed-input", result.Output,
+		"cancel path returns Input verbatim — widget contract")
+	require.True(t, model.Canceled, "model must record the cancel")
+}
+
 // TestReadGeometry_FallsBackOnZeroSize pins the docker-pty fallback:
 // some pty configurations (notably docker's pty without an explicit
 // SIGWINCH driver) report rows=0, cols=0 from TIOCGWINSZ. Without
