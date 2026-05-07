@@ -258,6 +258,94 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   and the user's input is preserved. (SIGINT from Ctrl-C inside the
   picker still arrives as the byte `0x03` because raw mode disables
   ISIG; the new wiring only matters for external kills.)
+- **`Alt+Backspace` cancelled the picker.** macOS Terminal, iTerm2,
+  GNOME Terminal — every xterm-style terminal — sends the chord as
+  `\e\x7f`. The parser saw the lone Esc, dispatched `KeyEsc` (which
+  cancels the picker), and the trailing `\x7f` was orphaned. Shell
+  users who reach for word-delete muscle memory mid-search were
+  dropped out of the picker every time. Fixed in `feedEsc`: when
+  the byte after `\e` is `\x7f` or `\x08`, route directly to
+  `KeyCtrlW` (the existing word-delete path). Plain Esc → ...later...
+  → Backspace still cancels because the reader's 50ms `flushTimer`
+  separates them into distinct Feed calls. Pinned by a parser unit
+  test, a slow-path-still-cancels guard, and e2e scenario 20 on
+  both glibc / musl.
+- **Filter rotations scrambled the immutable `Choices` slice.**
+  `search.AndFilter` aliases `Choices` when the input has no tokens
+  (a documented zero-copy fast path). `recomputeFilter` then
+  assigned that aliased slice to `m.Filter`, which is later rotated
+  in place by `rotateUp` / `rotateDown`. So every Up arrow on the
+  empty-input view scribbled the rotation through into the
+  user-supplied `Choices`, and a subsequent `recomputeFilter` (e.g.
+  after Ctrl-U) returned a permuted history rather than reverse-
+  chronological order. Fixed by cloning the filter slice in
+  `recomputeFilter` whenever tokens is empty.
+- **UTF-8 resync dropped valid bytes alongside invalid ones.** When
+  decode failed and the internal buffer reached `utf8.UTFMax`, the
+  parser dropped the *entire* 4-byte buffer. So feeding
+  `[0xbd, 'a', 'b', 'c']` (a stray continuation byte then ASCII)
+  silently swallowed the user's `abc` along with the bad byte.
+  Real-world triggers: terminal locale mismatch, SSH bit corruption,
+  paste payload that begins with a partial UTF-8 sequence. Fixed
+  with one-byte-at-a-time resync: drop only the invalid lead byte
+  (using a strict `isValidUTF8Lead` helper that's stricter than
+  `utf8.RuneStart` — rejects 0xc0/0xc1 and 0xf5-0xff which Go's
+  stdlib accepts) and re-attempt decode on the rest.
+- **Reader's flush timer didn't arm on `stateSS3`.** The parser's
+  `FlushEsc` already handled both `stateEsc` and `stateSS3`, but
+  the reader only armed its 50ms timer for `stateEsc`. Net effect:
+  a terminal that sent `\eO` and then nothing (rare on flaky links
+  / embedded firmware) froze the picker — no events surfaced until
+  some unrelated byte unstuck the SS3 sequence.
+- **Non-ASCII LBUFFER mis-aligned the picker against the prompt.**
+  The init-column arithmetic and `m.Cursor` updates were using
+  `len()` (bytes) where the underlying CSI sequences expect cells.
+  For accented Latin / Greek / Cyrillic / Hebrew / Arabic / CJK /
+  emoji, byte-count over-counted display width by 1.5–3×, so the
+  picker drew at the wrong column whenever LBUFFER had any
+  non-ASCII content — visibly mis-aligning against the prompt and
+  parking the caret in empty space after the input row. Now goes
+  through `ui.CellWidth` (mattn/go-runewidth, the same library every
+  Charm / bubbletea TUI uses), East Asian Width-aware so CJK
+  ideographs and emoji each contribute their actual 2 cells.
+- **`splitNonEmptyLines` was a misnomer, letting empty entries
+  through.** A corrupt $HISTFILE (with `echo "" >> ~/.zsh_history`,
+  partial-write blank lines, or CRLF-only blank lines that
+  collapsed to "" after the trailing-CR strip) produced empty
+  entries the picker rendered as blank rows. The user could
+  navigate to one and accidentally hit Enter, blanking $BUFFER.
+  The function now actually drops empty lines.
+- **CRLF in $HISTFILE scrambled the picker frame.** A history file
+  saved on Windows (or by a misconfigured editor) left a `\r` at
+  the end of every entry. When rendered, the `\r` carriage-returned
+  the cursor back to col 1 mid-frame, and the next entry's pointer
+  overwrote the previous entry's last byte — entries appearing to
+  mash together. `splitNonEmptyLines` now strips trailing `\r` from
+  each line before emitting it.
+- **`$LBUFFER="--print-install-hint"` blanked user input.** The npm
+  shim used `process.argv.includes('--print-install-hint')` to
+  trigger the postinstall hint. Same widget-contract footgun as
+  the `--version` / `--help` cases: a $LBUFFER literally equal to
+  the flag name tripped the fast-path, wrote the hint to stderr,
+  and exited 0 with empty stdout — silently destroying the user's
+  typed text. Narrowed to `argv.length === 3 && argv[2] === ...`,
+  matching the discipline used on the Go side. Three node:test
+  scenarios pin it.
+
+### Added (ergonomics + correctness)
+
+- **`NO_COLOR` env-var support** ([no-color.org](https://no-color.org)
+  convention). Setting `NO_COLOR` to any non-empty value disables
+  the bold-cyan token highlighting; filtering / matching are
+  unaffected.
+- **`Alt+Backspace` → word-delete.** Mirrors zsh's emacs-keymap
+  default. Listed in the keybindings table.
+- **CJK / emoji-aware rendering** via `mattn/go-runewidth` —
+  initial-column math, wrap math, cursor placement all use real
+  terminal cell counts.
+- **Env-var documentation in `--help`.** The `Environment:` section
+  lists `HISTFILE`, `NO_COLOR`, `ZHE_DEBUG` so users discover
+  configuration knobs without spelunking the README.
 
 ### Distribution
 
