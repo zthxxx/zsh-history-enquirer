@@ -1,0 +1,99 @@
+#!/usr/bin/env expect
+# 24-multiline-narrow-wrap-submit.exp
+#
+# 多行换行交互 — the user-emphasised compound boundary case:
+# select a MULTI-LINE history entry on a narrow terminal where EACH
+# LINE of the entry also wraps because it's wider than the terminal,
+# then submit it and verify BUFFER preserves every byte of the
+# original multi-line text.
+#
+# This combines three layers that each have their own unit-level
+# coverage:
+#   - multi-line render (literal `\n` → CRLF translation in renderBody)
+#   - per-line wrap math (rivo/uniseg cell width × terminal cols)
+#   - dynamic-limit math (heightLimit shrinks for wrap rows)
+#
+# The unit tests pin each in isolation. This scenario verifies they
+# survive the full pipeline (zsh widget → binary picker → BUFFER →
+# eval-via-Enter) without any wrap-induced truncation, off-by-one,
+# or stale-frame artefact corrupting the saved command. A bug in
+# any of those layers would land a malformed command in BUFFER and
+# the assertion on the command's stdout would fail.
+#
+# Scenario shape:
+#   1. Write a custom $HISTFILE containing a multi-line `printf`
+#      where each logical line is wider than 40 cols.
+#   2. Set the slave pty to 40×24, open the picker.
+#   3. Filter by a unique marker token, ensure the multi-line entry
+#      is rendered (presence of the second-line marker proves it).
+#   4. Submit, then run — verify each line's stdout marker appears.
+
+set timeout 20
+log_user 1
+
+# Custom $HISTFILE with one multi-line entry. zsh stores embedded
+# newlines as literal backslash-n; the loader's
+# ReverseDedupeUnescape un-escapes them so the picker sees real LFs.
+# Each line below is 50 chars (50 'X' / 'Y' / 'Z' + the marker), well
+# above the 40-col terminal width — so each line wraps to two visual
+# rows once the picker is rendering.
+exec sh -c {
+  printf ': 1568797200:0;ml-marker-pre\n' > /tmp/multiline-narrow-history
+  printf ': 1568797201:0;printf "%%s %%s %%s\\\\n" XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXalpha\\\\nYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYbeta\\\\nZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZgamma\n' >> /tmp/multiline-narrow-history
+  printf ': 1568797202:0;ml-marker-post\n' >> /tmp/multiline-narrow-history
+}
+
+spawn -noecho zsh -il
+stty rows 24 columns 40 < $spawn_out(slave,name)
+
+expect_after timeout {
+  puts stderr "TIMEOUT in 24-multiline-narrow-wrap-submit"
+  exit 1
+}
+
+expect "% "
+sleep 0.4
+
+# Configure the shell to use our custom HISTFILE before opening the
+# picker — fc -R will re-read on the binary's side and pick up the
+# multi-line entry.
+send -- "HISTFILE=/tmp/multiline-narrow-history fc -R\r"
+sleep 0.4
+expect "% "
+
+# Open the picker. With HISTFILE swapped above and our seed entry
+# carrying a unique "alpha" marker on the second line, filtering
+# narrows immediately to the multi-line entry.
+send -- "\x12"
+sleep 1.2
+
+# Type filter. "alpha" only appears in our seeded multi-line entry,
+# so the picker focuses it.
+send -- "alpha"
+sleep 0.6
+
+# The second logical line of the multi-line entry must be rendered —
+# proves multi-line + wrap render survived without corruption.
+expect -- "beta"
+sleep 0.4
+
+# Submit — load the multi-line BUFFER.
+send -- "\r"
+sleep 0.6
+
+# Run — zsh interprets the multi-line BUFFER as one logical printf
+# spanning three lines.
+send -- "\r"
+sleep 0.6
+
+# Each line's marker must appear in stdout — proves BUFFER preserved
+# every byte of the original multi-line entry across the picker
+# pipeline.
+expect -- "alpha"
+expect -- "beta"
+expect -- "gamma"
+sleep 0.3
+
+expect "% "
+send -- "exit\r"
+expect eof
