@@ -170,14 +170,56 @@ func TestHandleProbeFallback_TimeoutErrorReturnsLeftover(t *testing.T) {
 	}
 }
 
-func TestHandleProbeFallback_NonTimeoutErrorClearsLeftover(t *testing.T) {
+func TestHandleProbeFallback_NonTimeoutErrorWithoutLeftoverStaysEmpty(t *testing.T) {
 	t.Parallel()
+	// Generic non-timeout error path (e.g. write-DSR failure, poll
+	// failure): Probe.Cursor returns cur.leftover == "" because the
+	// failure happened before any read accumulated bytes. Fallback
+	// must surface that empty leftover unchanged — there's nothing to
+	// replay, but we should not synthesize garbage either.
 	cfg := &Config{Input: "x"}
 	cur := cursorResult{err: errors.New("write failed")}
 	var stderr bytes.Buffer
 	leftover := handleProbeFallback(&cur, cfg, &stderr)
 	if leftover != "" {
-		t.Fatalf("leftover = %q, want empty for non-timeout error", leftover)
+		t.Fatalf("leftover = %q, want empty for non-timeout error with empty cur.leftover", leftover)
+	}
+}
+
+// TestHandleProbeFallback_MalformedParseErrorRoundTripsLeftover pins
+// the regression where a malformed-DSR-parse error dropped every byte
+// the probe had consumed.
+//
+// Scenario: user presses Ctrl-R and immediately types Up arrow before
+// the picker finishes its DSR probe. The buffer reads
+// `\x1b[A\x1b[12;5R` — parseDSRResponse anchors on the FIRST `\x1b[`,
+// tries to parse `A\x1b[12;5` as `<row>;<col>`, fails, and returns the
+// entire input as leftover alongside a malformed-parse error.
+//
+// Pre-fix: handleProbeFallback only honored TimeoutError.Leftover, so
+// the user's `\x1b[A` was silently dropped and the picker ate the
+// keypress. Post-fix: cur.leftover is the default fallthrough, so the
+// bytes round-trip through reader.Prefeed and the up-arrow becomes a
+// KeyUp event as the user expected.
+func TestHandleProbeFallback_MalformedParseErrorRoundTripsLeftover(t *testing.T) {
+	t.Parallel()
+	cfg := &Config{Input: "abc"}
+	// Mirror what parseDSRResponse populates on a malformed parse:
+	// leftover = full input string, err = malformed-DSR diagnostic.
+	cur := cursorResult{
+		leftover: "\x1b[A\x1b[12;5R",
+		err:      errors.New(`malformed DSR response "\x1b[A\x1b[12;5R" (non-numeric)`),
+	}
+	var stderr bytes.Buffer
+	leftover := handleProbeFallback(&cur, cfg, &stderr)
+	if leftover != "\x1b[A\x1b[12;5R" {
+		t.Fatalf("leftover = %q, want full probe input on malformed parse", leftover)
+	}
+	if cur.col != 4 {
+		t.Fatalf("col fallback = %d, want len(Input)+1 = 4", cur.col)
+	}
+	if !strings.Contains(stderr.String(), "DSR cursor probe failed") {
+		t.Fatalf("stderr should warn, got %q", stderr.String())
 	}
 }
 

@@ -97,15 +97,24 @@ func readGeometry(t *tty.TTY) (rows, cols int, err error) {
 
 // handleProbeFallback applies the cursor-probe error fallback in
 // place. Returns any leftover bytes the probe consumed so the
-// caller can replay them through the keystream parser. Both code
+// caller can replay them through the keystream parser. Three code
 // paths produce leftover:
 //
 //   - Success: the user typed something before / after the DSR
 //     response and the probe parsed the response cleanly. Leftover
 //     comes from cur.leftover, populated by Probe.Cursor's success
 //     return.
-//   - Failure: the probe timed out or hit a malformed response.
-//     Leftover comes from TimeoutError.Leftover.
+//   - Timeout: the probe never saw a complete response. Bytes
+//     received before the deadline come back via TimeoutError.Leftover.
+//   - Malformed parse: the probe read enough bytes to terminate the
+//     loop (saw an 'R' after a `\x1b[`) but the body wasn't a valid
+//     `<row>;<col>` shape — most often because the user pressed an
+//     arrow / Home / End in the probe window and parseDSRResponse
+//     anchored on the user's CSI rather than the real DSR. parseDSR
+//     populates cur.leftover with the entire input string in that
+//     case so we re-feed every byte the probe read; without this the
+//     user's typed sequence (e.g. \x1b[A → KeyUp) would be silently
+//     dropped and a non-trivial keypress would vanish.
 //
 // The fallback (when err != nil) assumes the prompt starts at
 // column 1 with the input filling the first inputCells cells; the
@@ -117,9 +126,14 @@ func handleProbeFallback(cur *cursorResult, cfg *Config, stderr io.Writer) strin
 	if cur.err == nil {
 		return cur.leftover
 	}
-	var leftover string
+	// Default: trust whatever Probe.Cursor populated on cur.leftover.
+	// On a malformed-parse error parseDSRResponse stuffs the full
+	// input there exactly so this fallback can replay it.
+	leftover := cur.leftover
 	var te *tty.TimeoutError
 	if errors.As(cur.err, &te) {
+		// Timeout never reaches parseDSRResponse, so cur.leftover is
+		// empty; the buffered bytes live on the error itself.
 		leftover = te.Leftover
 	}
 	_, _ = fmt.Fprintf(stderr, "warning: DSR cursor probe failed: %v (using col=1 fallback)\n", cur.err)
