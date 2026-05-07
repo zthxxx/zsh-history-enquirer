@@ -70,28 +70,18 @@ if (
   process.exit(0);
 }
 
-const bin = locateBinary();
-if (!bin) {
-  // Print the diagnostic to stderr so it appears at the user's
-  // terminal (the widget's BUFFER=$(...) only captures stdout).
-  process.stderr.write(
-    'zsh-history-enquirer: no platform binary installed for ' +
-      `${process.platform}-${process.arch}.\n` +
-    'Install one of @zsh-history-enquirer/<os>-<arch> manually if\n' +
-    'your platform was excluded from optionalDependencies resolution.\n'
-  );
-
-  // CRITICAL: echo argv back to stdout so the widget's
-  // `BUFFER=$(...)` does not blank the user's typed line. The
-  // widget contract is "stdout must reproduce the input on any
-  // failure path"; without this echo, a missing platform binary
-  // silently eats the user's keystrokes.
-  //
-  // The widget invokes us as `cli.js -- "$LBUFFER"` (the `--`
-  // protects $LBUFFER strings that look like flags from triggering
-  // the binary's --version / --help fast-path). We must strip a
-  // leading `--` here too, otherwise `BUFFER=$(...)` lands as
-  // `-- $LBUFFER` instead of the user's actual typed text.
+// echoArgvAndExit is the BUFFER-preservation fallback for any
+// path where the shim cannot complete the picker invocation
+// successfully. The widget invokes us inside `BUFFER=$(...)`;
+// stdout becomes the user's command line. Any failure that
+// leaves stdout empty silently destroys the user's typed text.
+//
+// The widget passes argv as `cli.js -- "$LBUFFER"`; we strip
+// the leading `--` so the echo reflects the user's input rather
+// than literally `-- ...`. Always exits 0 because a non-zero
+// exit aborts the `$(...)` substitution and likewise loses the
+// input.
+function echoArgvAndExit() {
   let argv = process.argv.slice(2);
   if (argv[0] === '--') {
     argv = argv.slice(1);
@@ -99,14 +89,43 @@ if (!bin) {
   if (argv.length > 0) {
     process.stdout.write(argv.join(' ') + '\n');
   }
-
-  // Exit 0 so `BUFFER=$(...)` doesn't abort. The plugin file's
-  // graceful native-^R fallback only kicks in when the binary
-  // isn't on $PATH at all; once npm has placed cli.js there, it
-  // is on $PATH but unable to do its job, so this echo path is
-  // the next-best UX.
   process.exit(0);
 }
 
+const bin = locateBinary();
+if (!bin) {
+  // No platform-specific binary installed (e.g. a platform that
+  // wasn't included in optionalDependencies resolution).
+  process.stderr.write(
+    'zsh-history-enquirer: no platform binary installed for ' +
+      `${process.platform}-${process.arch}.\n` +
+    'Install one of @zsh-history-enquirer/<os>-<arch> manually if\n' +
+    'your platform was excluded from optionalDependencies resolution.\n'
+  );
+  echoArgvAndExit();
+}
+
 const result = spawnSync(bin, process.argv.slice(2), { stdio: 'inherit' });
+
+// spawnSync sets `result.error` when the child could not be
+// spawned at all (ENOENT, EACCES, ETXTBSY, etc.) — distinct from
+// a child that ran but exited non-zero. require.resolve above
+// only confirmed file existence; a binary that lost its +x bit
+// (some Docker mounts, a botched npm-cache extraction, a stale
+// symlink) would slip past locateBinary and fail here. Without
+// the same echo-argv fallback, BUFFER=$(...) would blank the
+// user's typed text on every Ctrl-R.
+if (result.error) {
+  process.stderr.write(
+    'zsh-history-enquirer: failed to exec platform binary ' +
+      `(${bin}): ${result.error.code || result.error.message}\n`
+  );
+  echoArgvAndExit();
+}
+
+// result.status is null when the child was killed by a signal —
+// preserve the widget contract by exiting 0 in that case so
+// $(...) doesn't abort. The picker's own signal handlers leave
+// stdout written if it had emitted a result before the signal,
+// so this path is rarely user-visible.
 process.exit(result.status === null ? 0 : result.status);

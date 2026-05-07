@@ -776,3 +776,26 @@ companion was resolved in the
   check at the top of the loop iteration enforces the original
   timeout budget so a misbehaving terminal can't loop forever.
   Resolved in this iteration's commit.
+
+* **2026-05-07** — npm shim's `spawnSync` failure path silently
+  blanked $BUFFER. The shim invokes the platform binary as
+  `spawnSync(bin, argv, { stdio: 'inherit' })` and exits with
+  `result.status === null ? 0 : result.status`. When `result.error`
+  is set — distinct from a child that ran but exited non-zero;
+  this is the case where the child could NOT be spawned at all
+  (ENOENT, EACCES, ETXTBSY, etc.) — `result.status` is null and
+  `result.signal` is null, so the shim exits 0 with NO stdout.
+  `BUFFER=$(cli.js -- "$LBUFFER")` then lands as empty, silently
+  destroying the user's typed text on every Ctrl-R. Reachable
+  whenever `require.resolve` finds the binary file but it then
+  fails to exec — a binary that lost its +x bit (some Docker
+  bind mounts, a botched npm-cache extraction), a stale symlink,
+  or any FS-level error between resolve and exec. Fix:
+  refactored the BUFFER-preservation echo into an
+  `echoArgvAndExit()` helper and wired the `result.error` branch
+  to call it after a stderr diagnostic. Pinned by an integration-
+  level node:test scenario that builds a fake platform package
+  with a chmod 0644 binary, points NODE_PATH at it, runs the
+  shim, and asserts BUFFER round-trips. The test was verified
+  to fail without the fix (status=0 / stdout='') and pass with
+  it. Resolved in this iteration's commit.
