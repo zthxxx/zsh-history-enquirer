@@ -51,6 +51,20 @@ itself.)
 
 ## Addressed
 
+* **2026-05-07** — Highlight loop missed self-overlapping search
+  tokens. `highlight()` advanced `offset = end` after each match so a
+  token whose suffix is also its prefix (e.g. `ana` against
+  `banana`, `abab` against `abababab`) only emphasized its first
+  occurrence — every overlapping later match was silently skipped
+  because the slice cursor had jumped past them. Filter correctness
+  was unaffected (`strings.Contains` matched the whole entry); only
+  the visual emphasis was incomplete, making the picker look like
+  the substring search itself was broken. Fix advances `offset = begin
+  + 1` so every overlap lands in `spans`, and the existing merge step
+  folds them into one continuous SGR-wrapped run. Two table cases
+  added (`TestHighlight_SelfOverlappingTokenAllMatchesCovered`,
+  `TestHighlight_LongerSelfOverlap`).
+
 * **2026-05-07** — `parseDSRResponse` now scans forward through every
   `\x1b[` introducer and picks the first valid `<digits>;<digits>R`
   body, so a user pressing Ctrl-R and immediately typing an arrow /
