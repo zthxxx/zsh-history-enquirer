@@ -199,6 +199,30 @@ if [ "${PUBLISH}" -eq 1 ]; then
     NPM_TAG="latest"
   fi
 
+  # publish_if_new <pkg> <pkg-dir>
+  #
+  # Idempotent wrapper around `npm publish`. Skips packages that
+  # already exist at this exact version on the registry — required
+  # because `npm publish` of an already-published version fails with
+  # EPUBLISHCONFLICT (set -e then aborts the rest of the loop). Real
+  # scenario: a transient npm registry hiccup partway through
+  # publishing the platform packages forces a CI retry; without this
+  # guard the retry trips on the first already-published package and
+  # never reaches the still-unpublished ones (or the umbrella).
+  #
+  # `npm view <pkg>@<ver> version` exits 0 with the version on hit,
+  # exits non-zero (or empty) on miss. We capture both and compare.
+  publish_if_new() {
+    local pkg="$1" pkg_dir="$2"
+    local existing
+    existing="$(npm view "${pkg}@${VERSION}" version 2>/dev/null || true)"
+    if [ "${existing}" = "${VERSION}" ]; then
+      echo "==> skip ${pkg}@${VERSION} (already on registry)"
+      return 0
+    fi
+    (cd "${pkg_dir}" && npm publish --access public --tag "${NPM_TAG}")
+  }
+
   echo ""
   echo "==> Publishing platform packages first, umbrella last (dist-tag: ${NPM_TAG})"
   for platform in "${PLATFORMS[@]}"; do
@@ -210,12 +234,12 @@ if [ "${PUBLISH}" -eq 1 ]; then
     pkg_dir="${BUILD}/${NPM_PLATFORM}"
     echo ""
     echo "---- @zsh-history-enquirer/${NPM_PLATFORM}@${VERSION} (tag: ${NPM_TAG})"
-    (cd "${pkg_dir}" && npm publish --access public --tag "${NPM_TAG}")
+    publish_if_new "@zsh-history-enquirer/${NPM_PLATFORM}" "${pkg_dir}"
   done
 
   echo ""
   echo "---- zsh-history-enquirer@${VERSION} (tag: ${NPM_TAG})"
-  (cd "${umbrella}" && npm publish --access public --tag "${NPM_TAG}")
+  publish_if_new "zsh-history-enquirer" "${umbrella}"
 fi
 
 echo ""

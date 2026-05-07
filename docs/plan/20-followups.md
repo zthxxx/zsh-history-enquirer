@@ -799,3 +799,19 @@ companion was resolved in the
   shim, and asserts BUFFER round-trips. The test was verified
   to fail without the fix (status=0 / stdout='') and pass with
   it. Resolved in this iteration's commit.
+
+* **2026-05-07** — `scripts/release/build-npm.sh --publish` was
+  not idempotent on partial-failure retries. `npm publish` of an
+  already-published version fails with EPUBLISHCONFLICT, and the
+  script's `set -e` then aborts the loop — so a transient npm
+  registry hiccup that publishes 2 of 4 platform packages forces
+  a manual cleanup before the retry can complete (or worse, the
+  umbrella package never gets published, leaving the registry in
+  a half-released state where `npm install zsh-history-enquirer`
+  resolves to the OLD umbrella but the platform packages have
+  the NEW version). Fix: wrapped the publish step in a
+  `publish_if_new` helper that calls `npm view <pkg>@<ver> version`
+  first, skips on an exact-version hit, and otherwise proceeds
+  with the original publish. The check adds ~5 network round-trips
+  per release (one per platform + one for the umbrella) but makes
+  retries safe. Resolved in this iteration's commit.
