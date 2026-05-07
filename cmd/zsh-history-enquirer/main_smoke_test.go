@@ -223,6 +223,32 @@ func TestRecoverStartFailure_NoArgsLeavesStdoutEmpty(t *testing.T) {
 	require.Contains(t, readFile(t, stderr.Name()), "startup failed")
 }
 
+// TestRecoverStartFailure_HonorsWidgetSeparator pins the canonical
+// widget-mode argv shape: the plugin invokes
+//
+//	BUFFER=$(zsh-history-enquirer -- "$LBUFFER")
+//
+// so the binary is called with `--` followed by the user's typed
+// text. recoverStartFailure must strip the separator (via NewConfig's
+// flag.Parse) and echo the typed text back so the widget contract's
+// "preserve input on every failure path" invariant holds even when
+// /dev/tty is unopenable. Without this guard, a headless container
+// would write `-- git status` to stdout — turning $BUFFER into a
+// malformed command.
+func TestRecoverStartFailure_HonorsWidgetSeparator(t *testing.T) {
+	t.Parallel()
+	stdout, stderr := captureStdoutStderr(t)
+	recoverStartFailure(stdout, stderr,
+		[]string{"--", "git status"},
+		errors.New("dev/tty: no such file"),
+	)
+	require.NoError(t, stdout.Close())
+	require.NoError(t, stderr.Close())
+
+	require.Equal(t, "git status\n", readFile(t, stdout.Name()),
+		"widget-mode argv must echo only the post-separator payload")
+}
+
 // TestRecoverStartFailure_TolerantOfBadArgs makes sure malformed
 // argv (e.g. an unknown flag) doesn't compound the disaster — the
 // recovery path is best-effort. We log the original startup error to
