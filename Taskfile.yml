@@ -99,6 +99,47 @@ tasks:
     cmds:
       - go run -ldflags "{{.LDFLAGS}}" {{.CMD_PATH}} {{.CLI_ARGS}}
 
+  dev:
+    # Drops the developer into an interactive zsh session inside the
+    # same debian-slim image the e2e harness uses. $HOME is seeded with
+    # write_zshrc + write_seed_history from e2e/seed-home.sh — the same
+    # fixture every e2e scenario starts from — so any bug a scenario
+    # surfaces can be reproduced by hand without polluting the host's
+    # ~/.zsh_history. The picker binary and plugin are bind-mounted
+    # read-only, so re-running `task build:linux` between sessions
+    # picks up local code changes without rebuilding the image.
+    desc: "Interactive debian zsh shell against the e2e seed history (build:linux is auto-run)"
+    deps: [build:linux]
+    cmds:
+      - |
+        # Cache key tracks the Dockerfile only — the image's content
+        # is apt deps + locale + a `tester` user; everything else
+        # (the binary, the plugin, seed-home.sh, dev.sh) is
+        # bind-mounted at run time and stays out of the image.
+        # Matches ci:e2e:run's cache discipline so `task dev` and
+        # `task ci:e2e:run` share the cached image.
+        HASH=$(sha256sum e2e/debian/Dockerfile | head -c 12)
+        IMAGE="{{.APP_NAME}}-e2e-debian:${HASH}"
+        if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+          docker build -f e2e/debian/Dockerfile -t "$IMAGE" e2e
+          docker images --format '{{`{{.Repository}}:{{.Tag}}`}}' \
+            | grep "^{{.APP_NAME}}-e2e-debian:" | grep -v ":${HASH}$" \
+            | xargs -r docker rmi 2>/dev/null || true
+        fi
+        # --rm so the container is torn down on exit; -it for an
+        # attached pty so `^R` and the picker's raw-mode reads work;
+        # --entrypoint /dev.sh overrides the image's default /run.sh
+        # so we get an interactive shell instead of the scenario
+        # harness.
+        docker run --rm -it \
+          --entrypoint /dev.sh \
+          -v "$(pwd)/{{.BUILD_DIR}}/{{.APP_NAME}}-linux-amd64:/usr/local/bin/{{.APP_NAME}}:ro" \
+          -v "$(pwd)/plugin/{{.APP_NAME}}.plugin.zsh:/opt/{{.APP_NAME}}/plugin.zsh:ro" \
+          -v "$(pwd)/e2e/seed-home.sh:/seed-home.sh:ro" \
+          -v "$(pwd)/e2e/dev.sh:/dev.sh:ro" \
+          "$IMAGE"
+    interactive: true
+
   # ---------------------------------------------------------------------------
   # Tests
   # ---------------------------------------------------------------------------
@@ -309,7 +350,14 @@ tasks:
     desc: "CI e2e — build target image and run scenarios (usage: TARGET=debian task ci:e2e:run)"
     cmds:
       - |
-        HASH=$(sha256sum e2e/${TARGET}/Dockerfile e2e/run.sh | head -c 12)
+        # Cache key tracks the Dockerfile only because the image is
+        # otherwise content-free: run.sh, dev.sh, seed-home.sh, the
+        # scenarios, the binary, and the plugin are all bind-mounted
+        # at run time, so editing them never invalidates the cached
+        # image. Only Dockerfile (apt deps, locale, user setup)
+        # changes need a rebuild — this keeps `task ci:e2e:run`
+        # fast on the common edit-script-and-rerun loop.
+        HASH=$(sha256sum e2e/${TARGET}/Dockerfile | head -c 12)
         IMAGE="{{.APP_NAME}}-e2e-${TARGET}:${HASH}"
         if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
           docker build -f e2e/${TARGET}/Dockerfile -t "$IMAGE" e2e
@@ -322,6 +370,7 @@ tasks:
           -v "$(pwd)/plugin/{{.APP_NAME}}.plugin.zsh:/opt/{{.APP_NAME}}/plugin.zsh:ro" \
           -v "$(pwd)/e2e/scenarios:/scenarios:ro" \
           -v "$(pwd)/e2e/run.sh:/run.sh:ro" \
+          -v "$(pwd)/e2e/seed-home.sh:/seed-home.sh:ro" \
           -e TARGET=${TARGET} \
           "$IMAGE" \
           /run.sh
@@ -400,12 +449,20 @@ tasks:
       # propagate the exit code. The previous `&& ... || (echo ...)`
       # chain masked real shellcheck failures by routing them to the
       # 'not installed' message.
+      #
+      # `-x --source-path=SCRIPTDIR` tells shellcheck to follow
+      # `. /seed-home.sh` style absolute-path sources by resolving
+      # the directive `# shellcheck source=seed-home.sh` against
+      # the directory of the script being linted. Without it,
+      # SC1091 fires because the literal /seed-home.sh path only
+      # exists inside the docker container.
       - |
         if ! command -v shellcheck >/dev/null; then
           echo "shellcheck not installed; skipping" >&2
           exit 0
         fi
-        find scripts e2e -name "*.sh" -print0 | xargs -0 shellcheck
+        find scripts e2e -name "*.sh" -print0 \
+          | xargs -0 shellcheck -x --source-path=SCRIPTDIR
 
   lint:md:
     desc: Run markdownlint via bun (npx fallback if no bun)
