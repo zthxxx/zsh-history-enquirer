@@ -119,16 +119,23 @@ Run a single Go test: `go test ./internal/ui -run TestRender_PointerOnFocused`.
   emit the user's typed input as the picker's stdout. The widget
   sets `BUFFER=$(...)` to that string. Breaking this invariant means
   losing typed work, so it has e2e coverage in
-  `e2e/scenarios/03-cancel-preserves-input.exp`.
+  `e2e-v2/scenarios/03_cancel_preserves_input_test.go`.
 - **Tests are layered.** `internal/**/*_test.go` use property-based
   generation where the behaviour is amenable (history transform,
   search filter, wrap math, parser FSM) plus a Go-native fuzz target
-  on `Parser.Feed`. The e2e layer lives only in docker
-  (`e2e/scenarios/*.exp`, run by `e2e/{debian,alpine}/Dockerfile`).
-  The legacy port shipped a `tests/zsh-widget.test.zsh` that ran
-  against the developer's host shell — that path mutated
-  `~/.zsh_history` and broke terminal state, and is **not** to be
-  recreated. New e2e scenarios go in `e2e/scenarios/`.
+  on `Parser.Feed`. The e2e layer is a Go-native harness in a
+  separate go module at `e2e-v2/` (its dependencies — creack/pty,
+  hinshun/vt10x — never enter the release binary's dep graph; see
+  `e2e-v2/DESIGN.md` decision 5 and the `task lint:no-test-deps`
+  belt-and-braces guard). The harness drives a real `zsh -il` over
+  a pty inside `e2e-v2/docker/Dockerfile.{debian,alpine}` and
+  triggers `^R` through the widget. The legacy Tcl/expect harness
+  at `e2e/scenarios/*.exp` was retired in May 2026 once the v2
+  harness reached parity. A second legacy port shipped a
+  `tests/zsh-widget.test.zsh` that ran against the developer's
+  host shell — that path mutated `~/.zsh_history` and broke
+  terminal state, and is **not** to be recreated. New e2e
+  scenarios go in `e2e-v2/scenarios/<NN>_<topic>_test.go`.
 - **All comments and docs in English.** The single exception is
   `README.zh-CN.md`.
 - **fx.NopLogger is mandatory in main.** The widget contract requires

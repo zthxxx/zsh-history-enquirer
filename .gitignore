@@ -62,3 +62,7 @@ __debug_bin*
 # rendered from templates at release time and never tracked).
 /npm/build/
 /npm/packages/@zsh-history-enquirer/
+
+# e2e v2 — VHS render outputs (regenerated on demand by
+# `task record:examples`; large binary files, not source).
+/e2e-v2/tapes/out/

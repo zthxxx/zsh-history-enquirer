@@ -193,9 +193,40 @@ tasks:
   # locally before pushing.
   # ---------------------------------------------------------------------------
 
+  # ---------------------------------------------------------------------------
+  # E2E (Go-native harness) — drives a real `zsh -il` over a pty inside
+  # a minimal docker image (debian + alpine) and triggers ^R through
+  # the widget. The harness lives in its own go module under e2e-v2/
+  # so its dependencies (creack/pty, hinshun/vt10x) never enter the
+  # release binary's dep graph (DESIGN.md decision 5).
+  #
+  # History: replaced the Tcl/expect harness at e2e/scenarios/*.exp +
+  # e2e/run.sh in May 2026. The legacy harness was deleted in the same
+  # commit; e2e/dev.sh + e2e/seed-home.sh remain because `task dev`
+  # still uses them for the interactive picker shell.
+  # ---------------------------------------------------------------------------
+
+  build:e2e-harness:
+    desc: Compile the Go-native e2e harness test binary (linux/amd64, static)
+    deps: [build:linux]
+    dir: e2e-v2
+    env:
+      CGO_ENABLED: "0"
+      GOOS: linux
+      GOARCH: amd64
+    cmds:
+      - go test -c -o bin/harness.test ./scenarios/...
+    sources:
+      - ./harness/**/*.go
+      - ./scenarios/**/*.go
+      - ./go.mod
+      - ./go.sum
+    generates:
+      - bin/harness.test
+
   test:e2e:
     desc: Run all e2e scenarios in docker (debian + alpine)
-    deps: [build:linux]
+    deps: [build:e2e-harness]
     cmds:
       - for: { var: 'TARGETS', as: TARGET, split: ' ' }
         cmd: TARGET={{.TARGET}} task ci:e2e:run
@@ -204,7 +235,7 @@ tasks:
 
   test:e2e:one:
     desc: "Run a single e2e target (usage: task test:e2e:one TARGET=debian)"
-    deps: [build:linux]
+    deps: [build:e2e-harness]
     cmds:
       - TARGET={{.TARGET}} task ci:e2e:run
     requires:
@@ -216,6 +247,74 @@ tasks:
       - act push --container-architecture linux/amd64 -j e2e --matrix target:{{.TARGET}} --rm
     requires:
       vars: [TARGET]
+
+  ci:e2e:run:
+    desc: "CI e2e — build target image and run harness.test (usage: TARGET=debian task ci:e2e:run)"
+    cmds:
+      - |
+        # Cache key tracks the Dockerfile only. Editing the runner,
+        # the harness Go code, the seed fixtures, or the picker binary
+        # does not invalidate the image — they are bind-mounted at run
+        # time.
+        HASH=$(sha256sum e2e-v2/docker/Dockerfile.${TARGET} | head -c 12)
+        IMAGE="{{.APP_NAME}}-e2e-${TARGET}:${HASH}"
+        if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+          docker build -f e2e-v2/docker/Dockerfile.${TARGET} -t "$IMAGE" e2e-v2
+          docker images --format '{{`{{.Repository}}:{{.Tag}}`}}' \
+            | grep "^{{.APP_NAME}}-e2e-${TARGET}:" | grep -v ":${HASH}$" \
+            | xargs -r docker rmi 2>/dev/null || true
+        fi
+        docker run --rm \
+          -v "$(pwd)/{{.BUILD_DIR}}/{{.APP_NAME}}-linux-amd64:/usr/local/bin/{{.APP_NAME}}:ro" \
+          -v "$(pwd)/plugin/{{.APP_NAME}}.plugin.zsh:/opt/{{.APP_NAME}}/plugin.zsh:ro" \
+          -v "$(pwd)/e2e-v2/testdata/history:/seed/history:ro" \
+          -v "$(pwd)/e2e-v2/testdata/zshrc.template:/seed/zshrc.template:ro" \
+          -v "$(pwd)/e2e-v2/bin/harness.test:/usr/local/bin/harness.test:ro" \
+          -v "$(pwd)/e2e-v2/runner.sh:/runner.sh:ro" \
+          -e TARGET=${TARGET} \
+          "$IMAGE"
+    requires:
+      vars: [TARGET]
+
+  # ---------------------------------------------------------------------------
+  # VHS recordings (docs artifacts — NOT a CI gate)
+  #
+  # `record:examples` renders the .tape files under e2e-v2/tapes/ into
+  # MP4 + GIF via the official VHS docker image. Outputs land under
+  # e2e-v2/tapes/out/ (gitignored). These are human-watchable recordings
+  # for the README and docs/examples/, NEVER automated assertions —
+  # those live in e2e-v2/scenarios/*_test.go.
+  # ---------------------------------------------------------------------------
+
+  record:examples:
+    desc: "Render VHS tapes to MP4/GIF (docs only). Usage: task record:examples [TAPE=01]"
+    deps: [build:linux]
+    cmds:
+      - mkdir -p e2e-v2/tapes/out
+      - |
+        FILTER="{{.TAPE}}"
+        for tape in e2e-v2/tapes/*.tape; do
+          name=$(basename "$tape" .tape)
+          # Skip shared snippets (filenames starting with `_`).
+          case "$name" in
+            _*) continue ;;
+          esac
+          if [ -n "$FILTER" ] && ! echo "$name" | grep -q "$FILTER"; then
+            continue
+          fi
+          echo "==== rendering $name ===="
+          # The official VHS image carries ghostty + ttyd + ffmpeg +
+          # the required fonts so rendering is reproducible across
+          # macOS and Linux developers. The picker binary and plugin
+          # are mounted at the same in-container paths the .tape
+          # files reference.
+          docker run --rm \
+            -v "$(pwd)/e2e-v2/tapes:/vhs" \
+            -v "$(pwd)/{{.BUILD_DIR}}/{{.APP_NAME}}-linux-amd64:/usr/local/bin/{{.APP_NAME}}:ro" \
+            -v "$(pwd)/plugin/{{.APP_NAME}}.plugin.zsh:/opt/{{.APP_NAME}}/plugin.zsh:ro" \
+            ghcr.io/charmbracelet/vhs:latest \
+            "/vhs/${name}.tape"
+        done
 
   # ---------------------------------------------------------------------------
   # Local CI helpers
@@ -346,37 +445,6 @@ tasks:
 
         echo "==> all 4 smokes pass"
 
-  ci:e2e:run:
-    desc: "CI e2e — build target image and run scenarios (usage: TARGET=debian task ci:e2e:run)"
-    cmds:
-      - |
-        # Cache key tracks the Dockerfile only because the image is
-        # otherwise content-free: run.sh, dev.sh, seed-home.sh, the
-        # scenarios, the binary, and the plugin are all bind-mounted
-        # at run time, so editing them never invalidates the cached
-        # image. Only Dockerfile (apt deps, locale, user setup)
-        # changes need a rebuild — this keeps `task ci:e2e:run`
-        # fast on the common edit-script-and-rerun loop.
-        HASH=$(sha256sum e2e/${TARGET}/Dockerfile | head -c 12)
-        IMAGE="{{.APP_NAME}}-e2e-${TARGET}:${HASH}"
-        if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-          docker build -f e2e/${TARGET}/Dockerfile -t "$IMAGE" e2e
-          docker images --format '{{`{{.Repository}}:{{.Tag}}`}}' \
-            | grep "^{{.APP_NAME}}-e2e-${TARGET}:" | grep -v ":${HASH}$" \
-            | xargs -r docker rmi 2>/dev/null || true
-        fi
-        docker run --rm \
-          -v "$(pwd)/{{.BUILD_DIR}}/{{.APP_NAME}}-linux-amd64:/usr/local/bin/{{.APP_NAME}}:ro" \
-          -v "$(pwd)/plugin/{{.APP_NAME}}.plugin.zsh:/opt/{{.APP_NAME}}/plugin.zsh:ro" \
-          -v "$(pwd)/e2e/scenarios:/scenarios:ro" \
-          -v "$(pwd)/e2e/run.sh:/run.sh:ro" \
-          -v "$(pwd)/e2e/seed-home.sh:/seed-home.sh:ro" \
-          -e TARGET=${TARGET} \
-          "$IMAGE" \
-          /run.sh
-    requires:
-      vars: [TARGET]
-
   # ---------------------------------------------------------------------------
   # Lint / Fmt
   # ---------------------------------------------------------------------------
@@ -390,6 +458,27 @@ tasks:
       - task: lint:sh
       - task: lint:zsh
       - task: lint:js
+      - task: lint:no-test-deps
+
+  lint:no-test-deps:
+    desc: Verify the main module's transitive deps do not include e2e-v2 / vt10x
+    cmds:
+      # Belt-and-braces guard for DESIGN.md decision 5. The e2e-v2
+      # module is intentionally NOT joined via go.work — if anyone
+      # adds one, or if a stray import sneaks in, the main module's
+      # dep graph would suddenly include the test-only parser. We
+      # `grep -E` against vt10x and the e2e-v2 module path; either
+      # match is a failure. The exit-code dance keeps the task
+      # green when grep finds NOTHING (its default exit=1) and fails
+      # loudly when it finds anything (exit=0).
+      - |
+        out=$(go list -deps -f '{{`{{.Module}}`}}' ./... | sort -u | grep -E 'vt10x|e2e-v2' || true)
+        if [ -n "$out" ]; then
+          echo "test-only modules leaked into main module dep graph:" >&2
+          echo "$out" >&2
+          exit 1
+        fi
+        echo "no test-only modules in main dep graph"
 
   lint:go:
     desc: Run golangci-lint

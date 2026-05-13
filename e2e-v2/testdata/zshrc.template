@@ -1,0 +1,13 @@
+HISTSIZE=100000
+SAVEHIST=100000
+HISTFILE="${HOME}/.zsh_history"
+
+# Disable history sharing so the picker sees only the seed we wrote.
+setopt EXTENDED_HISTORY
+unsetopt SHARE_HISTORY
+unsetopt INC_APPEND_HISTORY
+unsetopt APPEND_HISTORY
+
+PROMPT='%% '
+RPROMPT=''
+source {{PLUGIN}}

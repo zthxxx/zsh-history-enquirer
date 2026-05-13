@@ -36,12 +36,15 @@ Each entry must include:
     `keys.RuneEvent` — the swap is implementation-only.
 
 * **2026-05-07** — Initial post-load DSR cursor probe always falls back
-  inside docker (expect's pty doesn't reply). Production terminals do
-  reply; the user-facing impact is "first run looks fine." The fallback
-  draws starting at column 1 instead of inline at the prompt column.
-  Why open: when running in a real terminal the probe works, so this
-  only matters for tests. How to apply: don't try to fix it for
-  expect — the renderer's correctness is verified at the model layer.
+  inside docker (the pty doesn't reply to the `\e[6n` probe). Production
+  terminals do reply; the user-facing impact is "first run looks fine."
+  The fallback draws starting at column 1 instead of inline at the
+  prompt column. Why still open: a real terminal does answer the probe,
+  so this only matters for tests. How to apply: don't try to fix it
+  for the docker pty — the renderer's correctness is verified at the
+  model layer, and the v2 harness (`e2e-v2/scenarios/*_test.go`)
+  acknowledges the fallback explicitly in its `WaitQuiescent(400ms, 5s)`
+  tuning after the first `^R`.
 
 * **2026-05-07** — Resize-preserves-focus is not implemented. On a
   SIGWINCH that significantly shrinks the terminal (e.g. window
@@ -54,18 +57,18 @@ Each entry must include:
   resize rotate the filter to bring that entry into the new visible
   window — handled symmetrically with multi-line aware moveDown's
   walk-from-bottom budget. Held back this round because: (a) no
-  e2e harness exercises mid-session SIGWINCH (expect can simulate
-  it but the picker's reflow timing makes it brittle to assert),
-  (b) most users don't resize mid-pick, (c) the existing
-  `NeedsFullErase` path already prevents the reflowed-stale-rows
-  artifact — only the focus-shift remains. Tracking note for a
-  focused UX session.
+  e2e harness exercises mid-session SIGWINCH (the v2 harness's
+  `Session.Resize` helper exists but no scenario uses it yet —
+  reflow timing makes it brittle to assert), (b) most users don't
+  resize mid-pick, (c) the existing `NeedsFullErase` path already
+  prevents the reflowed-stale-rows artifact — only the focus-shift
+  remains. Tracking note for a focused UX session.
 
-(Three open items: the x/input parser swap above is a longer-form
-refactor held for a focused session, the docker pty DSR limitation
-is intrinsic to the expect-based test harness — not a code bug,
-and the resize-preserves-focus tracking is a UX nice-to-have.
-No open user-facing *defect* remains in the picker itself.)
+(Two open items: the x/input parser swap above is a longer-form
+refactor held for a focused session, and the resize-preserves-focus
+tracking is a UX nice-to-have. No open user-facing *defect* remains
+in the picker itself. The docker-pty-DSR-fallback note remains as
+a documented quirk rather than a defect.)
 
 ## Addressed
 
