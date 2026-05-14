@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | **unit** | `internal/**/*_test.go` | Pure Go. No zsh, no docker. Property-based tests via `pgregory.net/rapid` plus targeted table tests. Runs with `task test:unit`. |
 | **integration** | same package | Components that need a pty (via `creack/pty`) — keys reader, tty cursor probe. Skipped on Windows. Still no docker. |
-| **e2e** | `e2e-v2/` (separate Go module) | Real binary inside docker, real zsh, real pty, driven by a Go-native harness using `creack/pty` + `hinshun/vt10x`. Two libcs (glibc / musl). **Never** runs against the user's machine. |
+| **e2e** | `e2e/` (separate Go module) | Real binary inside docker, real zsh, real pty, driven by a Go-native harness using `creack/pty` + `hinshun/vt10x`. Two libcs (glibc / musl). **Never** runs against the user's machine. |
 
 ## Why e2e in docker
 
@@ -38,23 +38,23 @@ files. The Go harness gives us:
   the raw byte stream.
 - **Structured failure artifacts** — every failed test writes
   `screen.txt`, `raw.bin`, and `events.jsonl` to
-  `e2e-v2/_artifacts/<TestName>/` for post-mortem.
+  `e2e/_artifacts/<TestName>/` for post-mortem.
 - **Single-language stack** — debugger, `go test -run`, and `-v`
   all work; no Tcl context-switch for contributors.
 - **Module isolation** — the harness's `creack/pty` and `vt10x`
-  dependencies live in a separate `e2e-v2/go.mod` and are blocked
+  dependencies live in a separate `e2e/go.mod` and are blocked
   from the release binary's dep graph by `task lint:no-test-deps`.
 
-The full design is in `e2e-v2/DESIGN.md`. Review findings from the
-PoC iteration are in `e2e-v2/REVIEW-FINDINGS.md`.
+The full design is in `e2e/DESIGN.md`. Review findings from the
+PoC iteration are in `e2e/REVIEW-FINDINGS.md`.
 
 ## Docker images
 
 We run e2e on **two** libc surfaces because users actually run on
 both:
 
-- `e2e-v2/docker/Dockerfile.debian` — bookworm-slim, glibc.
-- `e2e-v2/docker/Dockerfile.alpine`  — alpine 3.20, musl.
+- `e2e/docker/Dockerfile.debian` — bookworm-slim, glibc.
+- `e2e/docker/Dockerfile.alpine`  — alpine 3.20, musl.
 
 Both install only what the test binary needs to run a zsh session
 (no Go inside the image — the test binary is precompiled on host
@@ -64,8 +64,8 @@ The picker binary (`bin/zsh-history-enquirer-linux-amd64`) is
 mounted at `/usr/local/bin/zsh-history-enquirer`. The plugin file
 is mounted under `/opt/zsh-history-enquirer/plugin.zsh`. Per-test
 `~/.zshrc` and `~/.zsh_history` are rendered from
-`e2e-v2/testdata/zshrc.template` and the chosen
-`e2e-v2/testdata/history/<name>.history` fixture into a scratch
+`e2e/testdata/zshrc.template` and the chosen
+`e2e/testdata/history/<name>.history` fixture into a scratch
 HOME created by `t.TempDir()`.
 
 ## Interactive dev shell
@@ -82,7 +82,7 @@ check render edges that don't yet have a scenario.
 
 ## Scenario coverage
 
-`e2e-v2/scenarios/<NN>_<topic>_test.go` — 24 active + 1 skip (25 total,
+`e2e/scenarios/<NN>_<topic>_test.go` — 24 active + 1 skip (25 total,
 one-to-one with the retired `.exp` scripts):
 
 | # | Test | Asserts |
@@ -115,15 +115,15 @@ one-to-one with the retired `.exp` scripts):
 
 Each test is one function with a per-call quiescence-based wait
 budget. Failures dump the screen and raw bytes to
-`e2e-v2/_artifacts/<TestName>/`.
+`e2e/_artifacts/<TestName>/`.
 
 ## VHS recordings
 
-`e2e-v2/tapes/*.tape` files render to MP4 + GIF via VHS for human-
+`e2e/tapes/*.tape` files render to MP4 + GIF via VHS for human-
 watchable demos. These are documentation artifacts, NOT automated
 assertions — they live in a separate `task record:examples` target
 that is not part of `task check` / `task ci`. Outputs land in
-`e2e-v2/tapes/out/` (gitignored) and are committed selectively to
+`e2e/tapes/out/` (gitignored) and are committed selectively to
 `docs/examples/` for README embedding.
 
 ## act compatibility

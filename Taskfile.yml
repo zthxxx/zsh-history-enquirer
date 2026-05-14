@@ -118,10 +118,10 @@ tasks:
         # bind-mounted at run time and stays out of the image.
         # Matches ci:e2e:run's cache discipline so `task dev` and
         # `task ci:e2e:run` share the cached image.
-        HASH=$(sha256sum e2e/debian/Dockerfile | head -c 12)
+        HASH=$(sha256sum e2e/docker/Dockerfile.debian | head -c 12)
         IMAGE="{{.APP_NAME}}-e2e-debian:${HASH}"
         if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-          docker build -f e2e/debian/Dockerfile -t "$IMAGE" e2e
+          docker build -f e2e/docker/Dockerfile.debian -t "$IMAGE" e2e
           docker images --format '{{`{{.Repository}}:{{.Tag}}`}}' \
             | grep "^{{.APP_NAME}}-e2e-debian:" | grep -v ":${HASH}$" \
             | xargs -r docker rmi 2>/dev/null || true
@@ -196,7 +196,7 @@ tasks:
   # ---------------------------------------------------------------------------
   # E2E (Go-native harness) — drives a real `zsh -il` over a pty inside
   # a minimal docker image (debian + alpine) and triggers ^R through
-  # the widget. The harness lives in its own go module under e2e-v2/
+  # the widget. The harness lives in its own go module under e2e/
   # so its dependencies (creack/pty, hinshun/vt10x) never enter the
   # release binary's dep graph (DESIGN.md decision 5).
   #
@@ -209,7 +209,7 @@ tasks:
   build:e2e-harness:
     desc: Compile the Go-native e2e harness test binary (linux/amd64, static)
     deps: [build:linux]
-    dir: e2e-v2
+    dir: e2e
     env:
       CGO_ENABLED: "0"
       GOOS: linux
@@ -256,10 +256,10 @@ tasks:
         # the harness Go code, the seed fixtures, or the picker binary
         # does not invalidate the image — they are bind-mounted at run
         # time.
-        HASH=$(sha256sum e2e-v2/docker/Dockerfile.${TARGET} | head -c 12)
+        HASH=$(sha256sum e2e/docker/Dockerfile.${TARGET} | head -c 12)
         IMAGE="{{.APP_NAME}}-e2e-${TARGET}:${HASH}"
         if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-          docker build -f e2e-v2/docker/Dockerfile.${TARGET} -t "$IMAGE" e2e-v2
+          docker build -f e2e/docker/Dockerfile.${TARGET} -t "$IMAGE" e2e
           docker images --format '{{`{{.Repository}}:{{.Tag}}`}}' \
             | grep "^{{.APP_NAME}}-e2e-${TARGET}:" | grep -v ":${HASH}$" \
             | xargs -r docker rmi 2>/dev/null || true
@@ -267,10 +267,10 @@ tasks:
         docker run --rm \
           -v "$(pwd)/{{.BUILD_DIR}}/{{.APP_NAME}}-linux-amd64:/usr/local/bin/{{.APP_NAME}}:ro" \
           -v "$(pwd)/plugin/{{.APP_NAME}}.plugin.zsh:/opt/{{.APP_NAME}}/plugin.zsh:ro" \
-          -v "$(pwd)/e2e-v2/testdata/history:/seed/history:ro" \
-          -v "$(pwd)/e2e-v2/testdata/zshrc.template:/seed/zshrc.template:ro" \
-          -v "$(pwd)/e2e-v2/bin/harness.test:/usr/local/bin/harness.test:ro" \
-          -v "$(pwd)/e2e-v2/runner.sh:/runner.sh:ro" \
+          -v "$(pwd)/e2e/testdata/history:/seed/history:ro" \
+          -v "$(pwd)/e2e/testdata/zshrc.template:/seed/zshrc.template:ro" \
+          -v "$(pwd)/e2e/bin/harness.test:/usr/local/bin/harness.test:ro" \
+          -v "$(pwd)/e2e/runner.sh:/runner.sh:ro" \
           -e TARGET=${TARGET} \
           "$IMAGE"
     requires:
@@ -279,21 +279,21 @@ tasks:
   # ---------------------------------------------------------------------------
   # VHS recordings (docs artifacts — NOT a CI gate)
   #
-  # `record:examples` renders the .tape files under e2e-v2/tapes/ into
+  # `record:examples` renders the .tape files under e2e/tapes/ into
   # MP4 + GIF via the official VHS docker image. Outputs land under
-  # e2e-v2/tapes/out/ (gitignored). These are human-watchable recordings
+  # e2e/tapes/out/ (gitignored). These are human-watchable recordings
   # for the README and docs/examples/, NEVER automated assertions —
-  # those live in e2e-v2/scenarios/*_test.go.
+  # those live in e2e/scenarios/*_test.go.
   # ---------------------------------------------------------------------------
 
   record:examples:
     desc: "Render VHS tapes to MP4/GIF (docs only). Usage: task record:examples [TAPE=01]"
     deps: [build:linux]
     cmds:
-      - mkdir -p e2e-v2/tapes/out
+      - mkdir -p e2e/tapes/out
       - |
         FILTER="{{.TAPE}}"
-        for tape in e2e-v2/tapes/*.tape; do
+        for tape in e2e/tapes/*.tape; do
           name=$(basename "$tape" .tape)
           # Skip shared snippets (filenames starting with `_`).
           case "$name" in
@@ -309,7 +309,7 @@ tasks:
           # are mounted at the same in-container paths the .tape
           # files reference.
           docker run --rm \
-            -v "$(pwd)/e2e-v2/tapes:/vhs" \
+            -v "$(pwd)/e2e/tapes:/vhs" \
             -v "$(pwd)/{{.BUILD_DIR}}/{{.APP_NAME}}-linux-amd64:/usr/local/bin/{{.APP_NAME}}:ro" \
             -v "$(pwd)/plugin/{{.APP_NAME}}.plugin.zsh:/opt/{{.APP_NAME}}/plugin.zsh:ro" \
             ghcr.io/charmbracelet/vhs:latest \
@@ -461,18 +461,18 @@ tasks:
       - task: lint:no-test-deps
 
   lint:no-test-deps:
-    desc: Verify the main module's transitive deps do not include e2e-v2 / vt10x
+    desc: Verify the main module's transitive deps do not include e2e / vt10x
     cmds:
-      # Belt-and-braces guard for DESIGN.md decision 5. The e2e-v2
+      # Belt-and-braces guard for DESIGN.md decision 5. The e2e
       # module is intentionally NOT joined via go.work — if anyone
       # adds one, or if a stray import sneaks in, the main module's
       # dep graph would suddenly include the test-only parser. We
-      # `grep -E` against vt10x and the e2e-v2 module path; either
+      # `grep -E` against vt10x and the e2e module path; either
       # match is a failure. The exit-code dance keeps the task
       # green when grep finds NOTHING (its default exit=1) and fails
       # loudly when it finds anything (exit=0).
       - |
-        out=$(go list -deps -f '{{`{{.Module}}`}}' ./... | sort -u | grep -E 'vt10x|e2e-v2' || true)
+        out=$(go list -deps -f '{{`{{.Module}}`}}' ./... | sort -u | grep -E 'vt10x|e2e' || true)
         if [ -n "$out" ]; then
           echo "test-only modules leaked into main module dep graph:" >&2
           echo "$out" >&2

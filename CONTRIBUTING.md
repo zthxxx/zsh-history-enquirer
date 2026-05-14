@@ -16,12 +16,12 @@ that doesn't make `^R` better is out of scope.
 | `plugin/zsh-history-enquirer.plugin.zsh` | The widget file users source from `~/.zshrc`. |
 | `e2e/{debian,alpine}/` | Per-libc Docker images used by `task dev`. |
 | `e2e/{dev,seed-home}.sh` | Interactive dev-shell entrypoint + shared HOME seeder. |
-| `e2e-v2/` | E2E test harness (separate Go module). See `e2e-v2/DESIGN.md`. |
-| `e2e-v2/scenarios/*_test.go` | Go-native scenario tests, one per former `.exp`. |
-| `e2e-v2/harness/` | `creack/pty` + `hinshun/vt10x` driver code. |
-| `e2e-v2/docker/Dockerfile.{debian,alpine}` | Per-libc images for the test binary. |
-| `e2e-v2/testdata/history/*.history` | Per-scenario history fixtures. |
-| `e2e-v2/tapes/*.tape` | VHS scripts → `docs/examples/*.{mp4,gif}`. |
+| `e2e/` | E2E test harness (separate Go module). See `e2e/DESIGN.md`. |
+| `e2e/scenarios/*_test.go` | Go-native scenario tests, one per former `.exp`. |
+| `e2e/harness/` | `creack/pty` + `hinshun/vt10x` driver code. |
+| `e2e/docker/Dockerfile.{debian,alpine}` | Per-libc images for the test binary. |
+| `e2e/testdata/history/*.history` | Per-scenario history fixtures. |
+| `e2e/tapes/*.tape` | VHS scripts → `docs/examples/*.{mp4,gif}`. |
 | `npm/` | NPM umbrella package + per-platform sub-package templates. |
 | `docs/spec/` | User-visible behaviour. |
 | `docs/design/` | Spec → Go implementation map. |
@@ -113,16 +113,16 @@ you. CI runs the same check.
   in `history`, `search`, `ui/wrap`, `ui/highlight`, `keys/parser`).
 - **No unit test may write to the user's real `$HISTFILE` or
   `~/.zshrc`.** History tests use `t.TempDir()` fixtures.
-- **E2E tests live in Docker.** `e2e-v2/scenarios/*_test.go` runs
+- **E2E tests live in Docker.** `e2e/scenarios/*_test.go` runs
   against a real zsh, real pty, real binary via the Go-native
-  harness in `e2e-v2/harness/`. Each test gets a fresh `$HOME` via
+  harness in `e2e/harness/`. Each test gets a fresh `$HOME` via
   `t.TempDir()` inside the container.
 - **Race detector is mandatory in CI.** `go test -race -count=1` is
   what `task test:unit` runs.
 
 When adding a feature, the spec in `docs/spec/` says what the user
 sees, and a corresponding test in either `internal/**/*_test.go` or
-`e2e-v2/scenarios/*_test.go` enforces it.
+`e2e/scenarios/*_test.go` enforces it.
 
 ## Releases
 

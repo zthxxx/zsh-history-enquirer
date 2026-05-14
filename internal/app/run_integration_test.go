@@ -14,7 +14,7 @@ import (
 // Run() we exercise as a Go-level integration test; the deeper
 // paths (DSR probe, raw mode, event loop, render, submit/cancel)
 // are exhaustively covered by the docker-driven e2e scenarios in
-// `e2e-v2/scenarios/*_test.go` against a real zsh + pty.
+// `e2e/scenarios/*_test.go` against a real zsh + pty.
 //
 // We tried writing a Go-level pty integration of Run() against a
 // creack/pty pair, but the resulting harness was fragile (the

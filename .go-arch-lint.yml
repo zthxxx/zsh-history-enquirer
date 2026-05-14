@@ -20,12 +20,12 @@ allow:
 
 exclude:
   - vendor
-  # e2e-v2/ is a separate Go module with its own go.mod — arch-lint
+  # e2e/ is a separate Go module with its own go.mod — arch-lint
   # walks from repo root and would otherwise complain about its
   # files not being attached to any component in this file. The
   # harness module has its own internal structure (harness/,
   # scenarios/) that doesn't fit the cmd→app→domain pipeline.
-  - e2e-v2
+  - e2e
 
 components:
   cmd:

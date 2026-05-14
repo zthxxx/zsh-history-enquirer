@@ -65,4 +65,4 @@ __debug_bin*
 
 # e2e v2 — VHS render outputs (regenerated on demand by
 # `task record:examples`; large binary files, not source).
-/e2e-v2/tapes/out/
+/e2e/tapes/out/

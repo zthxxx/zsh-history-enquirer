@@ -42,7 +42,7 @@ Each entry must include:
   prompt column. Why still open: a real terminal does answer the probe,
   so this only matters for tests. How to apply: don't try to fix it
   for the docker pty — the renderer's correctness is verified at the
-  model layer, and the v2 harness (`e2e-v2/scenarios/*_test.go`)
+  model layer, and the v2 harness (`e2e/scenarios/*_test.go`)
   acknowledges the fallback explicitly in its `WaitQuiescent(400ms, 5s)`
   tuning after the first `^R`.
 
