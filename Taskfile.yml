@@ -101,20 +101,29 @@ tasks:
 
   dev:
     # Drops the developer into an interactive zsh session inside the
-    # same debian-slim image the e2e harness uses. $HOME is seeded with
-    # write_zshrc + write_seed_history from e2e/seed-home.sh — the same
-    # fixture every e2e scenario starts from — so any bug a scenario
-    # surfaces can be reproduced by hand without polluting the host's
-    # ~/.zsh_history. The picker binary and plugin are bind-mounted
-    # read-only, so re-running `task build:linux` between sessions
-    # picks up local code changes without rebuilding the image.
-    desc: "Interactive debian zsh shell against the e2e seed history (build:linux is auto-run)"
+    # same debian-slim image the e2e harness uses. $HOME is rendered
+    # from the SAME canonical seed sources the Go harness consumes —
+    # e2e/testdata/zshrc.template + e2e/testdata/history/<fixture>.history
+    # — so any bug a scenario surfaces can be reproduced by hand
+    # without polluting the host's ~/.zsh_history, and the two can
+    # never silently drift. The picker binary and plugin are
+    # bind-mounted read-only, so re-running `task build:linux`
+    # between sessions picks up local code changes without rebuilding
+    # the image.
+    #
+    # Choose a fixture with `task dev FIXTURE=<name>` (default: seed).
+    # Names match the files under e2e/testdata/history/ minus the
+    # `.history` suffix (seed, empty, 13-unicode, 14-long-line,
+    # 21-input-wrap, 24-multiline-narrow-wrap, 25-multiline-stick).
+    desc: "Interactive debian zsh shell against an e2e history fixture (FIXTURE=seed; build:linux auto-run)"
     deps: [build:linux]
+    vars:
+      FIXTURE: '{{.FIXTURE | default "seed"}}'
     cmds:
       - |
         # Cache key tracks the Dockerfile only — the image's content
         # is apt deps + locale + a `tester` user; everything else
-        # (the binary, the plugin, seed-home.sh, dev.sh) is
+        # (the binary, the plugin, the seed fixtures, dev.sh) is
         # bind-mounted at run time and stays out of the image.
         # Matches ci:e2e:run's cache discipline so `task dev` and
         # `task ci:e2e:run` share the cached image.
@@ -128,14 +137,17 @@ tasks:
         fi
         # --rm so the container is torn down on exit; -it for an
         # attached pty so `^R` and the picker's raw-mode reads work;
-        # --entrypoint /dev.sh overrides the image's default /run.sh
-        # so we get an interactive shell instead of the scenario
-        # harness.
+        # --entrypoint /dev.sh overrides the image's default
+        # /runner.sh (the Go harness driver) so we get an interactive
+        # shell instead of the scenario run. The testdata mounts are
+        # the same ones ci:e2e:run uses — single source of truth.
         docker run --rm -it \
           --entrypoint /dev.sh \
+          -e SEED_HISTORY="/seed/history/{{.FIXTURE}}.history" \
           -v "$(pwd)/{{.BUILD_DIR}}/{{.APP_NAME}}-linux-amd64:/usr/local/bin/{{.APP_NAME}}:ro" \
           -v "$(pwd)/plugin/{{.APP_NAME}}.plugin.zsh:/opt/{{.APP_NAME}}/plugin.zsh:ro" \
-          -v "$(pwd)/e2e/seed-home.sh:/seed-home.sh:ro" \
+          -v "$(pwd)/e2e/testdata/history:/seed/history:ro" \
+          -v "$(pwd)/e2e/testdata/zshrc.template:/seed/zshrc.template:ro" \
           -v "$(pwd)/e2e/dev.sh:/dev.sh:ro" \
           "$IMAGE"
     interactive: true
@@ -201,9 +213,10 @@ tasks:
   # release binary's dep graph (DESIGN.md decision 5).
   #
   # History: replaced the Tcl/expect harness at e2e/scenarios/*.exp +
-  # e2e/run.sh in May 2026. The legacy harness was deleted in the same
-  # commit; e2e/dev.sh + e2e/seed-home.sh remain because `task dev`
-  # still uses them for the interactive picker shell.
+  # e2e/run.sh in May 2026. The legacy harness (and its seed-home.sh
+  # HOME seeder) was deleted in the same commit; `task dev`'s
+  # interactive shell now renders its scratch HOME from the same
+  # testdata/ fixtures the Go harness uses (e2e/dev.sh).
   # ---------------------------------------------------------------------------
 
   build:e2e-harness:
@@ -539,12 +552,11 @@ tasks:
       # chain masked real shellcheck failures by routing them to the
       # 'not installed' message.
       #
-      # `-x --source-path=SCRIPTDIR` tells shellcheck to follow
-      # `. /seed-home.sh` style absolute-path sources by resolving
-      # the directive `# shellcheck source=seed-home.sh` against
-      # the directory of the script being linted. Without it,
-      # SC1091 fires because the literal /seed-home.sh path only
-      # exists inside the docker container.
+      # `-x --source-path=SCRIPTDIR` lets shellcheck follow any
+      # sibling-script sources (`. ./lib.sh` style) via the script's
+      # own directory rather than emitting SC1091. No script sources
+      # another today, but the flags are standard hygiene and keep a
+      # future `. ./helper.sh` from tripping the linter.
       - |
         if ! command -v shellcheck >/dev/null; then
           echo "shellcheck not installed; skipping" >&2

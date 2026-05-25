@@ -86,9 +86,11 @@ task build            # build host binary (CGO disabled → static)
 task build:linux      # build linux/amd64 for e2e
 task build:all        # cross-compile every release target
 task dev              # interactive zsh in the e2e debian image
-                      # with the seed history loaded — press ^R to
-                      # exercise the picker by hand. Auto-runs
-                      # build:linux, never touches host history.
+                      # seeded from the SAME testdata/ fixtures the
+                      # harness uses — press ^R to exercise the picker
+                      # by hand. `task dev FIXTURE=<name>` picks a
+                      # fixture (default: seed). Auto-runs build:linux,
+                      # never touches host history.
 task test:unit        # Go unit tests (no docker)
 task test:js          # Node tests for the npm shim (cli.js)
 task test:e2e         # docker-driven e2e for both libcs

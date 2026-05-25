@@ -14,8 +14,7 @@ that doesn't make `^R` better is out of scope.
 | `internal/{history,search,tty,keys,ui}/` | Layered domain packages. See `.go-arch-lint.yml` for the dependency rules. (ANSI escape emission delegated to `charmbracelet/x/ansi`; cell-width to `rivo/uniseg` — no in-repo wrapper.) |
 | `pkg/version/` | `-ldflags`-injected build identification. |
 | `plugin/zsh-history-enquirer.plugin.zsh` | The widget file users source from `~/.zshrc`. |
-| `e2e/{debian,alpine}/` | Per-libc Docker images used by `task dev`. |
-| `e2e/{dev,seed-home}.sh` | Interactive dev-shell entrypoint + shared HOME seeder. |
+| `e2e/dev.sh` | Interactive `task dev` entrypoint — renders HOME from `testdata/` and exec's `zsh -i`. |
 | `e2e/` | E2E test harness (separate Go module). See `e2e/DESIGN.md`. |
 | `e2e/scenarios/*_test.go` | Go-native scenario tests, one per former `.exp`. |
 | `e2e/harness/` | `creack/pty` + `hinshun/vt10x` driver code. |

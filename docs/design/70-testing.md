@@ -70,15 +70,24 @@ HOME created by `t.TempDir()`.
 
 ## Interactive dev shell
 
-`task dev` continues to use the legacy `e2e/debian/Dockerfile` and
-`e2e/dev.sh` + `e2e/seed-home.sh` files. It overrides the image's
-default entrypoint with `e2e/dev.sh`, which seeds `$HOME` once and
-exec's `zsh -i`. The host's real `~/.zsh_history` is never touched.
-Auto-runs `task build:linux` so the binary you exercise is the one
-currently in your working tree; re-running `task build:linux`
-between sessions picks up code changes without rebuilding the
-image. Use this to reproduce e2e-only bugs by hand or to sanity-
-check render edges that don't yet have a scenario.
+`task dev` reuses the same `e2e/docker/Dockerfile.debian` image as
+the automated harness, overriding its `/runner.sh` entrypoint with
+`e2e/dev.sh`. `dev.sh` renders a scratch `$HOME` from the **same
+canonical seed sources** the Go harness consumes —
+`e2e/testdata/zshrc.template` (with `{{PLUGIN}}` substituted) and
+`e2e/testdata/history/<fixture>.history` — then exec's `zsh -i`.
+Because both surfaces read the identical files, the manual repro
+path can never silently drift from what the scenarios assert.
+
+Pick a fixture with `task dev FIXTURE=<name>` (default `seed`);
+names match the files under `e2e/testdata/history/` minus the
+`.history` suffix. The host's real `~/.zsh_history` is never
+touched — the seeded entries live in the container only. Auto-runs
+`task build:linux` so the binary you exercise is the one currently
+in your working tree; re-running `task build:linux` between
+sessions picks up code changes without rebuilding the image. Use
+this to reproduce e2e-only bugs by hand or to sanity-check render
+edges that don't yet have a scenario.
 
 ## Scenario coverage
 

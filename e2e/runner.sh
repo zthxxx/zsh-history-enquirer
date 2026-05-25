@@ -15,17 +15,15 @@
 #
 # The harness itself creates the scratch HOME via t.TempDir() per
 # test; the only host data the container can see is what these
-# read-only mounts expose, so the legacy `e2e/seed-home.sh`'s
-# write-HOME logic is replaced entirely by the harness's session-
-# level isolation.
+# read-only mounts expose, so HOME seeding is owned entirely by the
+# harness's session-level isolation (writeScratchHome in
+# harness/session.go).
 #
-# Why not source seed-home.sh? The harness writes the .zshrc and
-# .zsh_history into a per-test scratch HOME at runtime (rendered from
-# /seed/zshrc.template and /seed/history/*.history). Reusing the
-# shell function would pull a heredoc into the container that the
-# harness then has to re-render — duplicate logic with different
-# substitution rules. Keeping the templates as files mounted at
-# /seed/ is the single source of truth.
+# The .zshrc template and history fixtures are plain files under
+# /seed/, rendered into each test's scratch HOME at runtime. They
+# are the single source of truth: `task dev`'s interactive shell
+# (e2e/dev.sh) renders its HOME from the very same files, so the
+# manual repro path and the automated scenarios can never drift.
 set -eu
 
 # Hand off to the precompiled Go test binary. `-test.v` mirrors the

@@ -21,8 +21,9 @@ import (
 // Opts captures everything the harness needs to spin up a fresh zsh
 // session inside the container.
 //
-// All fields are optional; sensible defaults match the legacy expect
-// harness (`e2e/seed-home.sh` + `e2e/{debian,alpine}/Dockerfile`).
+// All fields are optional; sensible defaults match the canonical
+// seed sources under e2e/testdata/ (zshrc.template + history/seed.history)
+// and the e2e/docker/Dockerfile.{debian,alpine} images.
 type Opts struct {
 	// Image is the libc label for the run target — "debian" or
 	// "alpine". Informational only; set by the runner. The harness
