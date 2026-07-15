@@ -526,7 +526,22 @@ export default class HistorySearcher extends AutoComplete {
     const { submitted, cancelled } = this.state
 
     signale.debug('HistorySearcher close()', { input, focused, submitted, cancelled })
-    this.emit('close')
+
+    try {
+      this.emit('close')
+    } catch (error) {
+      /**
+       * [BUG enquirer] on ctrl-c, node closes its readline interface first,
+       * then enquirer keypress cleanup for `close` event calls `rl.pause()`,
+       * which throws ERR_USE_AFTER_CLOSE since Node.js v24.2
+       *
+       * https://github.com/zthxxx/zsh-history-enquirer/issues/75
+       */
+      if ((error as NodeJS.ErrnoException)?.code !== 'ERR_USE_AFTER_CLOSE') {
+        throw error
+      }
+      signale.debug('HistorySearcher close(), ignored readline ERR_USE_AFTER_CLOSE')
+    }
   }
 
   async submit() {
