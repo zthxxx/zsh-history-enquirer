@@ -437,6 +437,44 @@ test('cancel with ctrl+c', async () => {
   }
 })
 
+test('cancel with ctrl+c on closed readline', async () => {
+  try {
+    await searchHistory(
+      '',
+      async (searcher) => {
+        await keypress(
+          searcher,
+          [2, 3, 3, 3],
+        )
+
+        /**
+         * simulate enquirer keypress cleanup in real tty since Node.js v24.2,
+         * where `rl.pause()` throws ERR_USE_AFTER_CLOSE in `close` event,
+         * because node already closed its readline interface on ctrl-c
+         *
+         * https://github.com/zthxxx/zsh-history-enquirer/issues/75
+         */
+        searcher.once('close', () => {
+          const error = new Error('readline was closed') as NodeJS.ErrnoException
+          error.code = 'ERR_USE_AFTER_CLOSE'
+          throw error
+        })
+
+        await keypress(
+          searcher,
+          [
+            [ctrlC.sequence, ctrlC],
+          ],
+        )
+      },
+    )
+
+    expect(true).toBe(false)
+  } catch (result) {
+    expect(result).toBe('2333')
+  }
+})
+
 test('cancel with esc', async () => {
   try {
     await searchHistory(
